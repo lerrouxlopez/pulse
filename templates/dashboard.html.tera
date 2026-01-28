@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse - Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/static/site.css" />
+  </head>
+  <body class="bg-ink text-cream dashboard-body">
+    <div class="dashboard-wrap">
+      <aside class="sidebar">
+        <div class="brand d-flex align-items-center gap-2">
+          <img
+            src="/static/logo-dark.png"
+            class="brand-logo logo-dark"
+            alt="Pulse logo dark"
+          />
+          <img
+            src="/static/logo-light.png"
+            class="brand-logo logo-light"
+            alt="Pulse logo light"
+          />
+          <span class="fw-bold">Pulse</span>
+        </div>
+        <nav class="nav flex-column mt-4">
+          <a class="nav-link active" href="#">Dashboard</a>
+          <a class="nav-link" href="#">Matches</a>
+          <a class="nav-link" href="#">Brackets</a>
+          <a class="nav-link" href="#">Judges</a>
+          <a class="nav-link" href="#">Fighters</a>
+          <a class="nav-link" href="#">Categories</a>
+          <a class="nav-link" href="#">Results</a>
+          <a class="nav-link" href="#">Settings</a>
+        </nav>
+        <form action="/logout" method="post" class="mt-auto w-100">
+          <button class="btn btn-outline-light w-100 mt-4" type="submit">
+            Sign out
+          </button>
+        </form>
+      </aside>
+
+      <main class="content">
+        <header class="d-flex align-items-center justify-content-between mb-4">
+          <div>
+            <h1 class="fw-bold mb-1">Tournament Dashboard</h1>
+            <p class="text-cream-75 mb-0">Welcome back, {{ name }}.</p>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge text-bg-light text-ink">Day 1 • 6 Mats • Live</span>
+          </div>
+        </header>
+
+        <section class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="stat-card">
+              <p class="text-cream-60 mb-2">Matches Today</p>
+              <div class="d-flex align-items-end gap-3">
+                <h2 class="mb-0 fw-bold">42</h2>
+                <span class="pill status-ok">On Time</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-card">
+              <p class="text-cream-60 mb-2">Live Matches</p>
+              <div class="d-flex align-items-end gap-3">
+                <h2 class="mb-0 fw-bold">3</h2>
+                <span class="pill status-live">Live</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-card">
+              <p class="text-cream-60 mb-2">Mats Active</p>
+              <div class="d-flex align-items-end gap-3">
+                <h2 class="mb-0 fw-bold">6</h2>
+                <span class="pill status-ready">Full</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Live & Upcoming Matches</h3>
+            <button class="btn btn-outline-light btn-sm">View all</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">Mat</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Red</th>
+                  <th scope="col">Blue</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in matches %}
+                <tr>
+                  <td>{{ row.mat }}</td>
+                  <td>{{ row.category }}</td>
+                  <td>{{ row.red }}</td>
+                  <td>{{ row.blue }}</td>
+                  <td>
+                    <span class="pill {{ row.status_class }}">{{ row.status }}</span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h4 class="fw-semibold mb-3">Quick Actions</h4>
+          <div class="d-flex flex-wrap gap-3">
+            <button class="btn btn-primary shadow-glow">Start Next Match</button>
+            <button class="btn btn-outline-light">View Brackets</button>
+            <button class="btn btn-outline-light">Assign Judges</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>

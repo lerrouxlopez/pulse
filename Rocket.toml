@@ -1,0 +1,4 @@
+[default]
+address = "127.0.0.1"
+port = 8000
+secret_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
