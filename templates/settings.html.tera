@@ -30,16 +30,22 @@
             <h1 class="fw-bold mb-1">Tournament Settings</h1>
             <p class="text-cream-75 mb-0">Configure {{ tournament_name }}.</p>
           </div>
-          {% if not is_setup %}
-          <form action="/settings/setup/complete" method="post" class="d-flex flex-column align-items-end">
-            <button class="btn btn-primary shadow-glow" type="submit" {% if not can_complete_setup %}disabled{% endif %}>
-              Complete Setup
-            </button>
-            {% if not can_complete_setup %}
-            <p class="text-cream-60 mt-2 mb-0 text-end">Add at least one item in each tab to enable setup completion.</p>
+          <div class="d-flex flex-column align-items-end gap-2">
+            <form action="/tournaments/new" method="post">
+              <input type="hidden" name="name" value="New Tournament" />
+              <button class="btn btn-outline-light" type="submit">Create New Tournament</button>
+            </form>
+            {% if not is_setup %}
+            <form action="/settings/setup/complete" method="post" class="d-flex flex-column align-items-end">
+              <button class="btn btn-primary shadow-glow" type="submit" {% if not can_complete_setup %}disabled{% endif %}>
+                Complete Setup
+              </button>
+              {% if not can_complete_setup %}
+              <p class="text-cream-60 mt-2 mb-0 text-end">Add at least one item in each tab to enable setup completion.</p>
+              {% endif %}
+            </form>
             {% endif %}
-          </form>
-          {% endif %}
+          </div>
         </header>
 
         {% if error %}

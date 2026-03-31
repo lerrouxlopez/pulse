@@ -20,12 +20,16 @@ pub fn init_db(db_path: &PathBuf) -> rusqlite::Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tournaments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             name TEXT NOT NULL,
             is_setup INTEGER NOT NULL DEFAULT 0,
+            started_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
         [],
     )?;
+    let _ = conn.execute("ALTER TABLE tournaments ADD COLUMN user_id INTEGER", []);
+    let _ = conn.execute("ALTER TABLE tournaments ADD COLUMN started_at TEXT", []);
     conn.execute(
         "CREATE TABLE IF NOT EXISTS divisions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

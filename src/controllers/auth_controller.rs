@@ -1,5 +1,6 @@
 use crate::models::{LoginForm, RegisterForm};
 use crate::services::auth_service::{self, AuthError};
+use crate::services::tournament_service;
 use crate::state::AppState;
 use rocket::form::Form;
 use rocket::http::{Cookie, CookieJar, Status};
@@ -28,7 +29,16 @@ pub fn register(
     match auth_service::register(state, form) {
         Ok(user_id) => {
             jar.add(Cookie::new("user_id", user_id.to_string()));
-            Ok(Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard)))
+            let tournament = tournament_service::create(state, user_id, "New Tournament")
+                .ok_or(Status::InternalServerError)?;
+            jar.add(Cookie::new("tournament_id", tournament.id.to_string()));
+            Ok(Redirect::to(uri!(
+                crate::controllers::settings_controller::settings_page(
+                    error = Option::<String>::None,
+                    success = Option::<String>::None,
+                    tab = Option::<String>::None
+                )
+            )))
         }
         Err(AuthError::Validation(message)) => Ok(Redirect::to(uri!(auth_page(
             error = Some(message),
@@ -52,6 +62,7 @@ pub fn login(
     match auth_service::login(state, form) {
         Ok(user_id) => {
             jar.add(Cookie::new("user_id", user_id.to_string()));
+            jar.remove(Cookie::from("tournament_id"));
             Ok(Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard)))
         }
         Err(AuthError::InvalidCredentials) => Ok(Redirect::to(uri!(auth_page(
@@ -65,5 +76,6 @@ pub fn login(
 #[post("/logout")]
 pub fn logout(jar: &CookieJar<'_>) -> Redirect {
     jar.remove(Cookie::from("user_id"));
+    jar.remove(Cookie::from("tournament_id"));
     Redirect::to(uri!(crate::controllers::index_controller::index))
 }

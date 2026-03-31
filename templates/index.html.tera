@@ -55,9 +55,7 @@
                 <a class="nav-link text-cream" href="#flow">Flow</a>
               </li>
               <li class="nav-item">
-                <a class="btn btn-primary shadow-glow" href="/auth"
-                  >Start a Tournament</a
-                >
+                <a class="btn btn-primary shadow-glow" href="/auth">Get Started</a>
               </li>
             </ul>
           </div>
@@ -77,9 +75,7 @@
               the loop with live updates.
             </p>
             <div class="d-flex flex-wrap gap-3 mt-4">
-              <a class="btn btn-primary btn-lg shadow-glow" href="/auth"
-                >Launch a new event</a
-              >
+              <a class="btn btn-primary btn-lg shadow-glow" href="/auth">Get Started</a>
               <a class="btn btn-outline-light btn-lg" href="#features"
                 >See how it works</a
               >
@@ -207,9 +203,7 @@
             Spin up a tournament dashboard in minutes and keep the crowd on the
             edge of the mat.
           </p>
-          <a class="btn btn-primary btn-lg shadow-glow" href="/auth"
-            >Get Started</a
-          >
+          <a class="btn btn-primary btn-lg shadow-glow" href="/auth">Get Started</a>
         </div>
       </div>
     </section>

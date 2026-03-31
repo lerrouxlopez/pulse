@@ -28,10 +28,16 @@
         <header class="d-flex align-items-center justify-content-between mb-4">
           <div>
             <h1 class="fw-bold mb-1">Tournament Dashboard</h1>
-            <p class="text-cream-75 mb-0">Welcome back, {{ name }}.</p>
+            <p class="text-cream-75 mb-0">
+              Welcome back, {{ name }}.{% if current_tournament_name %} Currently viewing {{ current_tournament_name }}.{% endif %}
+            </p>
           </div>
           <div class="d-flex align-items-center gap-2">
             <span class="badge text-bg-light text-ink">Day 1 • 6 Mats • Live</span>
+            <form action="/tournaments/new" method="post">
+              <input type="hidden" name="name" value="New Tournament" />
+              <button class="btn btn-outline-light btn-sm" type="submit">Create New Tournament</button>
+            </form>
           </div>
         </header>
 
@@ -108,6 +114,63 @@
         </section>
       </main>
     </div>
+
+    {% if show_tournament_modal %}
+    <div class="modal fade show" id="tournamentModal" tabindex="-1" aria-hidden="true" style="display: block;">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Select a Tournament</h5>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted">Choose an existing tournament or create a new one to continue.</p>
+            <div class="table-responsive mb-4">
+              <table class="table table-striped align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for tournament in tournaments %}
+                  <tr>
+                    <td>{{ tournament.name }}</td>
+                    <td>
+                      {% if tournament.started_at %}
+                        Started
+                      {% elif tournament.is_setup %}
+                        Ready to start
+                      {% else %}
+                        Setup required
+                      {% endif %}
+                    </td>
+                    <td class="text-end">
+                      <form action="/tournaments/select/{{ tournament.id }}" method="post">
+                        <button class="btn btn-outline-dark btn-sm" type="submit">Open</button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="3" class="text-muted">No tournaments yet.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <form action="/tournaments/new" method="post" class="d-flex flex-wrap gap-2">
+              <input class="form-control flex-grow-1" name="name" placeholder="New tournament name" />
+              <button class="btn btn-primary" type="submit">Create Tournament</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+    {% endif %}
 
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"

@@ -40,8 +40,11 @@ pub struct NamedItem {
     pub name: String,
 }
 
+#[derive(Serialize)]
 pub struct Tournament {
     pub id: i64,
     pub name: String,
     pub is_setup: bool,
+    pub user_id: i64,
+    pub started_at: Option<String>,
 }

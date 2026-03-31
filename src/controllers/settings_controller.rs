@@ -32,9 +32,19 @@ pub fn settings_page(
         }
     };
 
-    let tournament = match tournament_service::get_or_create(state) {
+    let tournament_id = match jar.get("tournament_id") {
+        Some(cookie) => cookie.value().parse::<i64>().ok(),
+        None => None,
+    };
+    let tournament = match tournament_id
+        .and_then(|id| tournament_service::get_by_id_for_user(state, id, user.id))
+    {
         Some(tournament) => tournament,
-        None => return Err(Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard))),
+        None => {
+            return Err(Redirect::to(uri!(
+                crate::controllers::dashboard_controller::dashboard
+            )))
+        }
     };
 
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
@@ -70,7 +80,12 @@ pub fn complete_setup(
     jar: &CookieJar<'_>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let categories = settings_service::list(state, tournament.id, SettingsEntity::Category);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
@@ -108,8 +123,19 @@ pub fn create_division(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::create(state, tournament.id, SettingsEntity::Division, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::create(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Division,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Division added.".to_string()),
@@ -131,8 +157,20 @@ pub fn update_division(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::update(state, tournament.id, SettingsEntity::Division, id, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::update(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Division,
+        id,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Division updated.".to_string()),
@@ -153,8 +191,19 @@ pub fn delete_division(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::delete(state, tournament.id, SettingsEntity::Division, id) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::delete(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Division,
+        id,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Division deleted.".to_string()),
@@ -175,8 +224,19 @@ pub fn create_category(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::create(state, tournament.id, SettingsEntity::Category, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::create(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Category,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Category added.".to_string()),
@@ -198,8 +258,20 @@ pub fn update_category(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::update(state, tournament.id, SettingsEntity::Category, id, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::update(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Category,
+        id,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Category updated.".to_string()),
@@ -220,8 +292,19 @@ pub fn delete_category(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::delete(state, tournament.id, SettingsEntity::Category, id) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::delete(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Category,
+        id,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Category deleted.".to_string()),
@@ -242,8 +325,19 @@ pub fn create_weight_class(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::create(state, tournament.id, SettingsEntity::WeightClass, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::create(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::WeightClass,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Weight class added.".to_string()),
@@ -265,9 +359,15 @@ pub fn update_weight_class(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
     match settings_service::update(
         state,
+        _user.id,
         tournament.id,
         SettingsEntity::WeightClass,
         id,
@@ -293,8 +393,19 @@ pub fn delete_weight_class(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::delete(state, tournament.id, SettingsEntity::WeightClass, id) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::delete(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::WeightClass,
+        id,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Weight class deleted.".to_string()),
@@ -315,8 +426,19 @@ pub fn create_event(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::create(state, tournament.id, SettingsEntity::Event, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::create(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Event,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Event added.".to_string()),
@@ -338,8 +460,20 @@ pub fn update_event(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::update(state, tournament.id, SettingsEntity::Event, id, &form.name) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::update(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Event,
+        id,
+        &form.name,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Event updated.".to_string()),
@@ -360,8 +494,19 @@ pub fn delete_event(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_or_create(state).ok_or(Status::InternalServerError)?;
-    match settings_service::delete(state, tournament.id, SettingsEntity::Event, id) {
+    let tournament_id = jar
+        .get("tournament_id")
+        .and_then(|cookie| cookie.value().parse::<i64>().ok())
+        .ok_or(Status::BadRequest)?;
+    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, _user.id)
+        .ok_or(Status::NotFound)?;
+    match settings_service::delete(
+        state,
+        _user.id,
+        tournament.id,
+        SettingsEntity::Event,
+        id,
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
             success = Some("Event deleted.".to_string()),

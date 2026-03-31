@@ -41,7 +41,9 @@ fn rocket() -> _ {
                 controllers::settings_controller::delete_weight_class,
                 controllers::settings_controller::create_event,
                 controllers::settings_controller::update_event,
-                controllers::settings_controller::delete_event
+                controllers::settings_controller::delete_event,
+                controllers::tournaments_controller::create_tournament,
+                controllers::tournaments_controller::select_tournament
             ],
         )
         .mount("/static", FileServer::from(relative!("static")))
