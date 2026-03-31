@@ -33,7 +33,8 @@ pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> 
     if !tournament.is_setup {
         return Err(Redirect::to(uri!(crate::controllers::settings_controller::settings_page(
             error = Option::<String>::None,
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Option::<String>::None
         ))));
     }
 

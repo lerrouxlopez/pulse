@@ -21,7 +21,7 @@
   <body class="bg-ink text-cream dashboard-body">
     <div class="dashboard-wrap">
       <aside class="sidebar">
-        {% include "partials/sidebar.html" %}
+        {% include "partials/sidebar" %}
       </aside>
 
       <main class="content">

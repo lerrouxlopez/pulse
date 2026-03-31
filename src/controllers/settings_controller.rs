@@ -12,12 +12,13 @@ pub struct NameForm {
     pub name: String,
 }
 
-#[get("/settings?<error>&<success>")]
+#[get("/settings?<error>&<success>&<tab>")]
 pub fn settings_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     error: Option<String>,
     success: Option<String>,
+    tab: Option<String>,
 ) -> Result<Template, Redirect> {
     let user = match auth_service::current_user(state, jar) {
         Some(user) => user,
@@ -41,6 +42,7 @@ pub fn settings_page(
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
     let events = settings_service::list(state, tournament.id, SettingsEntity::Event);
 
+    let active_tab = tab.unwrap_or_else(|| "divisions".to_string());
     Ok(Template::render(
         "settings",
         context! {
@@ -54,6 +56,7 @@ pub fn settings_page(
             error: error,
             success: success,
             active: "settings",
+            active_tab: active_tab,
         },
     ))
 }
@@ -68,12 +71,14 @@ pub fn complete_setup(
     if tournament_service::mark_setup_complete(state, tournament.id) {
         Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Tournament setup completed.".to_string())
+            success = Some("Tournament setup completed.".to_string()),
+            tab = Option::<String>::None
         ))))
     } else {
         Ok(Redirect::to(uri!(settings_page(
             error = Some("Unable to update setup status.".to_string()),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Option::<String>::None
         ))))
     }
 }
@@ -89,11 +94,13 @@ pub fn create_division(
     match settings_service::create(state, tournament.id, SettingsEntity::Division, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Division added.".to_string())
+            success = Some("Division added.".to_string()),
+            tab = Some("divisions".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("divisions".to_string())
         )))),
     }
 }
@@ -109,11 +116,13 @@ pub fn update_division(
     match settings_service::update(state, SettingsEntity::Division, id, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Division updated.".to_string())
+            success = Some("Division updated.".to_string()),
+            tab = Some("divisions".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("divisions".to_string())
         )))),
     }
 }
@@ -128,11 +137,13 @@ pub fn delete_division(
     match settings_service::delete(state, SettingsEntity::Division, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Division deleted.".to_string())
+            success = Some("Division deleted.".to_string()),
+            tab = Some("divisions".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("divisions".to_string())
         )))),
     }
 }
@@ -148,11 +159,13 @@ pub fn create_category(
     match settings_service::create(state, tournament.id, SettingsEntity::Category, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Category added.".to_string())
+            success = Some("Category added.".to_string()),
+            tab = Some("categories".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("categories".to_string())
         )))),
     }
 }
@@ -168,11 +181,13 @@ pub fn update_category(
     match settings_service::update(state, SettingsEntity::Category, id, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Category updated.".to_string())
+            success = Some("Category updated.".to_string()),
+            tab = Some("categories".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("categories".to_string())
         )))),
     }
 }
@@ -187,11 +202,13 @@ pub fn delete_category(
     match settings_service::delete(state, SettingsEntity::Category, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Category deleted.".to_string())
+            success = Some("Category deleted.".to_string()),
+            tab = Some("categories".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("categories".to_string())
         )))),
     }
 }
@@ -207,11 +224,13 @@ pub fn create_weight_class(
     match settings_service::create(state, tournament.id, SettingsEntity::WeightClass, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Weight class added.".to_string())
+            success = Some("Weight class added.".to_string()),
+            tab = Some("weight".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("weight".to_string())
         )))),
     }
 }
@@ -227,11 +246,13 @@ pub fn update_weight_class(
     match settings_service::update(state, SettingsEntity::WeightClass, id, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Weight class updated.".to_string())
+            success = Some("Weight class updated.".to_string()),
+            tab = Some("weight".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("weight".to_string())
         )))),
     }
 }
@@ -246,11 +267,13 @@ pub fn delete_weight_class(
     match settings_service::delete(state, SettingsEntity::WeightClass, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Weight class deleted.".to_string())
+            success = Some("Weight class deleted.".to_string()),
+            tab = Some("weight".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("weight".to_string())
         )))),
     }
 }
@@ -266,11 +289,13 @@ pub fn create_event(
     match settings_service::create(state, tournament.id, SettingsEntity::Event, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Event added.".to_string())
+            success = Some("Event added.".to_string()),
+            tab = Some("events".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("events".to_string())
         )))),
     }
 }
@@ -286,11 +311,13 @@ pub fn update_event(
     match settings_service::update(state, SettingsEntity::Event, id, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Event updated.".to_string())
+            success = Some("Event updated.".to_string()),
+            tab = Some("events".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("events".to_string())
         )))),
     }
 }
@@ -305,11 +332,13 @@ pub fn delete_event(
     match settings_service::delete(state, SettingsEntity::Event, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             error = Option::<String>::None,
-            success = Some("Event deleted.".to_string())
+            success = Some("Event deleted.".to_string()),
+            tab = Some("events".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(
             error = Some(message),
-            success = Option::<String>::None
+            success = Option::<String>::None,
+            tab = Some("events".to_string())
         )))),
     }
 }

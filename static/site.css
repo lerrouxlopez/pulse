@@ -273,6 +273,18 @@ body {
   padding: 24px;
 }
 
+.dashboard-body .btn-outline-light {
+  color: #1f2937;
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+.dashboard-body .btn-outline-light:hover {
+  color: #111827;
+  background: #e5e7eb;
+  border-color: #94a3b8;
+}
+
 .table.table-dark {
   --bs-table-bg: transparent;
   --bs-table-striped-bg: #f3f4f6;
