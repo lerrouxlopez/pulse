@@ -6,12 +6,7 @@
 <nav class="nav flex-column mt-4">
   {% if is_setup %}
     <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a>
-    <a class="nav-link" href="#">Matches</a>
-    <a class="nav-link" href="#">Brackets</a>
-    <a class="nav-link" href="#">Judges</a>
-    <a class="nav-link" href="#">Fighters</a>
-    <a class="nav-link" href="#">Categories</a>
-    <a class="nav-link" href="#">Results</a>
+    <a class="nav-link {% if active == 'teams' %}active{% endif %}" href="/teams">Teams</a>
     <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
   {% else %}
     <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>

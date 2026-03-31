@@ -4,3 +4,4 @@ pub mod divisions_repository;
 pub mod categories_repository;
 pub mod weight_classes_repository;
 pub mod events_repository;
+pub mod teams_repository;

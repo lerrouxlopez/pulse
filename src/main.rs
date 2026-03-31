@@ -43,7 +43,13 @@ fn rocket() -> _ {
                 controllers::settings_controller::update_event,
                 controllers::settings_controller::delete_event,
                 controllers::tournaments_controller::create_tournament,
-                controllers::tournaments_controller::select_tournament
+                controllers::tournaments_controller::select_tournament,
+                controllers::teams_controller::teams_page,
+                controllers::teams_controller::create_team,
+                controllers::teams_controller::update_team,
+                controllers::teams_controller::delete_team,
+                controllers::teams_controller::add_member,
+                controllers::teams_controller::delete_member
             ],
         )
         .mount("/static", FileServer::from(relative!("static")))
