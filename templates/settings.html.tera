@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse - Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/static/site.css" />
+  </head>
+  <body class="bg-ink text-cream dashboard-body">
+    <div class="dashboard-wrap">
+      <aside class="sidebar">
+        {% include "partials/sidebar.html.tera" %}
+      </aside>
+
+      <main class="content">
+        <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+          <div>
+            <h1 class="fw-bold mb-1">Tournament Settings</h1>
+            <p class="text-cream-75 mb-0">Configure {{ tournament_name }}.</p>
+          </div>
+          {% if not is_setup %}
+          <form action="/settings/setup/complete" method="post">
+            <button class="btn btn-primary shadow-glow" type="submit">
+              Complete Setup
+            </button>
+          </form>
+          {% endif %}
+        </header>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% endif %}
+
+        <section class="panel">
+          <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="divisions-tab" data-bs-toggle="tab" data-bs-target="#divisions-pane" type="button" role="tab">
+                Divisions
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="categories-tab" data-bs-toggle="tab" data-bs-target="#categories-pane" type="button" role="tab">
+                Categories
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="weight-tab" data-bs-toggle="tab" data-bs-target="#weight-pane" type="button" role="tab">
+                Weight Class
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events-pane" type="button" role="tab">
+                Events
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content pt-4" id="settingsTabsContent">
+            <div class="tab-pane fade show active" id="divisions-pane" role="tabpanel">
+              <form action="/settings/divisions" method="post" class="d-flex flex-wrap gap-2 mb-3">
+                <input class="form-control flex-grow-1" name="name" placeholder="New division name" />
+                <button class="btn btn-outline-light" type="submit">Add Division</button>
+              </form>
+              <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Division</th>
+                      <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in divisions %}
+                    <tr>
+                      <td>
+                        <form action="/settings/divisions/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                          <input class="form-control" name="name" value="{{ item.name }}" />
+                          <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
+                        </form>
+                      </td>
+                      <td class="text-end">
+                        <form action="/settings/divisions/{{ item.id }}/delete" method="post">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                      <td colspan="2" class="text-cream-60">No divisions yet.</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="categories-pane" role="tabpanel">
+              <form action="/settings/categories" method="post" class="d-flex flex-wrap gap-2 mb-3">
+                <input class="form-control flex-grow-1" name="name" placeholder="New category name" />
+                <button class="btn btn-outline-light" type="submit">Add Category</button>
+              </form>
+              <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Category</th>
+                      <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in categories %}
+                    <tr>
+                      <td>
+                        <form action="/settings/categories/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                          <input class="form-control" name="name" value="{{ item.name }}" />
+                          <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
+                        </form>
+                      </td>
+                      <td class="text-end">
+                        <form action="/settings/categories/{{ item.id }}/delete" method="post">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                      <td colspan="2" class="text-cream-60">No categories yet.</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="weight-pane" role="tabpanel">
+              <form action="/settings/weight-classes" method="post" class="d-flex flex-wrap gap-2 mb-3">
+                <input class="form-control flex-grow-1" name="name" placeholder="New weight class name" />
+                <button class="btn btn-outline-light" type="submit">Add Weight</button>
+              </form>
+              <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Weight Class</th>
+                      <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in weight_classes %}
+                    <tr>
+                      <td>
+                        <form action="/settings/weight-classes/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                          <input class="form-control" name="name" value="{{ item.name }}" />
+                          <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
+                        </form>
+                      </td>
+                      <td class="text-end">
+                        <form action="/settings/weight-classes/{{ item.id }}/delete" method="post">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                      <td colspan="2" class="text-cream-60">No weight classes yet.</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="events-pane" role="tabpanel">
+              <form action="/settings/events" method="post" class="d-flex flex-wrap gap-2 mb-3">
+                <input class="form-control flex-grow-1" name="name" placeholder="New event name" />
+                <button class="btn btn-outline-light" type="submit">Add Event</button>
+              </form>
+              <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Event</th>
+                      <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in events %}
+                    <tr>
+                      <td>
+                        <form action="/settings/events/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                          <input class="form-control" name="name" value="{{ item.name }}" />
+                          <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
+                        </form>
+                      </td>
+                      <td class="text-end">
+                        <form action="/settings/events/{{ item.id }}/delete" method="post">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                      <td colspan="2" class="text-cream-60">No events yet.</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>

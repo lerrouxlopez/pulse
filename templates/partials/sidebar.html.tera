@@ -1,0 +1,24 @@
+<div class="brand d-flex align-items-center gap-2">
+  <img src="/static/logo-dark.png" class="brand-logo logo-dark" alt="Pulse logo dark" />
+  <img src="/static/logo-light.png" class="brand-logo logo-light" alt="Pulse logo light" />
+  <span class="fw-bold">Pulse</span>
+</div>
+<nav class="nav flex-column mt-4">
+  {% if is_setup %}
+    <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a>
+    <a class="nav-link" href="#">Matches</a>
+    <a class="nav-link" href="#">Brackets</a>
+    <a class="nav-link" href="#">Judges</a>
+    <a class="nav-link" href="#">Fighters</a>
+    <a class="nav-link" href="#">Categories</a>
+    <a class="nav-link" href="#">Results</a>
+    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
+  {% else %}
+    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
+  {% endif %}
+</nav>
+<form action="/logout" method="post" class="mt-auto w-100">
+  <button class="btn btn-outline-light w-100 mt-4" type="submit">
+    Sign out
+  </button>
+</form>
