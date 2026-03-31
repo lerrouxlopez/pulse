@@ -24,15 +24,23 @@ pub fn create(conn: &Connection, tournament_id: i64, name: &str) -> rusqlite::Re
     Ok(conn.last_insert_rowid())
 }
 
-pub fn update(conn: &Connection, id: i64, name: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE weight_classes SET name = ?1 WHERE id = ?2",
-        params![name, id],
+pub fn update(
+    conn: &Connection,
+    tournament_id: i64,
+    id: i64,
+    name: &str,
+) -> rusqlite::Result<usize> {
+    let changed = conn.execute(
+        "UPDATE weight_classes SET name = ?1 WHERE id = ?2 AND tournament_id = ?3",
+        params![name, id, tournament_id],
     )?;
-    Ok(())
+    Ok(changed)
 }
 
-pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM weight_classes WHERE id = ?1", params![id])?;
-    Ok(())
+pub fn delete(conn: &Connection, tournament_id: i64, id: i64) -> rusqlite::Result<usize> {
+    let changed = conn.execute(
+        "DELETE FROM weight_classes WHERE id = ?1 AND tournament_id = ?2",
+        params![id, tournament_id],
+    )?;
+    Ok(changed)
 }

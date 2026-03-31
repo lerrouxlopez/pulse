@@ -2,6 +2,7 @@ use crate::db;
 use crate::models::NamedItem;
 use crate::repositories::{
     categories_repository, divisions_repository, events_repository, weight_classes_repository,
+    tournaments_repository,
 };
 use crate::state::AppState;
 use rocket::State;
@@ -41,6 +42,12 @@ pub fn create(
         return Err("Name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
+    let tournament_exists = tournaments_repository::get_by_id(&conn, tournament_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .is_some();
+    if !tournament_exists {
+        return Err("Tournament not found.".to_string());
+    }
     match entity {
         SettingsEntity::Division => divisions_repository::create(&conn, tournament_id, trimmed),
         SettingsEntity::Category => categories_repository::create(&conn, tournament_id, trimmed),
@@ -53,6 +60,7 @@ pub fn create(
 
 pub fn update(
     state: &State<AppState>,
+    tournament_id: i64,
     entity: SettingsEntity,
     id: i64,
     name: &str,
@@ -62,22 +70,53 @@ pub fn update(
         return Err("Name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    match entity {
-        SettingsEntity::Division => divisions_repository::update(&conn, id, trimmed),
-        SettingsEntity::Category => categories_repository::update(&conn, id, trimmed),
-        SettingsEntity::WeightClass => weight_classes_repository::update(&conn, id, trimmed),
-        SettingsEntity::Event => events_repository::update(&conn, id, trimmed),
+    let tournament_exists = tournaments_repository::get_by_id(&conn, tournament_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .is_some();
+    if !tournament_exists {
+        return Err("Tournament not found.".to_string());
     }
-    .map_err(|_| "Storage error.".to_string())
+
+    let changed = match entity {
+        SettingsEntity::Division => divisions_repository::update(&conn, tournament_id, id, trimmed),
+        SettingsEntity::Category => categories_repository::update(&conn, tournament_id, id, trimmed),
+        SettingsEntity::WeightClass => {
+            weight_classes_repository::update(&conn, tournament_id, id, trimmed)
+        }
+        SettingsEntity::Event => events_repository::update(&conn, tournament_id, id, trimmed),
+    }
+    .map_err(|_| "Storage error.".to_string())?;
+
+    if changed == 0 {
+        return Err("Item not found for this tournament.".to_string());
+    }
+    Ok(())
 }
 
-pub fn delete(state: &State<AppState>, entity: SettingsEntity, id: i64) -> Result<(), String> {
+pub fn delete(
+    state: &State<AppState>,
+    tournament_id: i64,
+    entity: SettingsEntity,
+    id: i64,
+) -> Result<(), String> {
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    match entity {
-        SettingsEntity::Division => divisions_repository::delete(&conn, id),
-        SettingsEntity::Category => categories_repository::delete(&conn, id),
-        SettingsEntity::WeightClass => weight_classes_repository::delete(&conn, id),
-        SettingsEntity::Event => events_repository::delete(&conn, id),
+    let tournament_exists = tournaments_repository::get_by_id(&conn, tournament_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .is_some();
+    if !tournament_exists {
+        return Err("Tournament not found.".to_string());
     }
-    .map_err(|_| "Storage error.".to_string())
+
+    let changed = match entity {
+        SettingsEntity::Division => divisions_repository::delete(&conn, tournament_id, id),
+        SettingsEntity::Category => categories_repository::delete(&conn, tournament_id, id),
+        SettingsEntity::WeightClass => weight_classes_repository::delete(&conn, tournament_id, id),
+        SettingsEntity::Event => events_repository::delete(&conn, tournament_id, id),
+    }
+    .map_err(|_| "Storage error.".to_string())?;
+
+    if changed == 0 {
+        return Err("Item not found for this tournament.".to_string());
+    }
+    Ok(())
 }

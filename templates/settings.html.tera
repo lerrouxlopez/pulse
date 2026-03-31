@@ -25,16 +25,19 @@
       </aside>
 
       <main class="content">
-        <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+        <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
           <div>
             <h1 class="fw-bold mb-1">Tournament Settings</h1>
             <p class="text-cream-75 mb-0">Configure {{ tournament_name }}.</p>
           </div>
           {% if not is_setup %}
-          <form action="/settings/setup/complete" method="post">
-            <button class="btn btn-primary shadow-glow" type="submit">
+          <form action="/settings/setup/complete" method="post" class="d-flex flex-column align-items-end">
+            <button class="btn btn-primary shadow-glow" type="submit" {% if not can_complete_setup %}disabled{% endif %}>
               Complete Setup
             </button>
+            {% if not can_complete_setup %}
+            <p class="text-cream-60 mt-2 mb-0 text-end">Add at least one item in each tab to enable setup completion.</p>
+            {% endif %}
           </form>
           {% endif %}
         </header>
