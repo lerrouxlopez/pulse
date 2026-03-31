@@ -53,7 +53,14 @@ pub struct Tournament {
 pub struct Team {
     pub id: i64,
     pub name: String,
+    pub logo_url: Option<String>,
     pub members: Vec<TeamMember>,
+    pub divisions: Vec<NamedItem>,
+    pub categories: Vec<NamedItem>,
+    pub events: Vec<NamedItem>,
+    pub division_ids: Vec<i64>,
+    pub category_ids: Vec<i64>,
+    pub event_ids: Vec<i64>,
 }
 
 #[derive(Serialize)]

@@ -74,9 +74,47 @@ pub fn init_db(db_path: &PathBuf) -> rusqlite::Result<()> {
         "CREATE TABLE IF NOT EXISTS teams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tournament_id INTEGER NOT NULL,
+            logo_url TEXT,
             name TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id)
+        )",
+        [],
+    )?;
+    let _ = conn.execute("ALTER TABLE teams ADD COLUMN logo_url TEXT", []);
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_divisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            team_id INTEGER NOT NULL,
+            division_id INTEGER NOT NULL,
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
+            FOREIGN KEY (team_id) REFERENCES teams(id),
+            FOREIGN KEY (division_id) REFERENCES divisions(id)
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            team_id INTEGER NOT NULL,
+            category_id INTEGER NOT NULL,
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
+            FOREIGN KEY (team_id) REFERENCES teams(id),
+            FOREIGN KEY (category_id) REFERENCES categories(id)
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            team_id INTEGER NOT NULL,
+            event_id INTEGER NOT NULL,
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
+            FOREIGN KEY (team_id) REFERENCES teams(id),
+            FOREIGN KEY (event_id) REFERENCES events(id)
         )",
         [],
     )?;
