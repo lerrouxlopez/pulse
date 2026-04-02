@@ -150,12 +150,20 @@ pub fn init_db(db_path: &PathBuf) -> rusqlite::Result<()> {
             tournament_id INTEGER NOT NULL,
             team_id INTEGER NOT NULL,
             name TEXT NOT NULL,
+            notes TEXT,
+            rank TEXT,
+            weight_class TEXT,
+            photo_url TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
             FOREIGN KEY (team_id) REFERENCES teams(id)
         )",
         [],
     )?;
+    let _ = conn.execute("ALTER TABLE team_members ADD COLUMN notes TEXT", []);
+    let _ = conn.execute("ALTER TABLE team_members ADD COLUMN rank TEXT", []);
+    let _ = conn.execute("ALTER TABLE team_members ADD COLUMN weight_class TEXT", []);
+    let _ = conn.execute("ALTER TABLE team_members ADD COLUMN photo_url TEXT", []);
     Ok(())
 }
 

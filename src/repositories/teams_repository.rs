@@ -28,13 +28,17 @@ pub fn list_teams(conn: &Connection, tournament_id: i64) -> rusqlite::Result<Vec
 
 pub fn list_members(conn: &Connection, tournament_id: i64) -> rusqlite::Result<Vec<TeamMember>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, team_id FROM team_members WHERE tournament_id = ?1 ORDER BY id",
+        "SELECT id, name, team_id, notes, rank, weight_class, photo_url FROM team_members WHERE tournament_id = ?1 ORDER BY id",
     )?;
     let rows = stmt.query_map(params![tournament_id], |row| {
         Ok(TeamMember {
             id: row.get(0)?,
             name: row.get(1)?,
             team_id: row.get(2)?,
+            notes: row.get(3)?,
+            rank: row.get(4)?,
+            weight_class: row.get(5)?,
+            photo_url: row.get(6)?,
         })
     })?;
     let mut members = Vec::new();
@@ -82,10 +86,15 @@ pub fn create_member(
     tournament_id: i64,
     team_id: i64,
     name: &str,
+    notes: Option<&str>,
+    rank: Option<&str>,
+    weight_class: Option<&str>,
+    photo_url: Option<&str>,
 ) -> rusqlite::Result<i64> {
     conn.execute(
-        "INSERT INTO team_members (tournament_id, team_id, name) VALUES (?1, ?2, ?3)",
-        params![tournament_id, team_id, name],
+        "INSERT INTO team_members (tournament_id, team_id, name, notes, rank, weight_class, photo_url)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![tournament_id, team_id, name, notes, rank, weight_class, photo_url],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -99,6 +108,62 @@ pub fn delete_member(
         "DELETE FROM team_members WHERE id = ?1 AND tournament_id = ?2",
         params![id, tournament_id],
     )
+}
+
+pub fn update_member(
+    conn: &Connection,
+    tournament_id: i64,
+    member_id: i64,
+    name: &str,
+    notes: Option<&str>,
+    rank: Option<&str>,
+    weight_class: Option<&str>,
+    photo_url: Option<&str>,
+) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE team_members
+         SET name = ?1, notes = ?2, rank = ?3, weight_class = ?4, photo_url = ?5
+         WHERE id = ?6 AND tournament_id = ?7",
+        params![name, notes, rank, weight_class, photo_url, member_id, tournament_id],
+    )
+}
+
+pub fn update_member_photo(
+    conn: &Connection,
+    tournament_id: i64,
+    member_id: i64,
+    photo_url: Option<&str>,
+) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE team_members SET photo_url = ?1 WHERE id = ?2 AND tournament_id = ?3",
+        params![photo_url, member_id, tournament_id],
+    )
+}
+
+pub fn get_member(
+    conn: &Connection,
+    tournament_id: i64,
+    member_id: i64,
+) -> rusqlite::Result<Option<TeamMember>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, team_id, notes, rank, weight_class, photo_url
+         FROM team_members
+         WHERE id = ?1 AND tournament_id = ?2",
+    )?;
+    let mut rows = stmt.query(params![member_id, tournament_id])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(TeamMember {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            team_id: row.get(2)?,
+            notes: row.get(3)?,
+            rank: row.get(4)?,
+            weight_class: row.get(5)?,
+            photo_url: row.get(6)?,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn get_team_logo(

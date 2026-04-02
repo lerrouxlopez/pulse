@@ -54,7 +54,8 @@ fn rocket() -> _ {
                 controllers::teams_controller::update_team,
                 controllers::teams_controller::delete_team,
                 controllers::teams_controller::add_member,
-                controllers::teams_controller::delete_member
+                controllers::teams_controller::delete_member,
+                controllers::teams_controller::update_member
             ],
         )
         .mount("/static", FileServer::from(relative!("static")))

@@ -7,6 +7,7 @@ use rocket::http::{Cookie, CookieJar, Status};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
+use image::{imageops::FilterType, GenericImageView};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -20,8 +21,25 @@ pub struct TeamForm<'r> {
 }
 
 #[derive(FromForm)]
-pub struct MemberForm {
+pub struct MemberForm<'r> {
     pub name: String,
+    pub notes: Option<String>,
+    pub rank: Option<String>,
+    pub weight_class: Option<String>,
+    pub photo_file: Option<TempFile<'r>>,
+}
+
+#[derive(FromForm)]
+pub struct UpdateMemberForm<'r> {
+    pub name: Option<String>,
+    pub notes: Option<String>,
+    pub rank: Option<String>,
+    pub weight_class: Option<String>,
+    pub clear_notes: Option<String>,
+    pub clear_rank: Option<String>,
+    pub clear_weight_class: Option<String>,
+    pub photo_file: Option<TempFile<'r>>,
+    pub clear_photo: Option<String>,
 }
 
 #[get("/<slug>/teams?<error>&<success>")]
@@ -78,12 +96,15 @@ pub fn teams_page(
     ))
 }
 
-#[get("/<slug>/teams/<id>")]
+#[get("/<slug>/teams/<id>?<q>&<sort>&<dir>")]
 pub fn team_profile(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
     id: i64,
+    q: Option<String>,
+    sort: Option<String>,
+    dir: Option<String>,
 ) -> Result<Template, Redirect> {
     let user = match auth_service::current_user(state, jar) {
         Some(user) => user,
@@ -121,15 +142,67 @@ pub fn team_profile(
         }
     };
 
+    let filtered_team = {
+        let mut filtered = team;
+        if let Some(ref query) = q {
+            let needle = query.trim().to_lowercase();
+            if !needle.is_empty() {
+                filtered.members = filtered
+                    .members
+                    .into_iter()
+                    .filter(|member| {
+                        let name = member.name.to_lowercase();
+                        let rank = member.rank.as_deref().unwrap_or("").to_lowercase();
+                        let weight = member.weight_class.as_deref().unwrap_or("").to_lowercase();
+                        let notes = member.notes.as_deref().unwrap_or("").to_lowercase();
+                        name.contains(&needle)
+                            || rank.contains(&needle)
+                            || weight.contains(&needle)
+                            || notes.contains(&needle)
+                    })
+                    .collect();
+            }
+        }
+
+        let sort_by = sort
+            .as_deref()
+            .unwrap_or("name")
+            .to_lowercase();
+        let sort_dir = dir.as_deref().unwrap_or("asc").to_lowercase();
+        filtered.members.sort_by(|a, b| {
+            let key_a = match sort_by.as_str() {
+                "rank" => a.rank.as_deref().unwrap_or(""),
+                "weight" => a.weight_class.as_deref().unwrap_or(""),
+                _ => a.name.as_str(),
+            }
+            .to_lowercase();
+            let key_b = match sort_by.as_str() {
+                "rank" => b.rank.as_deref().unwrap_or(""),
+                "weight" => b.weight_class.as_deref().unwrap_or(""),
+                _ => b.name.as_str(),
+            }
+            .to_lowercase();
+            key_a.cmp(&key_b)
+        });
+        if sort_dir == "desc" {
+            filtered.members.reverse();
+        }
+
+        filtered
+    };
+
     Ok(Template::render(
         "team_profile",
         context! {
             name: user.name,
             tournament_name: tournament.name,
             tournament_slug: tournament.slug,
-            team: team,
+            team: filtered_team,
             active: "teams",
             is_setup: tournament.is_setup,
+            search_query: q,
+            sort_by: sort.unwrap_or_else(|| "name".to_string()),
+            sort_dir: dir.unwrap_or_else(|| "asc".to_string()),
         },
     ))
 }
@@ -241,21 +314,42 @@ pub fn delete_team(
 }
 
 #[post("/<slug>/teams/<team_id>/members", data = "<form>")]
-pub fn add_member(
+pub async fn add_member(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
     team_id: i64,
-    form: Form<MemberForm>,
+    mut form: Form<MemberForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
-    match teams_service::add_member(state, user.id, tournament.id, team_id, &form.name) {
+    let photo_url = match save_player_photo(&mut form.photo_file).await {
+        Ok(value) => value,
+        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
+            return Ok(Redirect::to(uri!(teams_page(
+                slug = slug,
+                error = Some("Invalid player photo. Use PNG/JPEG under 5MB.".to_string()),
+                success = Option::<String>::None
+            ))))
+        }
+        Err(_) => return Err(Status::InternalServerError),
+    };
+    match teams_service::add_member(
+        state,
+        user.id,
+        tournament.id,
+        team_id,
+        &form.name,
+        form.notes.as_deref(),
+        form.rank.as_deref(),
+        form.weight_class.as_deref(),
+        photo_url.as_deref(),
+    ) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
             error = Option::<String>::None,
-            success = Some("Member added.".to_string())
+            success = Some("Player added.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
@@ -279,7 +373,57 @@ pub fn delete_member(
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
             error = Option::<String>::None,
-            success = Some("Member removed.".to_string())
+            success = Some("Player removed.".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None
+        )))),
+    }
+}
+
+#[post("/<slug>/teams/members/<member_id>/update", data = "<form>")]
+pub async fn update_member(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    member_id: i64,
+    mut form: Form<UpdateMemberForm<'_>>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    let photo_url = match save_player_photo(&mut form.photo_file).await {
+        Ok(value) => value,
+        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
+            return Ok(Redirect::to(uri!(teams_page(
+                slug = slug,
+                error = Some("Invalid player photo. Use PNG/JPEG under 5MB.".to_string()),
+                success = Option::<String>::None
+            ))))
+        }
+        Err(_) => return Err(Status::InternalServerError),
+    };
+    match teams_service::update_member(
+        state,
+        user.id,
+        tournament.id,
+        member_id,
+        form.name.as_deref(),
+        form.notes.as_deref(),
+        form.rank.as_deref(),
+        form.weight_class.as_deref(),
+        form.clear_notes.is_some(),
+        form.clear_rank.is_some(),
+        form.clear_weight_class.is_some(),
+        photo_url.as_deref(),
+        form.clear_photo.is_some(),
+    ) {
+        Ok(_) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("Player updated.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
@@ -310,6 +454,68 @@ async fn save_logo(file: &mut Option<TempFile<'_>>) -> Result<Option<String>, st
     let filename = format!("team-logo-{}{}", timestamp, extension);
     let filepath = uploads_dir.join(filename);
     upload.persist_to(&filepath).await?;
+    let public_path = format!("/static/uploads/{}", filepath.file_name().unwrap().to_string_lossy());
+    Ok(Some(public_path))
+}
+
+async fn save_player_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<String>, std::io::Error> {
+    let Some(upload) = file else {
+        return Ok(None);
+    };
+    if upload.len() == 0 {
+        return Ok(None);
+    }
+    const MAX_UPLOAD_BYTES: u64 = 5 * 1024 * 1024;
+    if upload.len() > MAX_UPLOAD_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Photo too large",
+        ));
+    }
+    if let Some(content_type) = upload.content_type() {
+        let is_supported = content_type
+            .extension()
+            .map(|ext| {
+                let ext = ext.as_str();
+                ext.eq_ignore_ascii_case("png")
+                    || ext.eq_ignore_ascii_case("jpg")
+                    || ext.eq_ignore_ascii_case("jpeg")
+            })
+            .unwrap_or(false);
+        if !is_supported {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Unsupported file type",
+            ));
+        }
+    }
+
+    let uploads_dir = Path::new("static").join("uploads");
+    std::fs::create_dir_all(&uploads_dir)?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let raw_filename = format!("player-photo-raw-{}.bin", timestamp);
+    let raw_path = uploads_dir.join(raw_filename);
+    upload.persist_to(&raw_path).await?;
+
+    let image = image::open(&raw_path)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image"))?;
+    let (width, height) = image.dimensions();
+    let crop_size = width.min(height);
+    let x = (width - crop_size) / 2;
+    let y = (height - crop_size) / 2;
+    let cropped = image.crop_imm(x, y, crop_size, crop_size);
+    let resized = cropped.resize(320, 320, FilterType::CatmullRom);
+
+    let filename = format!("player-photo-{}.png", timestamp);
+    let filepath = uploads_dir.join(filename);
+    resized
+        .save(&filepath)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Unable to save image"))?;
+    let _ = std::fs::remove_file(&raw_path);
     let public_path = format!("/static/uploads/{}", filepath.file_name().unwrap().to_string_lossy());
     Ok(Some(public_path))
 }
