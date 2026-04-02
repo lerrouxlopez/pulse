@@ -43,10 +43,9 @@ pub fn create(
         return Err("Name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     match entity {
@@ -72,10 +71,9 @@ pub fn update(
         return Err("Name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
@@ -103,10 +101,9 @@ pub fn delete(
     id: i64,
 ) -> Result<(), String> {
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
 

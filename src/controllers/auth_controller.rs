@@ -31,9 +31,9 @@ pub fn register(
             jar.add(Cookie::new("user_id", user_id.to_string()));
             let tournament = tournament_service::create(state, user_id, "New Tournament")
                 .ok_or(Status::InternalServerError)?;
-            jar.add(Cookie::new("tournament_id", tournament.id.to_string()));
             Ok(Redirect::to(uri!(
                 crate::controllers::settings_controller::settings_page(
+                    slug = tournament.slug,
                     error = Option::<String>::None,
                     success = Option::<String>::None,
                     tab = Option::<String>::None
@@ -77,5 +77,6 @@ pub fn login(
 pub fn logout(jar: &CookieJar<'_>) -> Redirect {
     jar.remove(Cookie::from("user_id"));
     jar.remove(Cookie::from("tournament_id"));
+    jar.remove(Cookie::from("last_tournament_slug"));
     Redirect::to(uri!(crate::controllers::index_controller::index))
 }

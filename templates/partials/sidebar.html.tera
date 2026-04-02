@@ -5,11 +5,11 @@
 </div>
 <nav class="nav flex-column mt-4">
   {% if is_setup %}
-    <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a>
-    <a class="nav-link {% if active == 'teams' %}active{% endif %}" href="/teams">Teams</a>
-    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
+    <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/dashboard{% else %}/dashboard{% endif %}">Dashboard</a>
+    <a class="nav-link {% if active == 'teams' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/teams{% else %}/dashboard{% endif %}">Teams</a>
+    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/settings{% else %}/dashboard{% endif %}">Settings</a>
   {% else %}
-    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="/settings">Settings</a>
+    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/settings{% else %}/dashboard{% endif %}">Settings</a>
   {% endif %}
 </nav>
 <form action="/logout" method="post" class="mt-auto w-100">

@@ -147,9 +147,7 @@
                       {% endif %}
                     </td>
                     <td class="text-end">
-                      <form action="/tournaments/select/{{ tournament.id }}" method="post">
-                        <button class="btn btn-outline-dark btn-sm" type="submit">Open</button>
-                      </form>
+                      <a class="btn btn-outline-dark btn-sm" href="/{{ tournament.slug }}/dashboard">Open</a>
                     </td>
                   </tr>
                   {% else %}

@@ -6,10 +6,9 @@ use rocket::State;
 
 pub fn list(state: &State<AppState>, user_id: i64, tournament_id: i64) -> Result<Vec<Team>, String> {
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
@@ -41,6 +40,16 @@ pub fn list(state: &State<AppState>, user_id: i64, tournament_id: i64) -> Result
     Ok(teams)
 }
 
+pub fn get_team(
+    state: &State<AppState>,
+    user_id: i64,
+    tournament_id: i64,
+    team_id: i64,
+) -> Result<Option<Team>, String> {
+    let teams = list(state, user_id, tournament_id)?;
+    Ok(teams.into_iter().find(|team| team.id == team_id))
+}
+
 pub fn create_team(
     state: &State<AppState>,
     user_id: i64,
@@ -56,10 +65,9 @@ pub fn create_team(
         return Err("Team name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let team_id = teams_repository::create_team(&conn, tournament_id, trimmed, logo_url)
@@ -86,10 +94,9 @@ pub fn update_team(
         return Err("Team name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let changed = teams_repository::update_team(&conn, tournament_id, id, trimmed, logo_url)
@@ -110,10 +117,9 @@ pub fn delete_team(
     id: i64,
 ) -> Result<(), String> {
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let _ = conn.execute(
@@ -152,10 +158,9 @@ pub fn add_member(
         return Err("Member name is required.".to_string());
     }
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     teams_repository::create_member(&conn, tournament_id, team_id, trimmed)
@@ -170,10 +175,9 @@ pub fn delete_member(
     member_id: i64,
 ) -> Result<(), String> {
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let changed =
@@ -191,10 +195,9 @@ pub fn get_team_logo(
     team_id: i64,
 ) -> Result<Option<String>, String> {
     let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let tournament_exists = tournaments_repository::get_by_id_for_user(&conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
-        .is_some();
-    if !tournament_exists {
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
         return Err("Tournament not found.".to_string());
     }
     teams_repository::get_team_logo(&conn, tournament_id, team_id)

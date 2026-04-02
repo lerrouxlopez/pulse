@@ -1,7 +1,7 @@
 use crate::services::{auth_service, tournament_service};
 use crate::state::AppState;
 use rocket::form::{Form, FromForm};
-use rocket::http::{Cookie, CookieJar, Status};
+use rocket::http::{CookieJar, Status};
 use rocket::response::Redirect;
 use rocket::State;
 
@@ -24,9 +24,9 @@ pub fn create_tournament(
     };
     let tournament =
         tournament_service::create(state, user.id, name).ok_or(Status::InternalServerError)?;
-    jar.add(Cookie::new("tournament_id", tournament.id.to_string()));
     Ok(Redirect::to(uri!(
         crate::controllers::settings_controller::settings_page(
+            slug = tournament.slug,
             error = Option::<String>::None,
             success = Option::<String>::None,
             tab = Option::<String>::None
@@ -43,6 +43,9 @@ pub fn select_tournament(
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament = tournament_service::get_by_id_for_user(state, id, user.id)
         .ok_or(Status::NotFound)?;
-    jar.add(Cookie::new("tournament_id", tournament.id.to_string()));
-    Ok(Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard)))
+    Ok(Redirect::to(uri!(
+        crate::controllers::dashboard_controller::tournament_dashboard(
+            slug = tournament.slug
+        )
+    )))
 }

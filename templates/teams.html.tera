@@ -40,15 +40,24 @@
         {% endif %}
 
         <section class="panel mb-4">
-          <h3 class="fw-semibold mb-3">Create Team</h3>
-          <form action="/teams" method="post" enctype="multipart/form-data" class="d-flex flex-column gap-3">
-            <div class="d-flex flex-wrap gap-2">
-              <input class="form-control flex-grow-1" name="name" placeholder="Team name" />
-              <input class="form-control flex-grow-1" type="file" name="logo_file" accept="image/*" />
-              <button class="btn btn-outline-light" type="submit">Add Team</button>
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Create Team</h3>
+            <span class="text-cream-60 small">Standard setup</span>
+          </div>
+          <form action="/{{ tournament_slug }}/teams" method="post" enctype="multipart/form-data">
+            <div class="row g-3">
+              <div class="col-lg-6">
+                <label class="form-label text-cream-60">Team Name</label>
+                <input class="form-control" name="name" placeholder="e.g. Dragon Dojo" />
+              </div>
+              <div class="col-lg-6">
+                <label class="form-label text-cream-60">Team Logo</label>
+                <input class="form-control" type="file" name="logo_file" accept="image/*" />
+              </div>
             </div>
-            <div class="d-flex flex-wrap gap-4">
-              <div>
+
+            <div class="row g-4 mt-1">
+              <div class="col-md-4">
                 <p class="text-cream-60 mb-2">Divisions</p>
                 {% for division in divisions %}
                 <div class="form-check">
@@ -57,7 +66,7 @@
                 </div>
                 {% endfor %}
               </div>
-              <div>
+              <div class="col-md-4">
                 <p class="text-cream-60 mb-2">Categories</p>
                 {% for category in categories %}
                 <div class="form-check">
@@ -66,7 +75,7 @@
                 </div>
                 {% endfor %}
               </div>
-              <div>
+              <div class="col-md-4">
                 <p class="text-cream-60 mb-2">Events</p>
                 {% for event in events %}
                 <div class="form-check">
@@ -76,17 +85,24 @@
                 {% endfor %}
               </div>
             </div>
+            <div class="d-flex justify-content-end mt-4">
+              <button class="btn btn-outline-light" type="submit">Add Team</button>
+            </div>
           </form>
         </section>
 
         <section class="panel">
-          <h3 class="fw-semibold mb-3">Teams</h3>
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Teams</h3>
+          </div>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0">
               <thead>
                 <tr>
                   <th scope="col">Team</th>
-                  <th scope="col">Members</th>
+                  <th scope="col">Divisions</th>
+                  <th scope="col">Categories</th>
+                  <th scope="col">Events</th>
                   <th scope="col" class="text-end">Actions</th>
                 </tr>
               </thead>
@@ -94,72 +110,57 @@
                 {% for team in teams %}
                 <tr>
                   <td>
-                    <form action="/teams/{{ team.id }}/update" method="post" enctype="multipart/form-data" class="d-flex flex-column gap-3">
-                      <div class="d-flex gap-2">
-                        <input class="form-control" name="name" value="{{ team.name }}" />
-                        <input class="form-control" type="file" name="logo_file" accept="image/*" />
-                        <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
-                      </div>
+                    <div class="d-flex align-items-center gap-3">
                       {% if team.logo_url %}
-                      <img src="{{ team.logo_url }}" alt="Team logo" style="width: 52px; height: 52px; object-fit: cover; border-radius: 12px;">
+                      <img src="{{ team.logo_url }}" alt="Team logo" style="width: 40px; height: 40px; object-fit: cover; border-radius: 12px;">
+                      {% else %}
+                      <div class="bg-light text-dark d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; border-radius: 12px;">?</div>
                       {% endif %}
-                      <div class="d-flex flex-wrap gap-4">
-                        <div>
-                          <p class="text-cream-60 mb-2">Divisions</p>
-                          {% for division in divisions %}
-                          <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="division_ids" value="{{ division.id }}" id="team-{{ team.id }}-division-{{ division.id }}"
-                              {% if division.id in team.division_ids %}checked{% endif %}>
-                            <label class="form-check-label" for="team-{{ team.id }}-division-{{ division.id }}">{{ division.name }}</label>
-                          </div>
-                          {% endfor %}
-                        </div>
-                        <div>
-                          <p class="text-cream-60 mb-2">Categories</p>
-                          {% for category in categories %}
-                          <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="team-{{ team.id }}-category-{{ category.id }}"
-                              {% if category.id in team.category_ids %}checked{% endif %}>
-                            <label class="form-check-label" for="team-{{ team.id }}-category-{{ category.id }}">{{ category.name }}</label>
-                          </div>
-                          {% endfor %}
-                        </div>
-                        <div>
-                          <p class="text-cream-60 mb-2">Events</p>
-                          {% for event in events %}
-                          <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="team-{{ team.id }}-event-{{ event.id }}"
-                              {% if event.id in team.event_ids %}checked{% endif %}>
-                            <label class="form-check-label" for="team-{{ team.id }}-event-{{ event.id }}">{{ event.name }}</label>
-                          </div>
-                          {% endfor %}
-                        </div>
-                      </div>
-                    </form>
-                  </td>
-                  <td>
-                    <div class="d-flex flex-column gap-2">
-                      <form action="/teams/{{ team.id }}/members" method="post" class="d-flex gap-2">
-                        <input class="form-control" name="name" placeholder="Add member" />
-                        <button class="btn btn-sm btn-outline-light" type="submit">Add</button>
-                      </form>
-                    <div class="d-flex flex-wrap gap-2">
-                      {% for member in team.members %}
-                        <form action="/teams/members/{{ member.id }}/delete" method="post">
-                          <button class="btn btn-sm btn-outline-dark" type="submit">
-                            {{ member.name }} x
-                          </button>
-                        </form>
-                        {% else %}
-                        <span class="text-cream-60">No members yet.</span>
-                        {% endfor %}
+                      <div>
+                        <a class="fw-semibold text-decoration-none" href="/{{ tournament_slug }}/teams/{{ team.id }}">{{ team.name }}</a>
+                        <div class="text-cream-60 small">{{ team.members | length }} members</div>
+                        {% if team.logo_url %}
+                        <a class="small text-decoration-none" href="{{ team.logo_url }}" target="_blank">View logo</a>
+                        {% endif %}
                       </div>
                     </div>
                   </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for division in team.divisions %}
+                      <span class="badge text-bg-light text-ink">{{ division.name }}</span>
+                      {% else %}
+                      <span class="text-cream-60 small">None</span>
+                      {% endfor %}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for category in team.categories %}
+                      <span class="badge text-bg-light text-ink">{{ category.name }}</span>
+                      {% else %}
+                      <span class="text-cream-60 small">None</span>
+                      {% endfor %}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for event in team.events %}
+                      <span class="badge text-bg-light text-ink">{{ event.name }}</span>
+                      {% else %}
+                      <span class="text-cream-60 small">None</span>
+                      {% endfor %}
+                    </div>
+                  </td>
                   <td class="text-end">
-                    <form action="/teams/{{ team.id }}/delete" method="post">
-                      <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
-                    </form>
+                    <div class="d-flex justify-content-end gap-2">
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editTeamModal-{{ team.id }}">
+                        Edit
+                      </button>
+                      <form action="/{{ tournament_slug }}/teams/{{ team.id }}/delete" method="post">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
                 {% else %}
@@ -171,6 +172,93 @@
             </table>
           </div>
         </section>
+
+        {% for team in teams %}
+        <div class="modal fade" id="editTeamModal-{{ team.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit Team</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="/{{ tournament_slug }}/teams/{{ team.id }}/update" method="post" enctype="multipart/form-data">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-lg-6">
+                      <label class="form-label text-muted">Team Name</label>
+                      <input class="form-control" name="name" value="{{ team.name }}" />
+                    </div>
+                    <div class="col-lg-6">
+                      <label class="form-label text-muted">Team Logo</label>
+                      <input class="form-control" type="file" name="logo_file" accept="image/*" />
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <label class="form-label text-muted">Add Member</label>
+                    <div class="d-flex gap-2">
+                      <input class="form-control" name="name" placeholder="Member name" />
+                      <button class="btn btn-outline-light" type="submit" formaction="/{{ tournament_slug }}/teams/{{ team.id }}/members">
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <label class="form-label text-muted">Members</label>
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for member in team.members %}
+                      <form action="/{{ tournament_slug }}/teams/members/{{ member.id }}/delete" method="post">
+                        <button class="btn btn-sm btn-outline-dark" type="submit">
+                          {{ member.name }} x
+                        </button>
+                      </form>
+                      {% else %}
+                      <span class="text-muted">No members yet.</span>
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="row g-4 mt-1">
+                    <div class="col-md-4">
+                      <p class="text-muted mb-2">Divisions</p>
+                      {% for division in divisions %}
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="division_ids" value="{{ division.id }}" id="edit-{{ team.id }}-division-{{ division.id }}"
+                          {% if division.id in team.division_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="edit-{{ team.id }}-division-{{ division.id }}">{{ division.name }}</label>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                      <p class="text-muted mb-2">Categories</p>
+                      {% for category in categories %}
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="edit-{{ team.id }}-category-{{ category.id }}"
+                          {% if category.id in team.category_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="edit-{{ team.id }}-category-{{ category.id }}">{{ category.name }}</label>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                      <p class="text-muted mb-2">Events</p>
+                      {% for event in events %}
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="edit-{{ team.id }}-event-{{ event.id }}"
+                          {% if event.id in team.event_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="edit-{{ team.id }}-event-{{ event.id }}">{{ event.name }}</label>
+                      </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button class="btn btn-primary" type="submit">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
       </main>
     </div>
 

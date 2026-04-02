@@ -6,6 +6,7 @@ mod db;
 mod models;
 mod repositories;
 mod services;
+mod slug;
 mod state;
 
 use rocket::fs::{relative, FileServer};
@@ -17,6 +18,7 @@ use std::path::PathBuf;
 fn rocket() -> _ {
     let db_path = PathBuf::from("data/pulse.db");
     let _ = db::init_db(&db_path);
+    let _ = services::tournament_service::ensure_slugs(&db_path);
     rocket::build()
         .manage(AppState { db_path })
         .mount(
@@ -27,6 +29,7 @@ fn rocket() -> _ {
                 controllers::auth_controller::register,
                 controllers::auth_controller::login,
                 controllers::dashboard_controller::dashboard,
+                controllers::dashboard_controller::tournament_dashboard,
                 controllers::auth_controller::logout,
                 controllers::settings_controller::settings_page,
                 controllers::settings_controller::complete_setup,
@@ -42,9 +45,11 @@ fn rocket() -> _ {
                 controllers::settings_controller::create_event,
                 controllers::settings_controller::update_event,
                 controllers::settings_controller::delete_event,
+                controllers::settings_controller::invite_user,
                 controllers::tournaments_controller::create_tournament,
                 controllers::tournaments_controller::select_tournament,
                 controllers::teams_controller::teams_page,
+                controllers::teams_controller::team_profile,
                 controllers::teams_controller::create_team,
                 controllers::teams_controller::update_team,
                 controllers::teams_controller::delete_team,

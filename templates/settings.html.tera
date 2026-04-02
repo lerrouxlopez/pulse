@@ -36,7 +36,7 @@
               <button class="btn btn-outline-light" type="submit">Create New Tournament</button>
             </form>
             {% if not is_setup %}
-            <form action="/settings/setup/complete" method="post" class="d-flex flex-column align-items-end">
+            <form action="/{{ tournament_slug }}/settings/setup/complete" method="post" class="d-flex flex-column align-items-end">
               <button class="btn btn-primary shadow-glow" type="submit" {% if not can_complete_setup %}disabled{% endif %}>
                 Complete Setup
               </button>
@@ -77,11 +77,16 @@
                 Events
               </button>
             </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link {% if active_tab == 'access' %}active{% endif %}" id="access-tab" data-bs-toggle="tab" data-bs-target="#access-pane" type="button" role="tab">
+                Access
+              </button>
+            </li>
           </ul>
 
           <div class="tab-content pt-4" id="settingsTabsContent">
             <div class="tab-pane fade {% if active_tab == 'divisions' %}show active{% endif %}" id="divisions-pane" role="tabpanel">
-              <form action="/settings/divisions" method="post" class="d-flex flex-wrap gap-2 mb-3">
+              <form action="/{{ tournament_slug }}/settings/divisions" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New division name" />
                 <button class="btn btn-outline-light" type="submit">Add Division</button>
               </form>
@@ -97,13 +102,13 @@
                     {% for item in divisions %}
                     <tr>
                       <td>
-                        <form action="/settings/divisions/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                        <form action="/{{ tournament_slug }}/settings/divisions/{{ item.id }}/update" method="post" class="d-flex gap-2">
                           <input class="form-control" name="name" value="{{ item.name }}" />
                           <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
                         </form>
                       </td>
                       <td class="text-end">
-                        <form action="/settings/divisions/{{ item.id }}/delete" method="post">
+                        <form action="/{{ tournament_slug }}/settings/divisions/{{ item.id }}/delete" method="post">
                           <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                         </form>
                       </td>
@@ -119,7 +124,7 @@
             </div>
 
             <div class="tab-pane fade {% if active_tab == 'categories' %}show active{% endif %}" id="categories-pane" role="tabpanel">
-              <form action="/settings/categories" method="post" class="d-flex flex-wrap gap-2 mb-3">
+              <form action="/{{ tournament_slug }}/settings/categories" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New category name" />
                 <button class="btn btn-outline-light" type="submit">Add Category</button>
               </form>
@@ -135,13 +140,13 @@
                     {% for item in categories %}
                     <tr>
                       <td>
-                        <form action="/settings/categories/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                        <form action="/{{ tournament_slug }}/settings/categories/{{ item.id }}/update" method="post" class="d-flex gap-2">
                           <input class="form-control" name="name" value="{{ item.name }}" />
                           <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
                         </form>
                       </td>
                       <td class="text-end">
-                        <form action="/settings/categories/{{ item.id }}/delete" method="post">
+                        <form action="/{{ tournament_slug }}/settings/categories/{{ item.id }}/delete" method="post">
                           <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                         </form>
                       </td>
@@ -157,7 +162,7 @@
             </div>
 
             <div class="tab-pane fade {% if active_tab == 'weight' %}show active{% endif %}" id="weight-pane" role="tabpanel">
-              <form action="/settings/weight-classes" method="post" class="d-flex flex-wrap gap-2 mb-3">
+              <form action="/{{ tournament_slug }}/settings/weight-classes" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New weight class name" />
                 <button class="btn btn-outline-light" type="submit">Add Weight</button>
               </form>
@@ -173,13 +178,13 @@
                     {% for item in weight_classes %}
                     <tr>
                       <td>
-                        <form action="/settings/weight-classes/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                        <form action="/{{ tournament_slug }}/settings/weight-classes/{{ item.id }}/update" method="post" class="d-flex gap-2">
                           <input class="form-control" name="name" value="{{ item.name }}" />
                           <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
                         </form>
                       </td>
                       <td class="text-end">
-                        <form action="/settings/weight-classes/{{ item.id }}/delete" method="post">
+                        <form action="/{{ tournament_slug }}/settings/weight-classes/{{ item.id }}/delete" method="post">
                           <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                         </form>
                       </td>
@@ -195,7 +200,7 @@
             </div>
 
             <div class="tab-pane fade {% if active_tab == 'events' %}show active{% endif %}" id="events-pane" role="tabpanel">
-              <form action="/settings/events" method="post" class="d-flex flex-wrap gap-2 mb-3">
+              <form action="/{{ tournament_slug }}/settings/events" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New event name" />
                 <button class="btn btn-outline-light" type="submit">Add Event</button>
               </form>
@@ -211,13 +216,13 @@
                     {% for item in events %}
                     <tr>
                       <td>
-                        <form action="/settings/events/{{ item.id }}/update" method="post" class="d-flex gap-2">
+                        <form action="/{{ tournament_slug }}/settings/events/{{ item.id }}/update" method="post" class="d-flex gap-2">
                           <input class="form-control" name="name" value="{{ item.name }}" />
                           <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
                         </form>
                       </td>
                       <td class="text-end">
-                        <form action="/settings/events/{{ item.id }}/delete" method="post">
+                        <form action="/{{ tournament_slug }}/settings/events/{{ item.id }}/delete" method="post">
                           <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                         </form>
                       </td>
@@ -229,6 +234,42 @@
                     {% endfor %}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <div class="tab-pane fade {% if active_tab == 'access' %}show active{% endif %}" id="access-pane" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-6">
+                  <h5 class="fw-semibold mb-2">Invite User</h5>
+                  <p class="text-cream-60">Add another user by email to access this tournament.</p>
+                  <form action="/{{ tournament_slug }}/settings/invite" method="post" class="d-flex flex-wrap gap-2">
+                    <input class="form-control flex-grow-1" name="email" placeholder="user@email.com" />
+                    <button class="btn btn-outline-light" type="submit">Send Invite</button>
+                  </form>
+                </div>
+                <div class="col-lg-6">
+                  <h5 class="fw-semibold mb-2">People With Access</h5>
+                  <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for user in access_users %}
+                        <tr>
+                          <td>{{ user.name }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                          <td class="text-cream-60">No users added yet.</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

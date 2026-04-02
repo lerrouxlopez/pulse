@@ -3,7 +3,7 @@ use crate::services::settings_service::SettingsEntity;
 use crate::state::AppState;
 use rocket::form::{Form, FromForm};
 use rocket::fs::TempFile;
-use rocket::http::{CookieJar, Status};
+use rocket::http::{Cookie, CookieJar, Status};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
@@ -24,10 +24,11 @@ pub struct MemberForm {
     pub name: String,
 }
 
-#[get("/teams?<error>&<success>")]
+#[get("/<slug>/teams?<error>&<success>")]
 pub fn teams_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
+    slug: String,
     error: Option<String>,
     success: Option<String>,
 ) -> Result<Template, Redirect> {
@@ -43,12 +44,7 @@ pub fn teams_page(
         }
     };
 
-    let tournament_id = jar
-        .get("tournament_id")
-        .and_then(|cookie| cookie.value().parse::<i64>().ok());
-    let tournament = match tournament_id
-        .and_then(|id| tournament_service::get_by_id_for_user(state, id, user.id))
-    {
+    let tournament = match tournament_service::get_by_slug_for_user(state, &slug, user.id) {
         Some(tournament) => tournament,
         None => {
             return Err(Redirect::to(uri!(
@@ -56,6 +52,8 @@ pub fn teams_page(
             )))
         }
     };
+
+    jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
     let teams = teams_service::list(state, user.id, tournament.id).unwrap_or_default();
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
@@ -67,6 +65,7 @@ pub fn teams_page(
         context! {
             name: user.name,
             tournament_name: tournament.name,
+            tournament_slug: tournament.slug,
             teams: teams,
             divisions: divisions,
             categories: categories,
@@ -79,18 +78,71 @@ pub fn teams_page(
     ))
 }
 
-#[post("/teams", data = "<form>")]
+#[get("/<slug>/teams/<id>")]
+pub fn team_profile(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Template, Redirect> {
+    let user = match auth_service::current_user(state, jar) {
+        Some(user) => user,
+        None => {
+            return Err(Redirect::to(uri!(
+                crate::controllers::auth_controller::auth_page(
+                    error = Option::<String>::None,
+                    success = Option::<String>::None
+                )
+            )))
+        }
+    };
+
+    let tournament = match tournament_service::get_by_slug_for_user(state, &slug, user.id) {
+        Some(tournament) => tournament,
+        None => {
+            return Err(Redirect::to(uri!(
+                crate::controllers::dashboard_controller::dashboard
+            )))
+        }
+    };
+
+    jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
+
+    let team = match teams_service::get_team(state, user.id, tournament.id, id) {
+        Ok(Some(team)) => team,
+        _ => {
+            return Err(Redirect::to(uri!(
+                crate::controllers::teams_controller::teams_page(
+                    slug = slug,
+                    error = Some("Team not found.".to_string()),
+                    success = Option::<String>::None
+                )
+            )))
+        }
+    };
+
+    Ok(Template::render(
+        "team_profile",
+        context! {
+            name: user.name,
+            tournament_name: tournament.name,
+            tournament_slug: tournament.slug,
+            team: team,
+            active: "teams",
+            is_setup: tournament.is_setup,
+        },
+    ))
+}
+
+#[post("/<slug>/teams", data = "<form>")]
 pub async fn create_team(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
+    slug: String,
     mut form: Form<TeamForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament_id = jar
-        .get("tournament_id")
-        .and_then(|cookie| cookie.value().parse::<i64>().ok())
-        .ok_or(Status::BadRequest)?;
-    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, user.id)
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
     let logo_url = save_logo(&mut form.logo_file).await.map_err(|_| Status::InternalServerError)?;
     let division_ids = form.division_ids.clone().unwrap_or_default();
@@ -107,29 +159,28 @@ pub async fn create_team(
         &event_ids,
     ) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Option::<String>::None,
             success = Some("Team added.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Some(message),
             success = Option::<String>::None
         )))),
     }
 }
 
-#[post("/teams/<id>/update", data = "<form>")]
+#[post("/<slug>/teams/<id>/update", data = "<form>")]
 pub async fn update_team(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
+    slug: String,
     id: i64,
     mut form: Form<TeamForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament_id = jar
-        .get("tournament_id")
-        .and_then(|cookie| cookie.value().parse::<i64>().ok())
-        .ok_or(Status::BadRequest)?;
-    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, user.id)
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
     let uploaded_logo = save_logo(&mut form.logo_file).await.map_err(|_| Status::InternalServerError)?;
     let logo_url = if uploaded_logo.is_some() {
@@ -153,86 +204,85 @@ pub async fn update_team(
         &event_ids,
     ) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Option::<String>::None,
             success = Some("Team updated.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Some(message),
             success = Option::<String>::None
         )))),
     }
 }
 
-#[post("/teams/<id>/delete")]
+#[post("/<slug>/teams/<id>/delete")]
 pub fn delete_team(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
+    slug: String,
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament_id = jar
-        .get("tournament_id")
-        .and_then(|cookie| cookie.value().parse::<i64>().ok())
-        .ok_or(Status::BadRequest)?;
-    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, user.id)
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
     match teams_service::delete_team(state, user.id, tournament.id, id) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Option::<String>::None,
             success = Some("Team deleted.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Some(message),
             success = Option::<String>::None
         )))),
     }
 }
 
-#[post("/teams/<team_id>/members", data = "<form>")]
+#[post("/<slug>/teams/<team_id>/members", data = "<form>")]
 pub fn add_member(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
+    slug: String,
     team_id: i64,
     form: Form<MemberForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament_id = jar
-        .get("tournament_id")
-        .and_then(|cookie| cookie.value().parse::<i64>().ok())
-        .ok_or(Status::BadRequest)?;
-    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, user.id)
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
     match teams_service::add_member(state, user.id, tournament.id, team_id, &form.name) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Option::<String>::None,
             success = Some("Member added.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Some(message),
             success = Option::<String>::None
         )))),
     }
 }
 
-#[post("/teams/members/<member_id>/delete")]
+#[post("/<slug>/teams/members/<member_id>/delete")]
 pub fn delete_member(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
+    slug: String,
     member_id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament_id = jar
-        .get("tournament_id")
-        .and_then(|cookie| cookie.value().parse::<i64>().ok())
-        .ok_or(Status::BadRequest)?;
-    let tournament = tournament_service::get_by_id_for_user(state, tournament_id, user.id)
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
     match teams_service::delete_member(state, user.id, tournament.id, member_id) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Option::<String>::None,
             success = Some("Member removed.".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(teams_page(
+            slug = slug,
             error = Some(message),
             success = Option::<String>::None
         )))),

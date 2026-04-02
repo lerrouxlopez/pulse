@@ -39,3 +39,13 @@ pub fn find_user_by_id(conn: &Connection, user_id: i64) -> rusqlite::Result<Opti
         Ok(None)
     }
 }
+
+pub fn find_user_id_by_email(conn: &Connection, email: &str) -> rusqlite::Result<Option<i64>> {
+    let mut stmt = conn.prepare("SELECT id FROM users WHERE email = ?1")?;
+    let mut rows = stmt.query(params![email])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(row.get(0)?))
+    } else {
+        Ok(None)
+    }
+}
