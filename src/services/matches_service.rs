@@ -7,7 +7,7 @@ use crate::state::AppState;
 use std::time::{SystemTime, UNIX_EPOCH};
 use rocket::State;
 
-const MATCH_STATUSES: [&str; 4] = ["Scheduled", "Ongoing", "Finished", "Cancelled"];
+const MATCH_STATUSES: [&str; 3] = ["Scheduled", "Forfeit", "Finished"];
 
 pub fn list(
     state: &State<AppState>,
@@ -148,6 +148,7 @@ pub fn update(
         red_member_id,
         blue_member_id,
         is_bye,
+        None,
     )
     .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {
@@ -215,11 +216,165 @@ pub fn update_schedule(
         existing.red_member_id,
         existing.blue_member_id,
         existing.is_bye,
+        existing.winner_side.as_deref(),
     )
     .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
+    Ok(())
+}
+
+pub fn update_contact_match(
+    state: &State<AppState>,
+    user_id: i64,
+    tournament_id: i64,
+    id: i64,
+    scheduled_event_id: i64,
+    status: &str,
+    location: Option<&str>,
+    match_time: Option<&str>,
+    winner_side: Option<&str>,
+) -> Result<(), String> {
+    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+    if !MATCH_STATUSES.iter().any(|value| value.eq_ignore_ascii_case(status)) {
+        return Err("Invalid match status.".to_string());
+    }
+    let existing = matches_repository::get_by_id(&conn, tournament_id, id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Match not found for this event.".to_string())?;
+
+    if !(status.eq_ignore_ascii_case("Finished") || status.eq_ignore_ascii_case("Forfeit")) {
+        let changed = matches_repository::update(
+            &conn,
+            tournament_id,
+            id,
+            scheduled_event_id,
+            existing.mat.as_deref(),
+            existing.category.as_deref(),
+            existing.red.as_deref(),
+            existing.blue.as_deref(),
+            status,
+            location,
+            match_time,
+            existing.round,
+            existing.slot,
+            existing.red_member_id,
+            existing.blue_member_id,
+            existing.is_bye,
+            None,
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+        if changed == 0 {
+            return Err("Match not found for this event.".to_string());
+        }
+        return Ok(());
+    }
+
+    let resolved_winner = if existing.is_bye && winner_side.is_none() {
+        Some("red")
+    } else {
+        winner_side
+    };
+    let winner_side = resolved_winner.ok_or_else(|| "Winner is required.".to_string())?;
+    let winner_side = winner_side.trim();
+    let winner_side_value = Some(winner_side);
+
+    let (winner_label, winner_id) = match winner_side {
+        "red" => (
+            existing.red.clone().filter(|value| !value.trim().is_empty()),
+            existing.red_member_id,
+        ),
+        "blue" => (
+            existing.blue.clone().filter(|value| !value.trim().is_empty()),
+            existing.blue_member_id,
+        ),
+        _ => return Err("Invalid winner selection.".to_string()),
+    };
+
+    let winner_label = winner_label.ok_or_else(|| "Winner not found.".to_string())?;
+
+    let changed = matches_repository::update(
+        &conn,
+        tournament_id,
+        id,
+        scheduled_event_id,
+        existing.mat.as_deref(),
+        existing.category.as_deref(),
+        existing.red.as_deref(),
+        existing.blue.as_deref(),
+        status,
+        location,
+        match_time,
+        existing.round,
+        existing.slot,
+        existing.red_member_id,
+        existing.blue_member_id,
+        existing.is_bye,
+        winner_side_value,
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+    if changed == 0 {
+        return Err("Match not found for this event.".to_string());
+    }
+
+    let round = match existing.round {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+    let slot = match existing.slot {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    let next_round = round + 1;
+    let next_slot = (slot + 1) / 2;
+    let mut target = matches_repository::get_by_round_slot(
+        &conn,
+        tournament_id,
+        scheduled_event_id,
+        next_round,
+        next_slot,
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+    if let Some(ref mut target_match) = target {
+        if slot % 2 == 1 {
+            target_match.red = Some(winner_label.clone());
+            target_match.red_member_id = Some(winner_id).flatten();
+        } else {
+            target_match.blue = Some(winner_label.clone());
+            target_match.blue_member_id = Some(winner_id).flatten();
+        }
+        let changed = matches_repository::update(
+            &conn,
+            tournament_id,
+            target_match.id,
+            scheduled_event_id,
+            target_match.mat.as_deref(),
+            target_match.category.as_deref(),
+            target_match.red.as_deref(),
+            target_match.blue.as_deref(),
+            &target_match.status,
+            target_match.location.as_deref(),
+            target_match.match_time.as_deref(),
+            target_match.round,
+            target_match.slot,
+            target_match.red_member_id,
+            target_match.blue_member_id,
+            target_match.is_bye,
+            target_match.winner_side.as_deref(),
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+        if changed == 0 {
+            return Err("Next round match not found.".to_string());
+        }
+    }
+
     Ok(())
 }
 

@@ -214,6 +214,7 @@ pub fn init_db(db_path: &PathBuf) -> rusqlite::Result<()> {
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN red_member_id INTEGER", []);
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN blue_member_id INTEGER", []);
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN is_bye INTEGER", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN winner_side TEXT", []);
     conn.execute(
         "CREATE TABLE IF NOT EXISTS team_member_categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

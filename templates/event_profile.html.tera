@@ -36,7 +36,7 @@
         </header>
 
         <section class="panel mb-4">
-          <h3 class="fw-semibold mb-3">Competitors</h3>
+          <h3 class="fw-semibold mb-3">Participants</h3>
           <ul class="competitor-list">
             {% for competitor in competitors %}
             <li class="competitor-item">
@@ -112,14 +112,14 @@
             <div class="fg-match {% if match.is_bye %}is-bye{% endif %}" style="left: {{ match.x }}px; top: {{ match.y }}px; width: {{ bracket_box_width }}px; height: {{ bracket_box_total_height }}px;">
               <div class="fg-match-header">{{ match.header_label }}</div>
               <div class="fg-match-body" style="height: {{ bracket_box_height }}px;">
-                <div class="fg-player">
+                <div class="fg-player {% if match.winner_side == "red" %}is-winner{% endif %}">
                   {% if match.top_photo != "" %}
                   <img src="{{ match.top_photo }}" class="fg-player-photo" alt="Player photo">
                   {% endif %}
                   <span class="match-name">{{ match.top_label }}</span>
                 </div>
                 {% if not match.is_bye %}
-                <div class="fg-player">
+                <div class="fg-player {% if match.winner_side == "blue" %}is-winner{% endif %}">
                   {% if match.bottom_photo != "" %}
                   <img src="{{ match.bottom_photo }}" class="fg-player-photo" alt="Player photo">
                   {% endif %}
@@ -255,10 +255,32 @@
                     </div>
                     <div class="col-md-3">
                       <label class="form-label text-muted">Status</label>
-                      <select class="form-select" name="status">
+                      <select class="form-select js-match-status" name="status">
                         {% for option in match_statuses %}
                         <option value="{{ option }}" {% if option == match.status %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
+                      </select>
+                    </div>
+                    {% endif %}
+                    {% if is_contact %}
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Status</label>
+                      <select class="form-select js-match-status" name="status" data-winner-target="winner-{{ match.id }}">
+                        {% for option in match_statuses %}
+                        <option value="{{ option }}" {% if option == match.status %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-md-6 d-none" id="winner-{{ match.id }}">
+                      <label class="form-label text-muted">Match Winner</label>
+                      <select class="form-select" name="winner">
+                        <option value="" {% if match.status != "Finished" and match.status != "Forfeit" %}selected{% endif %}>Select winner</option>
+                        {% if match.red %}
+                        <option value="red" {% if match.winner_side == "red" %}selected{% endif %}>{{ match.red }}</option>
+                        {% endif %}
+                        {% if match.blue %}
+                        <option value="blue" {% if match.winner_side == "blue" %}selected{% endif %}>{{ match.blue }}</option>
+                        {% endif %}
                       </select>
                     </div>
                     {% endif %}
@@ -289,5 +311,32 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script>
+      const matchStatusSelectors = document.querySelectorAll(".js-match-status");
+      const needsWinner = (value) => {
+        const normalized = String(value || "").toLowerCase();
+        return normalized === "finished" || normalized === "forfeit";
+      };
+      matchStatusSelectors.forEach((select) => {
+        const targetId = select.dataset.winnerTarget;
+        if (!targetId) {
+          return;
+        }
+        const winnerRow = document.getElementById(targetId);
+        if (!winnerRow) {
+          return;
+        }
+        const winnerSelect = winnerRow.querySelector("select[name='winner']");
+        const updateVisibility = () => {
+          const showWinner = needsWinner(select.value);
+          winnerRow.classList.toggle("d-none", !showWinner);
+          if (winnerSelect) {
+            winnerSelect.required = showWinner;
+          }
+        };
+        select.addEventListener("change", updateVisibility);
+        updateVisibility();
+      });
+    </script>
   </body>
 </html>

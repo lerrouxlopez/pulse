@@ -540,13 +540,14 @@ body {
 }
 
 .fg-match-header {
-  background: #eef2f8;
+  background: #86b7fe7d;
   color: #1f2937;
   font-size: 0.78rem;
   text-align: center;
   padding: 6px 8px;
   border-radius: 8px 8px 0 0;
   border: 1px solid #d6deea;
+  font-weight: bold;
 }
 
 .fg-match-body {
@@ -567,7 +568,7 @@ body {
   padding: 8px 10px;
   margin: 0;
   border-radius: 12px;
-  background: #d7e6ff;
+  background: #d7e6ff70;
   color: #1f2937;
   font-weight: 600;
   overflow: hidden;
@@ -577,6 +578,12 @@ body {
 .fg-match.is-bye .fg-player {
   background: #e6ebf3;
   color: #4b5563;
+}
+
+.fg-player.is-winner {
+  background: #22c55e;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(13, 148, 80, 0.6);
 }
 
 .fg-player-photo {

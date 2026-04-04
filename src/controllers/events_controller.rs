@@ -26,6 +26,7 @@ pub struct MatchForm {
     pub red: Option<String>,
     pub blue: Option<String>,
     pub status: Option<String>,
+    pub winner: Option<String>,
     pub location: Option<String>,
     pub match_time: Option<String>,
 }
@@ -169,6 +170,7 @@ pub fn event_profile(
         bottom_label: String,
         top_photo: String,
         bottom_photo: String,
+        winner_side: Option<String>,
         x: f32,
         y: f32,
     }
@@ -394,6 +396,7 @@ pub fn event_profile(
                 bottom_label: bottom_label.clone(),
                 top_photo,
                 bottom_photo,
+                winner_side: item.winner_side.clone(),
                 x: round_x,
                 y: center_y - box_total_height / 2.0,
             });
@@ -677,15 +680,21 @@ pub fn update_match(
     let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
     let match_time = form.match_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
     let result = if event.contact_type.eq_ignore_ascii_case("Contact") {
-        matches_service::update_schedule(
-            state,
-            user.id,
-            tournament.id,
-            id,
-            event_id,
-            location,
-            match_time,
-        )
+            let status = match form.status.as_deref() {
+                Some(value) if !value.trim().is_empty() => value.trim(),
+                _ => "Scheduled",
+            };
+            matches_service::update_contact_match(
+                state,
+                user.id,
+                tournament.id,
+                id,
+                event_id,
+                status,
+                location,
+                match_time,
+                form.winner.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty()),
+            )
     } else {
         let status = match form.status.as_deref() {
             Some(value) if !value.trim().is_empty() => value.trim(),

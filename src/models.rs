@@ -106,6 +106,7 @@ pub struct ScheduledMatch {
     pub red_member_id: Option<i64>,
     pub blue_member_id: Option<i64>,
     pub is_bye: bool,
+    pub winner_side: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
