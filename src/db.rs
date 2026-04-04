@@ -165,6 +165,56 @@ pub fn init_db(db_path: &PathBuf) -> rusqlite::Result<()> {
     let _ = conn.execute("ALTER TABLE team_members ADD COLUMN division_id INTEGER", []);
     let _ = conn.execute("ALTER TABLE team_members ADD COLUMN photo_url TEXT", []);
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS scheduled_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            event_id INTEGER NOT NULL,
+            contact_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            location TEXT,
+            event_time TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
+            FOREIGN KEY (event_id) REFERENCES events(id)
+        )",
+        [],
+    )?;
+    let _ = conn.execute("ALTER TABLE scheduled_events ADD COLUMN event_time TEXT", []);
+    let _ = conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_unique ON scheduled_events(tournament_id, event_id)",
+        [],
+    );
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            scheduled_event_id INTEGER NOT NULL,
+            mat TEXT,
+            category TEXT,
+            red TEXT,
+            blue TEXT,
+            status TEXT NOT NULL,
+            location TEXT,
+            match_time TEXT,
+            round INTEGER,
+            slot INTEGER,
+            red_member_id INTEGER,
+            blue_member_id INTEGER,
+            is_bye INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
+            FOREIGN KEY (scheduled_event_id) REFERENCES scheduled_events(id)
+        )",
+        [],
+    )?;
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN location TEXT", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN match_time TEXT", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN round INTEGER", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN slot INTEGER", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN red_member_id INTEGER", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN blue_member_id INTEGER", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN is_bye INTEGER", []);
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS team_member_categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tournament_id INTEGER NOT NULL,

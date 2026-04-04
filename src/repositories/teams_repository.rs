@@ -287,6 +287,28 @@ pub fn list_team_events(
     Ok(items)
 }
 
+pub fn list_event_competitors(
+    conn: &Connection,
+    tournament_id: i64,
+    event_id: i64,
+) -> rusqlite::Result<Vec<(i64, i64, String, Option<String>)>> {
+    let mut stmt = conn.prepare(
+        "SELECT tm.id, tm.team_id, tm.name, tm.photo_url
+         FROM team_members tm
+         JOIN team_member_events tme ON tme.member_id = tm.id
+         WHERE tm.tournament_id = ?1 AND tme.tournament_id = ?1 AND tme.event_id = ?2
+         ORDER BY tm.id",
+    )?;
+    let rows = stmt.query_map(params![tournament_id, event_id], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
 pub fn list_member_categories(
     conn: &Connection,
     tournament_id: i64,

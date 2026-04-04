@@ -3,3 +3,5 @@ pub mod match_service;
 pub mod tournament_service;
 pub mod settings_service;
 pub mod teams_service;
+pub mod scheduled_events_service;
+pub mod matches_service;

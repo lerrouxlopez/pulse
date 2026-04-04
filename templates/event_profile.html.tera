@@ -1,0 +1,320 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse - Event</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/static/site.css" />
+  </head>
+  <body class="bg-ink text-cream dashboard-body">
+    <div class="dashboard-wrap">
+      <aside class="sidebar">
+        {% include "partials/sidebar" %}
+      </aside>
+
+      <main class="content">
+        <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
+          <div>
+            <h1 class="fw-bold mb-1">{{ event.event_name }}</h1>
+            <p class="text-cream-75 mb-0">
+              {{ event.contact_type }} - {{ event.status }}{% if event.location %} - {{ event.location }}{% endif %}
+            </p>
+          </div>
+          <a class="btn btn-outline-light" href="/{{ tournament_slug }}/events">Back to Events</a>
+        </header>
+
+        <section class="panel mb-4">
+          <h3 class="fw-semibold mb-3">Competitors</h3>
+          <ul class="competitor-list">
+            {% for competitor in competitors %}
+            <li class="competitor-item">
+              {% if competitor.photo_url %}
+              <img src="{{ competitor.photo_url }}" alt="Player photo" class="competitor-photo">
+              {% else %}
+              <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ competitor.member_id }}" alt="Player photo placeholder" class="competitor-photo">
+              {% endif %}
+              <div class="competitor-name">{{ competitor.name }}</div>
+            </li>
+            {% else %}
+            <li class="text-cream-60">No players entered for this event yet.</li>
+            {% endfor %}
+          </ul>
+        </section>
+
+        {% if not is_contact %}
+        <section class="panel mb-4">
+          <h3 class="fw-semibold mb-3">Add Match</h3>
+          <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches" method="post" class="row g-3">
+            <div class="col-md-2">
+              <label class="form-label text-cream-60">Mat</label>
+              <input class="form-control" name="mat" placeholder="Mat" />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label text-cream-60">Category</label>
+              <input class="form-control" name="category" placeholder="Category" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Red</label>
+              <input class="form-control" name="red" placeholder="Red" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Blue</label>
+              <input class="form-control" name="blue" placeholder="Blue" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Status</label>
+              <select class="form-select" name="status">
+                {% for option in match_statuses %}
+                <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Location</label>
+              <input class="form-control" name="location" placeholder="Location" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Date & Time</label>
+              <input class="form-control" type="datetime-local" name="match_time" />
+            </div>
+            <div class="col-md-6 d-flex align-items-end justify-content-end">
+              <button class="btn btn-outline-light" type="submit">Add Match</button>
+            </div>
+          </form>
+        </section>
+        {% endif %}
+
+        {% if is_contact %}
+        <section class="panel bracket-panel mb-4">
+          <h3 class="fw-semibold mb-3">Bracket</h3>
+          <div class="fightgrid" style="--rows: {{ bracket_rows }};">
+            {% for round in bracket_rounds %}
+            <div class="fg-round" style="grid-column: {{ round.index }};">
+              <div class="fg-round-title">{{ round.title }}</div>
+              <div class="fg-round-body">
+              {% for match in round.matches %}
+              <div class="fg-match {% if match.is_upper %}is-upper{% else %}is-lower{% endif %} {% if match.is_bye %}is-bye{% endif %}" style="grid-row: {{ match.row_start + 1 }} / span {{ match.row_span }}; --span: {{ match.row_span }};">
+                <div class="fg-match-header">{{ match.header_label }}</div>
+                <div class="fg-match-body">
+                  {% if round.round == 1 %}
+                  <div class="fg-player">
+                    {% if match.red_member_id %}
+                      {% if match.red_photo != "" %}
+                      <img src="{{ match.red_photo }}" class="match-avatar" alt="Player photo">
+                      {% else %}
+                      <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ match.red_member_id | default(value=0) }}" class="match-avatar" alt="Player photo placeholder">
+                      {% endif %}
+                    {% endif %}
+                    <span class="match-name">{{ match.top_label }}</span>
+                  </div>
+                  {% if not match.is_bye %}
+                  <div class="fg-player">
+                    {% if match.blue_member_id %}
+                      {% if match.blue_photo != "" %}
+                      <img src="{{ match.blue_photo }}" class="match-avatar" alt="Player photo">
+                      {% else %}
+                      <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ match.blue_member_id | default(value=0) }}" class="match-avatar" alt="Player photo placeholder">
+                      {% endif %}
+                    {% endif %}
+                    <span class="match-name">{{ match.bottom_label }}</span>
+                  </div>
+                  {% endif %}
+                  {% else %}
+                  <div class="fg-advance">{{ match.top_label }}</div>
+                  {% if not match.is_bye and match.bottom_label %}
+                  <div class="fg-advance">{{ match.bottom_label }}</div>
+                  {% endif %}
+                  {% endif %}
+                </div>
+                {% if match.has_prev %}
+                <span class="fg-line fg-line-left"></span>
+                {% endif %}
+                {% if match.has_next %}
+                <span class="fg-line fg-line-right"></span>
+                {% endif %}
+                {% if match.has_next and match.is_upper %}
+                <span class="fg-line fg-line-vert"></span>
+                {% endif %}
+                {% if match.has_next and not match.is_upper %}
+                <span class="fg-line fg-line-vert fg-line-vert-up"></span>
+                {% endif %}
+              </div>
+              {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+            <div class="fg-champion" style="grid-column: {{ champion_col }}; grid-row: {{ champion_row + 1 }} / span 2;">
+              <span class="fg-line fg-line-left"></span>
+              <div class="fg-advance fg-champ">Champion</div>
+            </div>
+          </div>
+        </section>
+        <section class="panel">
+          <h3 class="fw-semibold mb-3">Matches</h3>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Round</th>
+                  <th>Match</th>
+                  <th>Schedule</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for match in contact_match_rows %}
+                <tr>
+                  <td>{% if match.round %}Round {{ match.round }}{% else %}-{% endif %}</td>
+                  <td>{{ match.matchup_label }}</td>
+                  <td>{{ match.match_time | default(value="") }}</td>
+                  <td>{{ match.location | default(value="") }}</td>
+                  <td>{{ match.status }}</td>
+                  <td class="text-end">
+                    <div class="d-flex justify-content-end gap-2">
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}">
+                        Edit
+                      </button>
+                      <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/delete" method="post">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="6" class="text-cream-60">No matches yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% else %}
+        <section class="panel">
+          <h3 class="fw-semibold mb-3">Matches</h3>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Mat</th>
+                  <th>Category</th>
+                  <th>Red</th>
+                  <th>Blue</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                  <th>Date & Time</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for match in matches %}
+                <tr>
+                  <td>{{ match.mat | default(value="") }}</td>
+                  <td>{{ match.category | default(value="") }}</td>
+                  <td>{{ match.red | default(value="") }}</td>
+                  <td>{{ match.blue | default(value="") }}</td>
+                  <td>{{ match.status }}</td>
+                  <td>{{ match.location | default(value="") }}</td>
+                  <td>{{ match.match_time | default(value="") }}</td>
+                  <td class="text-end">
+                    <div class="d-flex justify-content-end gap-2">
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}">
+                        Edit
+                      </button>
+                      <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/delete" method="post">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="8" class="text-cream-60">No matches yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+
+        {% for match in matches %}
+        <div class="modal fade" id="editMatchModal-{{ match.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit Match</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/update" method="post">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    {% if not is_contact %}
+                    <div class="col-md-2">
+                      <label class="form-label text-muted">Mat</label>
+                      <input class="form-control" name="mat" value="{{ match.mat | default(value="") }}" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label text-muted">Category</label>
+                      <input class="form-control" name="category" value="{{ match.category | default(value="") }}" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Red</label>
+                      <input class="form-control" name="red" value="{{ match.red | default(value="") }}" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Blue</label>
+                      <input class="form-control" name="blue" value="{{ match.blue | default(value="") }}" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Status</label>
+                      <select class="form-select" name="status">
+                        {% for option in match_statuses %}
+                        <option value="{{ option }}" {% if option == match.status %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    {% endif %}
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Location</label>
+                      <input class="form-control" name="location" value="{{ match.location | default(value="") }}" />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Date & Time</label>
+                      <input class="form-control" type="datetime-local" name="match_time" value="{{ match.match_time | default(value="") }}" />
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button class="btn btn-primary" type="submit">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </main>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>

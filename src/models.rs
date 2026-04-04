@@ -78,3 +78,40 @@ pub struct TeamMember {
     pub event_ids: Vec<i64>,
     pub photo_url: Option<String>,
 }
+
+#[derive(Serialize)]
+pub struct ScheduledEvent {
+    pub id: i64,
+    pub event_id: i64,
+    pub event_name: String,
+    pub contact_type: String,
+    pub status: String,
+    pub location: Option<String>,
+    pub event_time: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ScheduledMatch {
+    pub id: i64,
+    pub scheduled_event_id: i64,
+    pub mat: Option<String>,
+    pub category: Option<String>,
+    pub red: Option<String>,
+    pub blue: Option<String>,
+    pub status: String,
+    pub location: Option<String>,
+    pub match_time: Option<String>,
+    pub round: Option<i64>,
+    pub slot: Option<i64>,
+    pub red_member_id: Option<i64>,
+    pub blue_member_id: Option<i64>,
+    pub is_bye: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct EventCompetitor {
+    pub member_id: i64,
+    pub team_id: i64,
+    pub name: String,
+    pub photo_url: Option<String>,
+}
