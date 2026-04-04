@@ -99,78 +99,51 @@
         {% if is_contact %}
         <section class="panel bracket-panel mb-4">
           <h3 class="fw-semibold mb-3">Bracket</h3>
-          <div class="fightgrid" style="--rows: {{ bracket_rows }};">
-            {% for round in bracket_rounds %}
-            <div class="fg-round" style="grid-column: {{ round.index }};">
-              <div class="fg-round-title">{{ round.title }}</div>
-              <div class="fg-round-body">
-              {% for match in round.matches %}
-              <div class="fg-match {% if match.is_upper %}is-upper{% else %}is-lower{% endif %} {% if match.is_bye %}is-bye{% endif %}" style="grid-row: {{ match.row_start + 1 }} / span {{ match.row_span }}; --span: {{ match.row_span }};">
-                <div class="fg-match-header">{{ match.header_label }}</div>
-                <div class="fg-match-body">
-                  {% if round.round == 1 %}
-                  <div class="fg-player">
-                    {% if match.red_member_id %}
-                      {% if match.red_photo != "" %}
-                      <img src="{{ match.red_photo }}" class="match-avatar" alt="Player photo">
-                      {% else %}
-                      <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ match.red_member_id | default(value=0) }}" class="match-avatar" alt="Player photo placeholder">
-                      {% endif %}
-                    {% endif %}
-                    <span class="match-name">{{ match.top_label }}</span>
-                  </div>
-                  {% if not match.is_bye %}
-                  <div class="fg-player">
-                    {% if match.blue_member_id %}
-                      {% if match.blue_photo != "" %}
-                      <img src="{{ match.blue_photo }}" class="match-avatar" alt="Player photo">
-                      {% else %}
-                      <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ match.blue_member_id | default(value=0) }}" class="match-avatar" alt="Player photo placeholder">
-                      {% endif %}
-                    {% endif %}
-                    <span class="match-name">{{ match.bottom_label }}</span>
-                  </div>
-                  {% endif %}
-                  {% else %}
-                  <div class="fg-advance">{{ match.top_label }}</div>
-                  {% if not match.is_bye and match.bottom_label %}
-                  <div class="fg-advance">{{ match.bottom_label }}</div>
-                  {% endif %}
-                  {% endif %}
-                </div>
-                {% if match.has_prev %}
-                <span class="fg-line fg-line-left"></span>
-                {% endif %}
-                {% if match.has_next %}
-                <span class="fg-line fg-line-right"></span>
-                {% endif %}
-                {% if match.has_next and match.is_upper %}
-                <span class="fg-line fg-line-vert"></span>
-                {% endif %}
-                {% if match.has_next and not match.is_upper %}
-                <span class="fg-line fg-line-vert fg-line-vert-up"></span>
-                {% endif %}
-              </div>
+          <div class="fg-canvas" style="width: {{ bracket_canvas_width }}px; height: {{ bracket_canvas_height }}px;">
+            <svg class="fg-lines" width="{{ bracket_canvas_width }}" height="{{ bracket_canvas_height }}">
+              {% for connector in bracket_connectors %}
+              <path d="{{ connector.path }}" />
               {% endfor %}
+            </svg>
+            {% for round in bracket_rounds %}
+            <div class="fg-round-title" style="left: {{ round.x }}px; width: {{ bracket_box_width }}px;">{{ round.title }}</div>
+            {% endfor %}
+            {% for match in bracket_matches %}
+            <div class="fg-match {% if match.is_bye %}is-bye{% endif %}" style="left: {{ match.x }}px; top: {{ match.y }}px; width: {{ bracket_box_width }}px; height: {{ bracket_box_total_height }}px;">
+              <div class="fg-match-header">{{ match.header_label }}</div>
+              <div class="fg-match-body" style="height: {{ bracket_box_height }}px;">
+                <div class="fg-player">
+                  {% if match.top_photo != "" %}
+                  <img src="{{ match.top_photo }}" class="fg-player-photo" alt="Player photo">
+                  {% endif %}
+                  <span class="match-name">{{ match.top_label }}</span>
+                </div>
+                {% if not match.is_bye %}
+                <div class="fg-player">
+                  {% if match.bottom_photo != "" %}
+                  <img src="{{ match.bottom_photo }}" class="fg-player-photo" alt="Player photo">
+                  {% endif %}
+                  <span class="match-name">{{ match.bottom_label }}</span>
+                </div>
+                {% endif %}
               </div>
             </div>
             {% endfor %}
-            <div class="fg-champion" style="grid-column: {{ champion_col }}; grid-row: {{ champion_row + 1 }} / span 2;">
-              <span class="fg-line fg-line-left"></span>
-              <div class="fg-advance fg-champ">Champion</div>
+            <div class="fg-match fg-champion" style="left: {{ champion_x }}px; top: {{ champion_y }}px; width: {{ champion_width }}px; height: {{ champion_height }}px;">
+              <div class="fg-champ">Champion</div>
             </div>
           </div>
         </section>
         <section class="panel">
           <h3 class="fw-semibold mb-3">Matches</h3>
           <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle mb-0">
+            <table class="table table-dark table-hover align-middle mb-0 matches-table">
               <thead>
                 <tr>
                   <th>Round</th>
-                  <th>Match</th>
+                  <th class="col-match">Match</th>
                   <th>Schedule</th>
-                  <th>Location</th>
+                  <th class="col-location">Location</th>
                   <th>Status</th>
                   <th class="text-end">Actions</th>
                 </tr>

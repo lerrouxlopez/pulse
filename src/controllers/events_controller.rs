@@ -156,35 +156,21 @@ pub fn event_profile(
         .max()
         .unwrap_or(1);
     let rounds: Vec<i64> = (1..=max_round).collect();
-    let bracket_rows = 1_i64 << (max_round as u32 + 1);
-    let champion_col = rounds.len() as i64 + 1;
 
-    #[derive(Serialize)]
+    #[derive(Serialize, Clone)]
     struct BracketMatchView {
         id: i64,
         round: i64,
         slot: i64,
-        row_start: i64,
-        row_span: i64,
-        is_upper: bool,
-        has_prev: bool,
-        has_next: bool,
         is_bye: bool,
-        status: String,
-        location: Option<String>,
-        match_time: Option<String>,
-        red_member_id: Option<i64>,
-        blue_member_id: Option<i64>,
-        red_name: String,
-        blue_name: String,
-        red_photo: String,
-        blue_photo: String,
-        advancement_label: String,
-        matchup_label: String,
+        has_next: bool,
         header_label: String,
         top_label: String,
         bottom_label: String,
-        stage_class: String,
+        top_photo: String,
+        bottom_photo: String,
+        x: f32,
+        y: f32,
     }
 
     #[derive(Serialize)]
@@ -192,7 +178,12 @@ pub fn event_profile(
         index: i64,
         round: i64,
         title: String,
-        matches: Vec<BracketMatchView>,
+        x: f32,
+    }
+
+    #[derive(Serialize)]
+    struct BracketConnector {
+        path: String,
     }
 
     #[derive(Serialize)]
@@ -217,8 +208,17 @@ pub fn event_profile(
     }
 
     let mut bracket_rounds: Vec<BracketRoundView> = Vec::new();
+    let mut bracket_matches: Vec<BracketMatchView> = Vec::new();
+    let mut bracket_connectors: Vec<BracketConnector> = Vec::new();
     let mut contact_match_rows: Vec<ContactMatchRow> = Vec::new();
-    let mut champion_row: i64 = bracket_rows / 2;
+    let box_width: f32 = 220.0;
+    let box_height: f32 = 90.0;
+    let header_height: f32 = 24.0;
+    let box_total_height: f32 = box_height + header_height;
+    let gap: f32 = 60.0;
+    let round_gap: f32 = 280.0;
+    let margin_left: f32 = 32.0;
+    let margin_top: f32 = 48.0;
     let mut match_number_by_id: HashMap<i64, i64> = HashMap::new();
     let mut ordered_for_numbers: Vec<&ScheduledMatch> = matches.iter().collect();
     ordered_for_numbers.sort_by(|a, b| {
@@ -235,31 +235,47 @@ pub fn event_profile(
             next_match_number += 1;
         }
     }
+    let mut rounds_map: HashMap<i64, Vec<&ScheduledMatch>> = HashMap::new();
+    for item in &matches {
+        let round = item.round.unwrap_or(1);
+        rounds_map.entry(round).or_default().push(item);
+    }
+    for items in rounds_map.values_mut() {
+        items.sort_by(|a, b| a.slot.unwrap_or(0).cmp(&b.slot.unwrap_or(0)));
+    }
+
+    let round1_count = rounds_map.get(&1).map(|r| r.len()).unwrap_or(0);
+    let total_height =
+        round1_count as f32 * box_total_height + (round1_count.saturating_sub(1) as f32) * gap;
+    let canvas_height = total_height + margin_top * 2.0 + header_height;
+
+    let mut center_map: HashMap<(i64, i64), f32> = HashMap::new();
+
     for (index, round) in rounds.iter().enumerate() {
-        let mut round_matches: Vec<BracketMatchView> = Vec::new();
-        for item in matches.iter().filter(|item| item.round.unwrap_or(1) == *round) {
+        let round_x = margin_left + (index as f32) * round_gap;
+        let title = if *round == 1 {
+            "Round 1".to_string()
+        } else if *round == max_round {
+            "Final".to_string()
+        } else if *round == max_round - 1 {
+            "Semifinals".to_string()
+        } else {
+            "Round".to_string()
+        };
+        bracket_rounds.push(BracketRoundView {
+            index: (index as i64) + 1,
+            round: *round,
+            title,
+            x: round_x,
+        });
+
+        let items = rounds_map.get(round).cloned().unwrap_or_default();
+        for (i, item) in items.iter().enumerate() {
             let slot = item.slot.unwrap_or(0);
-            let round_span = 1_i64 << (*round as u32);
-            let row_start = (slot * round_span) + (round_span / 2) + 1;
             let red = item.red_member_id.and_then(|id| competitor_map.get(&id).cloned());
             let blue = item.blue_member_id.and_then(|id| competitor_map.get(&id).cloned());
             let red_name = red.clone().map(|(name, _)| name).unwrap_or_default();
             let blue_name = blue.clone().map(|(name, _)| name).unwrap_or_default();
-            let matchup_label = if !red_name.is_empty() && !blue_name.is_empty() {
-                format!("{} vs {}", red_name, blue_name)
-            } else if let (Some(red_label), Some(blue_label)) = (&item.red, &item.blue) {
-                format!("{} vs {}", red_label, blue_label)
-            } else if !red_name.is_empty() && item.is_bye {
-                format!("{} - bye", red_name)
-            } else if let Some(red_label) = &item.red {
-                red_label.clone()
-            } else if !red_name.is_empty() {
-                red_name.clone()
-            } else if !blue_name.is_empty() {
-                blue_name.clone()
-            } else {
-                "TBD vs TBD".to_string()
-            };
             let top_label = if *round == 1 {
                 if !red_name.is_empty() {
                     red_name.clone()
@@ -270,10 +286,10 @@ pub fn event_profile(
                 item.red
                     .clone()
                     .filter(|value| !value.is_empty())
-                    .unwrap_or_else(|| "TBD".to_string())
+                    .unwrap_or_else(|| "Advancing".to_string())
             };
             let bottom_label = if item.is_bye {
-                String::new()
+                "BYE".to_string()
             } else if *round == 1 {
                 if !blue_name.is_empty() {
                     blue_name.clone()
@@ -284,7 +300,17 @@ pub fn event_profile(
                 item.blue
                     .clone()
                     .filter(|value| !value.is_empty())
-                    .unwrap_or_else(|| "TBD".to_string())
+                    .unwrap_or_else(|| "Advancing".to_string())
+            };
+            let top_photo = if *round == 1 {
+                red.map(|(_, photo)| photo).unwrap_or_default()
+            } else {
+                String::new()
+            };
+            let bottom_photo = if *round == 1 {
+                blue.map(|(_, photo)| photo).unwrap_or_default()
+            } else {
+                String::new()
             };
             let match_number = match_number_by_id.get(&item.id).copied();
             let header_label = if item.is_bye {
@@ -296,41 +322,37 @@ pub fn event_profile(
             } else {
                 format!("Match {}", match_number.unwrap_or(0))
             };
-            let stage_class = if *round == 1 {
-                "stage-round-1".to_string()
-            } else if *round == max_round {
-                "stage-finals".to_string()
-            } else if *round == max_round - 1 {
-                "stage-semi-finals".to_string()
+            let center_y = if *round == 1 {
+                margin_top + (i as f32) * (box_total_height + gap) + (box_total_height / 2.0)
             } else {
-                "stage-round-2".to_string()
+                let feeder_a = (slot - 1) * 2 + 1;
+                let feeder_b = feeder_a + 1;
+                let prev_a = center_map
+                    .get(&(*round - 1, feeder_a))
+                    .copied()
+                    .unwrap_or(margin_top + box_height / 2.0);
+                let prev_b = center_map.get(&(*round - 1, feeder_b)).copied();
+                prev_b.map(|value| (prev_a + value) / 2.0).unwrap_or(prev_a)
             };
-            round_matches.push(BracketMatchView {
+            center_map.insert((*round, slot), center_y);
+
+            let matchup_label = format!("{} vs {}", top_label, bottom_label);
+
+            bracket_matches.push(BracketMatchView {
                 id: item.id,
                 round: *round,
                 slot,
-                row_start,
-                row_span: round_span,
-                is_upper: slot % 2 == 0,
-                has_prev: *round > 1,
-                has_next: *round < max_round,
                 is_bye: item.is_bye,
-                status: item.status.clone(),
-                location: item.location.clone(),
-                match_time: item.match_time.clone(),
-                red_member_id: item.red_member_id,
-                blue_member_id: item.blue_member_id,
-                red_name,
-                blue_name,
-                red_photo: red.map(|(_, photo)| photo).unwrap_or_default(),
-                blue_photo: blue.map(|(_, photo)| photo).unwrap_or_default(),
-                advancement_label: top_label.clone(),
-                matchup_label: matchup_label.clone(),
+                has_next: *round < max_round,
                 header_label,
-                top_label,
-                bottom_label,
-                stage_class,
+                top_label: top_label.clone(),
+                bottom_label: bottom_label.clone(),
+                top_photo,
+                bottom_photo,
+                x: round_x,
+                y: center_y - box_total_height / 2.0,
             });
+
             contact_match_rows.push(ContactMatchRow {
                 id: item.id,
                 round: item.round,
@@ -340,27 +362,60 @@ pub fn event_profile(
                 status: item.status.clone(),
             });
         }
-        if *round == max_round {
-            if let Some(final_match) = round_matches.first() {
-                champion_row = final_match.row_start;
-            }
-        }
-        let title = if *round == 1 {
-            "Round 1".to_string()
-        } else if *round == max_round {
-            "Finals".to_string()
-        } else if *round == max_round - 1 {
-            "Semi Finals".to_string()
-        } else {
-            format!("Round {}", round)
-        };
-        bracket_rounds.push(BracketRoundView {
-            index: (index as i64) + 1,
-            round: *round,
-            title,
-            matches: round_matches,
-        });
     }
+
+    let mut final_center_y = margin_top + box_total_height / 2.0;
+    if let Some(final_match) = bracket_matches
+        .iter()
+        .filter(|m| m.round == max_round)
+        .min_by(|a, b| a.slot.cmp(&b.slot))
+    {
+        final_center_y = final_match.y + box_total_height / 2.0;
+    }
+    let champion_x = margin_left + (rounds.len() as f32) * round_gap;
+    let champion_width = box_width + 40.0;
+    let champion_height = 48.0;
+
+    let mut match_lookup: HashMap<(i64, i64), BracketMatchView> = HashMap::new();
+    for item in &bracket_matches {
+        match_lookup.insert((item.round, item.slot), item.clone());
+    }
+    for item in &bracket_matches {
+        if item.round >= max_round {
+            continue;
+        }
+        let next_slot = (item.slot + 1) / 2;
+        let target = match_lookup.get(&(item.round + 1, next_slot));
+        if let Some(target_match) = target {
+            let start_x = item.x + box_width;
+            let start_y = item.y + box_total_height / 2.0;
+            let end_x = target_match.x;
+            let end_y = target_match.y + box_total_height / 2.0;
+            let mid_x = (start_x + end_x) / 2.0;
+            let path = format!(
+                "M {} {} L {} {} L {} {} L {} {}",
+                start_x, start_y, mid_x, start_y, mid_x, end_y, end_x, end_y
+            );
+            bracket_connectors.push(BracketConnector { path });
+        }
+    }
+
+    let final_connector = {
+        let start_x = champion_x - 20.0;
+        let start_y = final_center_y;
+        let end_x = champion_x;
+        let end_y = final_center_y;
+        let mid_x = (start_x + end_x) / 2.0;
+        format!(
+            "M {} {} L {} {} L {} {} L {} {}",
+            start_x, start_y, mid_x, start_y, mid_x, end_y, end_x, end_y
+        )
+    };
+    bracket_connectors.push(BracketConnector {
+        path: final_connector,
+    });
+
+    let canvas_width = champion_x + champion_width + margin_left;
 
     Ok(Template::render(
         "event_profile",
@@ -374,11 +429,20 @@ pub fn event_profile(
             competitors: competitors,
             is_contact: is_contact,
             rounds: rounds,
-            bracket_rows: bracket_rows,
             bracket_rounds: bracket_rounds,
+            bracket_matches: bracket_matches,
+            bracket_connectors: bracket_connectors,
+            bracket_canvas_width: canvas_width,
+            bracket_canvas_height: canvas_height,
+            bracket_box_width: box_width,
+            bracket_box_height: box_height,
+            bracket_header_height: header_height,
+            bracket_box_total_height: box_total_height,
+            champion_x: champion_x,
+            champion_y: final_center_y - (champion_height / 2.0),
+            champion_width: champion_width,
+            champion_height: champion_height,
             contact_match_rows: contact_match_rows,
-            champion_row: champion_row,
-            champion_col: champion_col,
             active: "events",
             is_setup: tournament.is_setup,
         },
