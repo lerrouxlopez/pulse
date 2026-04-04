@@ -24,22 +24,35 @@ pub struct TeamForm<'r> {
 pub struct MemberForm<'r> {
     pub name: String,
     pub notes: Option<String>,
-    pub rank: Option<String>,
     pub weight_class: Option<String>,
+    pub division_id: Option<i64>,
+    pub category_ids: Option<Vec<i64>>,
+    pub event_ids: Option<Vec<i64>>,
     pub photo_file: Option<TempFile<'r>>,
+    pub return_to: Option<String>,
 }
 
 #[derive(FromForm)]
 pub struct UpdateMemberForm<'r> {
     pub name: Option<String>,
     pub notes: Option<String>,
-    pub rank: Option<String>,
     pub weight_class: Option<String>,
+    pub division_id: Option<i64>,
     pub clear_notes: Option<String>,
-    pub clear_rank: Option<String>,
     pub clear_weight_class: Option<String>,
+    pub clear_division: Option<String>,
+    pub category_ids: Option<Vec<i64>>,
+    pub event_ids: Option<Vec<i64>>,
+    pub clear_categories: Option<String>,
+    pub clear_events: Option<String>,
     pub photo_file: Option<TempFile<'r>>,
     pub clear_photo: Option<String>,
+    pub return_to: Option<String>,
+}
+
+#[derive(FromForm)]
+pub struct ReturnToForm {
+    pub return_to: Option<String>,
 }
 
 #[get("/<slug>/teams?<error>&<success>")]
@@ -77,6 +90,7 @@ pub fn teams_page(
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let categories = settings_service::list(state, tournament.id, SettingsEntity::Category);
     let events = settings_service::list(state, tournament.id, SettingsEntity::Event);
+    let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
 
     Ok(Template::render(
         "teams",
@@ -88,6 +102,7 @@ pub fn teams_page(
             divisions: divisions,
             categories: categories,
             events: events,
+            weight_classes: weight_classes,
             error: error,
             success: success,
             active: "teams",
@@ -141,6 +156,30 @@ pub fn team_profile(
             )))
         }
     };
+    let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
+
+    let total_members = team.members.len();
+    let divisions_count = team.divisions.len();
+    let categories_count = team.categories.len();
+    let events_count = team.events.len();
+    let members_with_division = team.members.iter().filter(|m| m.division_id.is_some()).count();
+    let members_with_category = team.members.iter().filter(|m| !m.category_ids.is_empty()).count();
+    let members_with_event = team.members.iter().filter(|m| !m.event_ids.is_empty()).count();
+    let coverage_division = if total_members == 0 {
+        0
+    } else {
+        (members_with_division * 100 / total_members) as i64
+    };
+    let coverage_category = if total_members == 0 {
+        0
+    } else {
+        (members_with_category * 100 / total_members) as i64
+    };
+    let coverage_event = if total_members == 0 {
+        0
+    } else {
+        (members_with_event * 100 / total_members) as i64
+    };
 
     let filtered_team = {
         let mut filtered = team;
@@ -152,11 +191,9 @@ pub fn team_profile(
                     .into_iter()
                     .filter(|member| {
                         let name = member.name.to_lowercase();
-                        let rank = member.rank.as_deref().unwrap_or("").to_lowercase();
                         let weight = member.weight_class.as_deref().unwrap_or("").to_lowercase();
                         let notes = member.notes.as_deref().unwrap_or("").to_lowercase();
                         name.contains(&needle)
-                            || rank.contains(&needle)
                             || weight.contains(&needle)
                             || notes.contains(&needle)
                     })
@@ -171,13 +208,11 @@ pub fn team_profile(
         let sort_dir = dir.as_deref().unwrap_or("asc").to_lowercase();
         filtered.members.sort_by(|a, b| {
             let key_a = match sort_by.as_str() {
-                "rank" => a.rank.as_deref().unwrap_or(""),
                 "weight" => a.weight_class.as_deref().unwrap_or(""),
                 _ => a.name.as_str(),
             }
             .to_lowercase();
             let key_b = match sort_by.as_str() {
-                "rank" => b.rank.as_deref().unwrap_or(""),
                 "weight" => b.weight_class.as_deref().unwrap_or(""),
                 _ => b.name.as_str(),
             }
@@ -203,6 +238,17 @@ pub fn team_profile(
             search_query: q,
             sort_by: sort.unwrap_or_else(|| "name".to_string()),
             sort_dir: dir.unwrap_or_else(|| "asc".to_string()),
+            weight_classes: weight_classes,
+            total_members: total_members,
+            divisions_count: divisions_count,
+            categories_count: categories_count,
+            events_count: events_count,
+            members_with_division: members_with_division,
+            members_with_category: members_with_category,
+            members_with_event: members_with_event,
+            coverage_division: coverage_division,
+            coverage_category: coverage_category,
+            coverage_event: coverage_event,
         },
     ))
 }
@@ -342,15 +388,29 @@ pub async fn add_member(
         team_id,
         &form.name,
         form.notes.as_deref(),
-        form.rank.as_deref(),
         form.weight_class.as_deref(),
+        form.division_id,
+        &form.category_ids.clone().unwrap_or_default(),
+        &form.event_ids.clone().unwrap_or_default(),
         photo_url.as_deref(),
     ) {
-        Ok(_) => Ok(Redirect::to(uri!(teams_page(
-            slug = slug,
-            error = Option::<String>::None,
-            success = Some("Player added.".to_string())
-        )))),
+        Ok(_) => {
+            if form.return_to.as_deref() == Some("teams") {
+                Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Option::<String>::None,
+                    success = Some("Player added.".to_string())
+                ))))
+            } else {
+                Ok(Redirect::to(uri!(team_profile(
+                    slug = slug,
+                    id = team_id,
+                    q = Option::<String>::None,
+                    sort = Option::<String>::None,
+                    dir = Option::<String>::None
+                ))))
+            }
+        }
         Err(message) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
             error = Some(message),
@@ -359,22 +419,43 @@ pub async fn add_member(
     }
 }
 
-#[post("/<slug>/teams/members/<member_id>/delete")]
+#[post("/<slug>/teams/members/<member_id>/delete", data = "<form>")]
 pub fn delete_member(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
     member_id: i64,
+    form: Form<ReturnToForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
+    let team_id = teams_service::get_member_team_id(state, user.id, tournament.id, member_id);
     match teams_service::delete_member(state, user.id, tournament.id, member_id) {
-        Ok(_) => Ok(Redirect::to(uri!(teams_page(
-            slug = slug,
-            error = Option::<String>::None,
-            success = Some("Player removed.".to_string())
-        )))),
+        Ok(_) => {
+            if form.return_to.as_deref() == Some("teams") {
+                Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Option::<String>::None,
+                    success = Some("Player removed.".to_string())
+                ))))
+            } else {
+                match team_id {
+                    Ok(team_id) => Ok(Redirect::to(uri!(team_profile(
+                        slug = slug,
+                        id = team_id,
+                        q = Option::<String>::None,
+                        sort = Option::<String>::None,
+                        dir = Option::<String>::None
+                    )))),
+                    Err(_) => Ok(Redirect::to(uri!(teams_page(
+                        slug = slug,
+                        error = Option::<String>::None,
+                        success = Some("Player removed.".to_string())
+                    )))),
+                }
+            }
+        }
         Err(message) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
             error = Some(message),
@@ -394,6 +475,7 @@ pub async fn update_member(
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
         .ok_or(Status::NotFound)?;
+    let team_id = teams_service::get_member_team_id(state, user.id, tournament.id, member_id);
     let photo_url = match save_player_photo(&mut form.photo_file).await {
         Ok(value) => value,
         Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
@@ -412,19 +494,42 @@ pub async fn update_member(
         member_id,
         form.name.as_deref(),
         form.notes.as_deref(),
-        form.rank.as_deref(),
         form.weight_class.as_deref(),
+        form.division_id,
+        form.category_ids.clone(),
+        form.event_ids.clone(),
         form.clear_notes.is_some(),
-        form.clear_rank.is_some(),
         form.clear_weight_class.is_some(),
+        form.clear_division.is_some(),
+        form.clear_categories.is_some(),
+        form.clear_events.is_some(),
         photo_url.as_deref(),
         form.clear_photo.is_some(),
     ) {
-        Ok(_) => Ok(Redirect::to(uri!(teams_page(
-            slug = slug,
-            error = Option::<String>::None,
-            success = Some("Player updated.".to_string())
-        )))),
+        Ok(_) => {
+            if form.return_to.as_deref() == Some("teams") {
+                Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Option::<String>::None,
+                    success = Some("Player updated.".to_string())
+                ))))
+            } else {
+                match team_id {
+                    Ok(team_id) => Ok(Redirect::to(uri!(team_profile(
+                        slug = slug,
+                        id = team_id,
+                        q = Option::<String>::None,
+                        sort = Option::<String>::None,
+                        dir = Option::<String>::None
+                    )))),
+                    Err(_) => Ok(Redirect::to(uri!(teams_page(
+                        slug = slug,
+                        error = Option::<String>::None,
+                        success = Some("Player updated.".to_string())
+                    )))),
+                }
+            }
+        }
         Err(message) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
             error = Some(message),

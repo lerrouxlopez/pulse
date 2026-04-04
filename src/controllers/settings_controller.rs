@@ -17,6 +17,10 @@ pub struct InviteForm {
     pub email: String,
 }
 
+#[derive(FromForm)]
+pub struct SettingsOptionsForm {
+    pub options: Vec<String>,
+}
 #[get("/<slug>/settings?<error>&<success>&<tab>")]
 pub fn settings_page(
     state: &State<AppState>,
@@ -56,6 +60,9 @@ pub fn settings_page(
     let access_users = tournament_service::list_access_users(state, tournament.id);
     let can_complete_setup =
         !divisions.is_empty() && !categories.is_empty() && !weight_classes.is_empty() && !events.is_empty();
+    let category_names: Vec<String> = categories.iter().map(|item| item.name.to_lowercase()).collect();
+    let event_names: Vec<String> = events.iter().map(|item| item.name.to_lowercase()).collect();
+    let weight_names: Vec<String> = weight_classes.iter().map(|item| item.name.to_lowercase()).collect();
 
     let active_tab = tab.unwrap_or_else(|| "divisions".to_string());
     Ok(Template::render(
@@ -67,8 +74,11 @@ pub fn settings_page(
             is_setup: tournament.is_setup,
             divisions: divisions,
             categories: categories,
+            category_names: category_names,
             weight_classes: weight_classes,
+            weight_names: weight_names,
             events: events,
+            event_names: event_names,
             access_users: access_users,
             error: error,
             success: success,
@@ -251,6 +261,70 @@ pub fn create_category(
     }
 }
 
+#[post("/<slug>/settings/categories/bulk", data = "<form>")]
+pub fn create_category_options(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<SettingsOptionsForm>,
+) -> Result<Redirect, Status> {
+    let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
+        .ok_or(Status::NotFound)?;
+    if form.options.is_empty() {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Select at least one category to add.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("categories".to_string())
+        ))));
+    }
+
+    let existing = settings_service::list(state, tournament.id, SettingsEntity::Category);
+    let mut existing_names: Vec<String> =
+        existing.iter().map(|item| item.name.to_lowercase()).collect();
+
+    let mut added = 0usize;
+    for option in &form.options {
+        let trimmed = option.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = trimmed.to_lowercase();
+        if existing_names.contains(&key) {
+            continue;
+        }
+        if settings_service::create(
+            state,
+            _user.id,
+            tournament.id,
+            SettingsEntity::Category,
+            trimmed,
+        )
+        .is_ok()
+        {
+            added += 1;
+            existing_names.push(key);
+        }
+    }
+
+    if added == 0 {
+        Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Selected categories already exist.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("categories".to_string())
+        ))))
+    } else {
+        Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some(format!("Added {} category(ies).", added)),
+            tab = Some("categories".to_string())
+        ))))
+    }
+}
+
 #[post("/<slug>/settings/categories/<id>/update", data = "<form>")]
 pub fn update_category(
     state: &State<AppState>,
@@ -349,6 +423,70 @@ pub fn create_weight_class(
     }
 }
 
+#[post("/<slug>/settings/weight-classes/bulk", data = "<form>")]
+pub fn create_weight_options(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<SettingsOptionsForm>,
+) -> Result<Redirect, Status> {
+    let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
+        .ok_or(Status::NotFound)?;
+    if form.options.is_empty() {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Select at least one weight class to add.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("weight".to_string())
+        ))));
+    }
+
+    let existing = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
+    let mut existing_names: Vec<String> =
+        existing.iter().map(|item| item.name.to_lowercase()).collect();
+
+    let mut added = 0usize;
+    for option in &form.options {
+        let trimmed = option.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = trimmed.to_lowercase();
+        if existing_names.contains(&key) {
+            continue;
+        }
+        if settings_service::create(
+            state,
+            _user.id,
+            tournament.id,
+            SettingsEntity::WeightClass,
+            trimmed,
+        )
+        .is_ok()
+        {
+            added += 1;
+            existing_names.push(key);
+        }
+    }
+
+    if added == 0 {
+        Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Selected weight classes already exist.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("weight".to_string())
+        ))))
+    } else {
+        Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some(format!("Added {} weight class(es).", added)),
+            tab = Some("weight".to_string())
+        ))))
+    }
+}
+
 #[post("/<slug>/settings/weight-classes/<id>/update", data = "<form>")]
 pub fn update_weight_class(
     state: &State<AppState>,
@@ -444,6 +582,70 @@ pub fn create_event(
             success = Option::<String>::None,
             tab = Some("events".to_string())
         )))),
+    }
+}
+
+#[post("/<slug>/settings/events/bulk", data = "<form>")]
+pub fn create_event_options(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<SettingsOptionsForm>,
+) -> Result<Redirect, Status> {
+    let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
+        .ok_or(Status::NotFound)?;
+    if form.options.is_empty() {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Select at least one event to add.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("events".to_string())
+        ))));
+    }
+
+    let existing = settings_service::list(state, tournament.id, SettingsEntity::Event);
+    let mut existing_names: Vec<String> =
+        existing.iter().map(|item| item.name.to_lowercase()).collect();
+
+    let mut added = 0usize;
+    for option in &form.options {
+        let trimmed = option.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = trimmed.to_lowercase();
+        if existing_names.contains(&key) {
+            continue;
+        }
+        if settings_service::create(
+            state,
+            _user.id,
+            tournament.id,
+            SettingsEntity::Event,
+            trimmed,
+        )
+        .is_ok()
+        {
+            added += 1;
+            existing_names.push(key);
+        }
+    }
+
+    if added == 0 {
+        Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Selected events already exist.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("events".to_string())
+        ))))
+    } else {
+        Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some(format!("Added {} event(s).", added)),
+            tab = Some("events".to_string())
+        ))))
     }
 }
 

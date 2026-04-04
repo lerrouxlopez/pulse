@@ -30,7 +30,7 @@
             {% if team.logo_url %}
             <img src="{{ team.logo_url }}" alt="Team logo" style="width: 56px; height: 56px; object-fit: cover; border-radius: 14px;">
             {% else %}
-            <div class="bg-light text-dark d-flex align-items-center justify-content-center" style="width: 56px; height: 56px; border-radius: 14px;">?</div>
+            <img src="/static/placeholders/team-1.svg" data-placeholder="team" data-seed="{{ team.id }}" alt="Team logo placeholder" style="width: 56px; height: 56px; object-fit: cover; border-radius: 14px;">
             {% endif %}
             <div>
               <h1 class="fw-bold mb-1">{{ team.name }}</h1>
@@ -42,7 +42,6 @@
               <input class="form-control" name="q" placeholder="Search players" value="{{ search_query | default(value="") }}" />
               <select class="form-select" name="sort">
                 <option value="name" {% if sort_by == "name" %}selected{% endif %}>Sort: Name</option>
-                <option value="rank" {% if sort_by == "rank" %}selected{% endif %}>Sort: Rank</option>
                 <option value="weight" {% if sort_by == "weight" %}selected{% endif %}>Sort: Weight Class</option>
               </select>
               <select class="form-select" name="dir">
@@ -55,68 +54,198 @@
           </div>
         </header>
 
-        
+        <section class="stat-strip mb-4">
+          <div class="stat-card stat-blue">
+            <div class="stat-head">
+              <span class="stat-label">Players</span>
+              <span class="stat-icon" aria-hidden="true">●</span>
+            </div>
+            <div class="stat-value">{{ total_members }}</div>
+            <div class="stat-sub">Division coverage: {{ coverage_division }}%</div>
+            <div class="stat-progress">
+              <span style="width: {{ coverage_division }}%;"></span>
+            </div>
+          </div>
+          <div class="stat-card stat-green">
+            <div class="stat-head">
+              <span class="stat-label">Divisions</span>
+              <span class="stat-icon" aria-hidden="true">●</span>
+            </div>
+            <div class="stat-value">{{ divisions_count }}</div>
+            <div class="stat-sub">Players assigned: {{ members_with_division }}/{{ total_members }}</div>
+            <div class="stat-progress">
+              <span style="width: {{ coverage_division }}%;"></span>
+            </div>
+          </div>
+          <div class="stat-card stat-orange">
+            <div class="stat-head">
+              <span class="stat-label">Categories</span>
+              <span class="stat-icon" aria-hidden="true">●</span>
+            </div>
+            <div class="stat-value">{{ categories_count }}</div>
+            <div class="stat-sub">Players assigned: {{ members_with_category }}/{{ total_members }}</div>
+            <div class="stat-progress">
+              <span style="width: {{ coverage_category }}%;"></span>
+            </div>
+          </div>
+          <div class="stat-card stat-pink">
+            <div class="stat-head">
+              <span class="stat-label">Events</span>
+              <span class="stat-icon" aria-hidden="true">●</span>
+            </div>
+            <div class="stat-value">{{ events_count }}</div>
+            <div class="stat-sub">Players assigned: {{ members_with_event }}/{{ total_members }}</div>
+            <div class="stat-progress">
+              <span style="width: {{ coverage_event }}%;"></span>
+            </div>
+          </div>
+        </section>
 
-        <section class="panel mb-4">
-          <h3 class="fw-semibold mb-3">Entered Divisions</h3>
-          <div class="d-flex flex-wrap gap-2">
-            {% for division in team.divisions %}
-            <span class="badge text-bg-light text-ink">{{ division.name }}</span>
-            {% else %}
-            <span class="text-cream-60">None</span>
-            {% endfor %}
+
+        <section class="drawer-row mb-4">
+          <div class="panel drawer-panel">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h3 class="fw-semibold mb-0">Divisions</h3>
+              <button class="drawer-toggle-btn is-collapsed js-drawer-toggle" type="button" data-drawer-target="divisions-drawer" aria-expanded="false" aria-label="Toggle divisions">
+                <span class="drawer-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+            <div class="drawer-content" id="divisions-drawer">
+              <div class="d-flex flex-wrap gap-2">
+                {% for division in team.divisions %}
+                <span class="badge text-bg-light text-ink">{{ division.name }}</span>
+                {% else %}
+                <span class="text-cream-60">None</span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div class="panel drawer-panel">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h3 class="fw-semibold mb-0">Categories</h3>
+              <button class="drawer-toggle-btn is-collapsed js-drawer-toggle" type="button" data-drawer-target="categories-drawer" aria-expanded="false" aria-label="Toggle categories">
+                <span class="drawer-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+            <div class="drawer-content" id="categories-drawer">
+              <div class="d-flex flex-wrap gap-2">
+                {% for category in team.categories %}
+                <span class="badge text-bg-light text-ink">{{ category.name }}</span>
+                {% else %}
+                <span class="text-cream-60">None</span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div class="panel drawer-panel">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h3 class="fw-semibold mb-0">Events</h3>
+              <button class="drawer-toggle-btn is-collapsed js-drawer-toggle" type="button" data-drawer-target="events-drawer" aria-expanded="false" aria-label="Toggle events">
+                <span class="drawer-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+            <div class="drawer-content" id="events-drawer">
+              <div class="d-flex flex-wrap gap-2">
+                {% for event in team.events %}
+                <span class="badge text-bg-light text-ink">{{ event.name }}</span>
+                {% else %}
+                <span class="text-cream-60">None</span>
+                {% endfor %}
+              </div>
+            </div>
           </div>
         </section>
 
         <section class="panel mb-4">
-          <h3 class="fw-semibold mb-3">Entered Categories</h3>
-          <div class="d-flex flex-wrap gap-2">
-            {% for category in team.categories %}
-            <span class="badge text-bg-light text-ink">{{ category.name }}</span>
-            {% else %}
-            <span class="text-cream-60">None</span>
-            {% endfor %}
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Add Player</h3>
           </div>
-        </section>
-
-        <section class="panel mb-4">
-          <h3 class="fw-semibold mb-3">Entered Events</h3>
-          <div class="d-flex flex-wrap gap-2">
-            {% for event in team.events %}
-            <span class="badge text-bg-light text-ink">{{ event.name }}</span>
-            {% else %}
-            <span class="text-cream-60">None</span>
-            {% endfor %}
+          <div class="drawer-content" id="add-player-drawer">
+            <form action="/{{ tournament_slug }}/teams/{{ team.id }}/members" method="post" enctype="multipart/form-data" class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label text-cream-60">Player Name</label>
+                <input class="form-control" name="name" placeholder="Player name" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label text-cream-60">Weight Class</label>
+                <select class="form-select" name="weight_class">
+                  <option value="">Select weight class</option>
+                  {% for weight_class in weight_classes %}
+                  <option value="{{ weight_class.name }}">{{ weight_class.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label text-cream-60">Division</label>
+                <select class="form-select" name="division_id">
+                  <option value="">Select division</option>
+                  {% for division in team.divisions %}
+                  <option value="{{ division.id }}">{{ division.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label text-cream-60">Photo</label>
+                <input class="form-control" type="file" name="photo_file" accept="image/*" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-cream-60">Categories</label>
+                <div class="drawer-grid">
+                  {% for category in team.categories %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="add-category-{{ category.id }}">
+                    <label class="form-check-label" for="add-category-{{ category.id }}">{{ category.name }}</label>
+                  </div>
+                  {% endfor %}
+                  {% if team.categories | length == 0 %}
+                  <span class="text-cream-60 small">No categories.</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-cream-60">Events</label>
+                <div class="drawer-grid">
+                  {% for event in team.events %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="add-event-{{ event.id }}">
+                    <label class="form-check-label" for="add-event-{{ event.id }}">{{ event.name }}</label>
+                  </div>
+                  {% endfor %}
+                  {% if team.events | length == 0 %}
+                  <span class="text-cream-60 small">No events.</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-9">
+                <label class="form-label text-cream-60">Notes</label>
+                <input class="form-control" name="notes" placeholder="Notes" />
+              </div>
+              <div class="col-md-3 d-grid align-items-end">
+                <button class="btn btn-outline-light mt-4" type="submit">Add Player</button>
+              </div>
+            </form>
           </div>
-        </section>
-
-        <section class="panel mb-4">
-          <h3 class="fw-semibold mb-3">Add Player</h3>
-          <form action="/{{ tournament_slug }}/teams/{{ team.id }}/members" method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
-            <div class="col-md-4">
-              <label class="form-label text-cream-60">Player Name</label>
-              <input class="form-control" name="name" placeholder="Player name" />
-            </div>
-            <div class="col-md-3">
-              <label class="form-label text-cream-60">Rank</label>
-              <input class="form-control" name="rank" placeholder="Rank" />
-            </div>
-            <div class="col-md-3">
-              <label class="form-label text-cream-60">Weight Class</label>
-              <input class="form-control" name="weight_class" placeholder="Weight class" />
-            </div>
-            <div class="col-md-2">
-              <label class="form-label text-cream-60">Photo</label>
-              <input class="form-control" type="file" name="photo_file" accept="image/*" />
-            </div>
-            <div class="col-md-10">
-              <label class="form-label text-cream-60">Notes</label>
-              <input class="form-control" name="notes" placeholder="Notes" />
-            </div>
-            <div class="col-md-2 d-grid">
-              <button class="btn btn-outline-light" type="submit">Add Player</button>
-            </div>
-          </form>
+          <div class="drawer-handle">
+            <button class="drawer-toggle-btn is-collapsed js-drawer-toggle" type="button" data-drawer-target="add-player-drawer" aria-expanded="false" aria-label="Toggle add player">
+              <span class="drawer-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+            </button>
+          </div>
         </section>
 
         <section class="panel">
@@ -127,8 +256,10 @@
                 <tr>
                   <th>Photo</th>
                   <th>Name</th>
-                  <th>Rank</th>
                   <th>Weight Class</th>
+                  <th>Division</th>
+                  <th>Category</th>
+                  <th>Event</th>
                   <th>Notes</th>
                   <th class="text-end">Actions</th>
                 </tr>
@@ -136,64 +267,169 @@
               <tbody>
                 {% for member in team.members %}
                 <tr>
-                  <td colspan="6">
-                    <form action="/{{ tournament_slug }}/teams/members/{{ member.id }}/update" method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
-                      <div class="col-md-1">
-                        {% if member.photo_url %}
-                        <img src="{{ member.photo_url }}" alt="Player photo" style="width: 42px; height: 42px; object-fit: cover; border-radius: 12px;">
-                        {% else %}
-                        <div class="bg-light text-dark d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; border-radius: 12px;">?</div>
+                  <td>
+                    {% if member.photo_url %}
+                    <img src="{{ member.photo_url }}" alt="Player photo" style="width: 42px; height: 42px; object-fit: cover; border-radius: 12px;">
+                    {% else %}
+                    <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ member.id }}" alt="Player photo placeholder" style="width: 42px; height: 42px; object-fit: cover; border-radius: 12px;">
+                    {% endif %}
+                  </td>
+                  <td>{{ member.name }}</td>
+                  <td>{{ member.weight_class | default(value="") }}</td>
+                  <td>{{ member.division_name | default(value="") }}</td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-1">
+                      {% for category in team.categories %}
+                        {% if category.id in member.category_ids %}
+                        <span class="badge text-bg-light text-ink">{{ category.name }}</span>
                         {% endif %}
-                      </div>
-                      <div class="col-md-3">
-                        <input class="form-control form-control-sm" name="name" value="{{ member.name }}" />
-                      </div>
-                      <div class="col-md-2">
-                        <input class="form-control form-control-sm" name="rank" value="{{ member.rank | default(value="") }}" placeholder="Rank" />
-                        <div class="form-check mt-1">
-                          <input class="form-check-input" type="checkbox" name="clear_rank" id="clear-rank-{{ member.id }}">
-                          <label class="form-check-label small" for="clear-rank-{{ member.id }}">Clear rank</label>
-                        </div>
-                      </div>
-                      <div class="col-md-2">
-                        <input class="form-control form-control-sm" name="weight_class" value="{{ member.weight_class | default(value="") }}" placeholder="Weight class" />
-                        <div class="form-check mt-1">
-                          <input class="form-check-input" type="checkbox" name="clear_weight_class" id="clear-weight-{{ member.id }}">
-                          <label class="form-check-label small" for="clear-weight-{{ member.id }}">Clear weight</label>
-                        </div>
-                      </div>
-                      <div class="col-md-2">
-                        <input class="form-control form-control-sm" type="file" name="photo_file" accept="image/*" />
-                        <div class="form-check mt-1">
-                          <input class="form-check-input" type="checkbox" name="clear_photo" id="clear-photo-{{ member.id }}">
-                          <label class="form-check-label small" for="clear-photo-{{ member.id }}">Clear photo</label>
-                        </div>
-                      </div>
-                      <div class="col-md-2">
-                        <input class="form-control form-control-sm" name="notes" value="{{ member.notes | default(value="") }}" placeholder="Notes" />
-                        <div class="form-check mt-1">
-                          <input class="form-check-input" type="checkbox" name="clear_notes" id="clear-notes-{{ member.id }}">
-                          <label class="form-check-label small" for="clear-notes-{{ member.id }}">Clear notes</label>
-                        </div>
-                      </div>
-                      <div class="col-md-1 d-flex justify-content-end gap-2">
-                        <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
-                        <button class="btn btn-sm btn-outline-danger" type="submit" formaction="/{{ tournament_slug }}/teams/members/{{ member.id }}/delete" formmethod="post">
-                          Delete
-                        </button>
-                      </div>
-                    </form>
+                      {% endfor %}
+                      {% if member.category_ids | length == 0 %}
+                      <span class="text-cream-60 small">None</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-1">
+                      {% for event in team.events %}
+                        {% if event.id in member.event_ids %}
+                        <span class="badge text-bg-light text-ink">{{ event.name }}</span>
+                        {% endif %}
+                      {% endfor %}
+                      {% if member.event_ids | length == 0 %}
+                      <span class="text-cream-60 small">None</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td>{{ member.notes | default(value="") }}</td>
+                  <td class="text-end">
+                    <div class="d-flex justify-content-end gap-2">
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMemberModal-{{ member.id }}">
+                        Edit
+                      </button>
+                      <form action="/{{ tournament_slug }}/teams/members/{{ member.id }}/delete" method="post">
+                        <input type="hidden" name="return_to" value="team_profile" />
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="6" class="text-cream-60">No players yet.</td>
+                  <td colspan="8" class="text-cream-60">No players yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         </section>
+
+        {% for member in team.members %}
+        <div class="modal fade" id="editMemberModal-{{ member.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit Player</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="/{{ tournament_slug }}/teams/members/{{ member.id }}/update" method="post" enctype="multipart/form-data">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Player Name</label>
+                      <input class="form-control" name="name" value="{{ member.name }}" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Weight Class</label>
+                      <select class="form-select" name="weight_class">
+                        <option value="">Select weight</option>
+                        {% for weight_class in weight_classes %}
+                        <option value="{{ weight_class.name }}" {% if member.weight_class == weight_class.name %}selected{% endif %}>{{ weight_class.name }}</option>
+                        {% endfor %}
+                      </select>
+                      <div class="form-check mt-1">
+                        <input class="form-check-input" type="checkbox" name="clear_weight_class" id="clear-weight-modal-{{ member.id }}">
+                        <label class="form-check-label small" for="clear-weight-modal-{{ member.id }}">Clear weight</label>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Division</label>
+                      <select class="form-select" name="division_id">
+                        <option value="">Select division</option>
+                        {% for division in team.divisions %}
+                        <option value="{{ division.id }}" {% if member.division_id == division.id %}selected{% endif %}>{{ division.name }}</option>
+                        {% endfor %}
+                      </select>
+                      <div class="form-check mt-1">
+                        <input class="form-check-input" type="checkbox" name="clear_division" id="clear-division-modal-{{ member.id }}">
+                        <label class="form-check-label small" for="clear-division-modal-{{ member.id }}">Clear division</label>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Photo</label>
+                      <input class="form-control" type="file" name="photo_file" accept="image/*" />
+                      <div class="form-check mt-1">
+                        <input class="form-check-input" type="checkbox" name="clear_photo" id="clear-photo-modal-{{ member.id }}">
+                        <label class="form-check-label small" for="clear-photo-modal-{{ member.id }}">Clear photo</label>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Categories</label>
+                      <div class="drawer-grid">
+                        {% for category in team.categories %}
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="modal-member-{{ member.id }}-category-{{ category.id }}"
+                            {% if category.id in member.category_ids %}checked{% endif %}>
+                          <label class="form-check-label" for="modal-member-{{ member.id }}-category-{{ category.id }}">{{ category.name }}</label>
+                        </div>
+                        {% endfor %}
+                        {% if team.categories | length == 0 %}
+                        <span class="text-cream-60 small">No categories.</span>
+                        {% endif %}
+                      </div>
+                      <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="clear_categories" id="clear-categories-modal-{{ member.id }}">
+                        <label class="form-check-label small" for="clear-categories-modal-{{ member.id }}">Clear categories</label>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Events</label>
+                      <div class="drawer-grid">
+                        {% for event in team.events %}
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="modal-member-{{ member.id }}-event-{{ event.id }}"
+                            {% if event.id in member.event_ids %}checked{% endif %}>
+                          <label class="form-check-label" for="modal-member-{{ member.id }}-event-{{ event.id }}">{{ event.name }}</label>
+                        </div>
+                        {% endfor %}
+                        {% if team.events | length == 0 %}
+                        <span class="text-cream-60 small">No events.</span>
+                        {% endif %}
+                      </div>
+                      <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="clear_events" id="clear-events-modal-{{ member.id }}">
+                        <label class="form-check-label small" for="clear-events-modal-{{ member.id }}">Clear events</label>
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label text-muted">Notes</label>
+                      <input class="form-control" name="notes" value="{{ member.notes | default(value="") }}" placeholder="Notes" />
+                      <div class="form-check mt-1">
+                        <input class="form-check-input" type="checkbox" name="clear_notes" id="clear-notes-modal-{{ member.id }}">
+                        <label class="form-check-label small" for="clear-notes-modal-{{ member.id }}">Clear notes</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button class="btn btn-primary" type="submit">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
       </main>
     </div>
 
@@ -202,5 +438,61 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script>
+      const drawerToggles = document.querySelectorAll(".js-drawer-toggle");
+      drawerToggles.forEach((toggle) => {
+        const targetId = toggle.dataset.drawerTarget;
+        const drawer = document.getElementById(targetId);
+        if (!drawer) {
+          return;
+        }
+        const extraSpace = 12;
+        if (drawer.classList.contains("is-open")) {
+          drawer.style.maxHeight = `${drawer.scrollHeight + extraSpace}px`;
+        } else {
+          drawer.style.maxHeight = "0px";
+        }
+        toggle.addEventListener("click", () => {
+          const isOpen = drawer.classList.toggle("is-open");
+          toggle.setAttribute("aria-expanded", String(isOpen));
+          toggle.classList.toggle("is-collapsed", !isOpen);
+          if (isOpen) {
+            drawer.style.maxHeight = `${drawer.scrollHeight + extraSpace}px`;
+          } else {
+            drawer.style.maxHeight = "0px";
+          }
+        });
+        window.addEventListener("resize", () => {
+          if (drawer.classList.contains("is-open")) {
+            drawer.style.maxHeight = `${drawer.scrollHeight + extraSpace}px`;
+          }
+        });
+      });
+    </script>
+    <script>
+      const placeholderSets = {
+        team: ["/static/placeholders/team-1.svg", "/static/placeholders/team-2.svg", "/static/placeholders/team-3.svg"],
+        player: ["/static/placeholders/player-1.svg", "/static/placeholders/player-2.svg", "/static/placeholders/player-3.svg"]
+      };
+
+      const seededIndex = (seed, length) => {
+        const value = String(seed || "");
+        let hash = 0;
+        for (let i = 0; i < value.length; i += 1) {
+          hash = (hash * 31 + value.charCodeAt(i)) % 2147483647;
+        }
+        return length === 0 ? 0 : Math.abs(hash) % length;
+      };
+
+      document.querySelectorAll("img[data-placeholder]").forEach((img) => {
+        const kind = img.dataset.placeholder;
+        const options = placeholderSets[kind];
+        if (!options || options.length === 0) {
+          return;
+        }
+        const index = seededIndex(img.dataset.seed, options.length);
+        img.src = options[index];
+      });
+    </script>
   </body>
 </html>

@@ -71,7 +71,10 @@ pub struct TeamMember {
     pub name: String,
     pub team_id: i64,
     pub notes: Option<String>,
-    pub rank: Option<String>,
     pub weight_class: Option<String>,
+    pub division_id: Option<i64>,
+    pub division_name: Option<String>,
+    pub category_ids: Vec<i64>,
+    pub event_ids: Vec<i64>,
     pub photo_url: Option<String>,
 }

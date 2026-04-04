@@ -124,6 +124,43 @@
             </div>
 
             <div class="tab-pane fade {% if active_tab == 'categories' %}show active{% endif %}" id="categories-pane" role="tabpanel">
+              <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                  <h5 class="fw-semibold mb-2">Quick Add Categories</h5>
+                  <p class="text-cream-60 mb-3">Select from the standard category list to add multiple at once.</p>
+                  <div class="form-check mb-2">
+                    <input class="form-check-input js-select-all" type="checkbox" id="select-all-categories" data-group="categories" />
+                    <label class="form-check-label" for="select-all-categories">Select all</label>
+                  </div>
+                  {% set category_options = [
+                    "Up to 15 years",
+                    "6-8 years",
+                    "16+ years"
+                  ] %}
+                  <form action="/{{ tournament_slug }}/settings/categories/bulk" method="post" class="d-flex flex-column gap-2">
+                    <div class="row g-2">
+                      {% for option in category_options %}
+                      {% set option_key = option | lower %}
+                      {% set already_added = option_key in category_names %}
+                      <div class="col-12 col-md-6">
+                        <div class="form-check">
+                          <input class="form-check-input js-select-item" type="checkbox" name="options" value="{{ option }}" id="category-option-{{ loop.index }}" data-group="categories" {% if already_added %}checked disabled{% endif %} />
+                          <label class="form-check-label" for="category-option-{{ loop.index }}">
+                            {{ option }}
+                            {% if already_added %}
+                            <span class="text-cream-60 ms-2">(Added)</span>
+                            {% endif %}
+                          </label>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    <div>
+                      <button class="btn btn-outline-light" type="submit">Add Selected Categories</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
               <form action="/{{ tournament_slug }}/settings/categories" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New category name" />
                 <button class="btn btn-outline-light" type="submit">Add Category</button>
@@ -162,6 +199,102 @@
             </div>
 
             <div class="tab-pane fade {% if active_tab == 'weight' %}show active{% endif %}" id="weight-pane" role="tabpanel">
+              <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                  <h5 class="fw-semibold mb-2">Quick Add Weight Classes</h5>
+                  <p class="text-cream-60 mb-3">Select from the standard weight list to add multiple at once.</p>
+                  {% set weight_men_women = [
+                    "Bantam Weight: -55 kg (Men), -48 kg (Women)",
+                    "Feather Weight: -60 kg (Men), -52 kg (Women)",
+                    "Light Weight: -66 kg (Men), -57 kg (Women)",
+                    "Welter Weight: -73 kg (Men), -63 kg (Women)",
+                    "Middle Weight: -81 kg (Men), -70 kg (Women)",
+                    "Cruiser Weight: -90 kg (Men), -78 kg (Women)",
+                    "Heavy Weight: -100 kg (Men), -87 kg (Women)",
+                    "Super Heavy: 100 kg+ (Men), 87 kg+ (Women)"
+                  ] %}
+                  {% set weight_boys_girls = [
+                    "Mini Division: Under 43 kg (Boys), Under 37 kg (Girls)",
+                    "Pinweight: 43 kgs - 47 kgs (Boys), 37 kgs - 40 kgs (Girls)",
+                    "Bantamweight: Over 47 kgs - 51 kgs (Boys), Over 40 kgs - 44 kgs (Girls)",
+                    "Featherweight: Over 51 kgs - 55 kgs (Boys), Over 44 kgs - 48 kgs (Girls)",
+                    "Extra Lightweight: Over 55 kgs - 60 kgs (Boys), Over 48 kgs - 52 kgs (Girls)",
+                    "Half Lightweight: Over 60 kgs - 65 kgs (Boys), Over 52 kgs - 56 kgs (Girls)"
+                  ] %}
+                  {% set weight_kids = [
+                    "Kids Division: 38 kg and below / Over 38-40 kg / Over 40-42 kg"
+                  ] %}
+                  <form action="/{{ tournament_slug }}/settings/weight-classes/bulk" method="post" class="d-flex flex-column gap-2">
+                    <div class="row g-3">
+                      <div class="col-12 col-lg-6">
+                        <p class="text-cream-60 mb-2">Men / Women</p>
+                        <div class="form-check mb-2">
+                          <input class="form-check-input js-select-all" type="checkbox" id="select-all-weight-men" data-group="weight-men" />
+                          <label class="form-check-label" for="select-all-weight-men">Select all (Men / Women)</label>
+                        </div>
+                        {% for option in weight_men_women %}
+                        {% set option_key = option | lower %}
+                        {% set already_added = option_key in weight_names %}
+                        <div class="form-check">
+                          <input class="form-check-input js-select-item" type="checkbox" name="options" value="{{ option }}" id="weight-men-{{ loop.index }}" data-group="weight-men" {% if already_added %}checked disabled{% endif %} />
+                          <label class="form-check-label" for="weight-men-{{ loop.index }}">
+                            {{ option }}
+                            {% if already_added %}
+                            <span class="text-cream-60 ms-2">(Added)</span>
+                            {% endif %}
+                          </label>
+                        </div>
+                        {% endfor %}
+                      </div>
+                      <div class="col-12 col-lg-6">
+                        <p class="text-cream-60 mb-2">Boys / Girls</p>
+                        <div class="form-check mb-2">
+                          <input class="form-check-input js-select-all" type="checkbox" id="select-all-weight-youth" data-group="weight-youth" />
+                          <label class="form-check-label" for="select-all-weight-youth">Select all (Boys / Girls)</label>
+                        </div>
+                        {% for option in weight_boys_girls %}
+                        {% set option_key = option | lower %}
+                        {% set already_added = option_key in weight_names %}
+                        <div class="form-check">
+                          <input class="form-check-input js-select-item" type="checkbox" name="options" value="{{ option }}" id="weight-youth-{{ loop.index }}" data-group="weight-youth" {% if already_added %}checked disabled{% endif %} />
+                          <label class="form-check-label" for="weight-youth-{{ loop.index }}">
+                            {{ option }}
+                            {% if already_added %}
+                            <span class="text-cream-60 ms-2">(Added)</span>
+                            {% endif %}
+                          </label>
+                        </div>
+                        {% endfor %}
+                      </div>
+                      <div class="col-12 col-lg-6">
+                        <p class="text-cream-60 mb-2">Kids Divisions</p>
+                        <div class="form-check mb-2">
+                          <input class="form-check-input js-select-all" type="checkbox" id="select-all-weight-kids" data-group="weight-kids" />
+                          <label class="form-check-label" for="select-all-weight-kids">Select all (Kids Divisions)</label>
+                        </div>
+                        <div class="drawer-grid">
+                          {% for option in weight_kids %}
+                          {% set option_key = option | lower %}
+                          {% set already_added = option_key in weight_names %}
+                          <div class="form-check">
+                            <input class="form-check-input js-select-item" type="checkbox" name="options" value="{{ option }}" id="weight-kids-{{ loop.index }}" data-group="weight-kids" {% if already_added %}checked disabled{% endif %} />
+                            <label class="form-check-label" for="weight-kids-{{ loop.index }}">
+                              {{ option }}
+                              {% if already_added %}
+                              <span class="text-cream-60 ms-2">(Added)</span>
+                              {% endif %}
+                            </label>
+                          </div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <button class="btn btn-outline-light" type="submit">Add Selected Weight Classes</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
               <form action="/{{ tournament_slug }}/settings/weight-classes" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New weight class name" />
                 <button class="btn btn-outline-light" type="submit">Add Weight</button>
@@ -200,6 +333,50 @@
             </div>
 
             <div class="tab-pane fade {% if active_tab == 'events' %}show active{% endif %}" id="events-pane" role="tabpanel">
+              <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                  <h5 class="fw-semibold mb-2">Quick Add Events</h5>
+                  <p class="text-cream-60 mb-3">Select from the standard event list to add multiple at once.</p>
+                  <div class="form-check mb-2">
+                    <input class="form-check-input js-select-all" type="checkbox" id="select-all-events" data-group="events" />
+                    <label class="form-check-label" for="select-all-events">Select all</label>
+                  </div>
+                  {% set event_options = [
+                    "Non-Traditional Sayaw",
+                    "Traditional Sayaw",
+                    "Padded Stick",
+                    "Padded Point Knife",
+                    "Padded Single Live Stick",
+                    "Padded Double Live Stick",
+                    "Pool Noodle Point",
+                    "Single Live Stick",
+                    "Double Live Stick",
+                    "Bangkaw"
+                  ] %}
+                  <form action="/{{ tournament_slug }}/settings/events/bulk" method="post" class="d-flex flex-column gap-2">
+                    <div class="row g-2">
+                      {% for option in event_options %}
+                      {% set option_key = option | lower %}
+                      {% set already_added = option_key in event_names %}
+                      <div class="col-12 col-md-6">
+                        <div class="form-check">
+                          <input class="form-check-input js-select-item" type="checkbox" name="options" value="{{ option }}" id="event-option-{{ loop.index }}" data-group="events" {% if already_added %}checked disabled{% endif %} />
+                          <label class="form-check-label" for="event-option-{{ loop.index }}">
+                            {{ option }}
+                            {% if already_added %}
+                            <span class="text-cream-60 ms-2">(Added)</span>
+                            {% endif %}
+                          </label>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    <div>
+                      <button class="btn btn-outline-light" type="submit">Add Selected Events</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
               <form action="/{{ tournament_slug }}/settings/events" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New event name" />
                 <button class="btn btn-outline-light" type="submit">Add Event</button>
@@ -282,5 +459,35 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script>
+      const selectAllBoxes = document.querySelectorAll(".js-select-all");
+      const updateSelectAllState = (group) => {
+        const items = Array.from(document.querySelectorAll(`.js-select-item[data-group="${group}"]`))
+          .filter((item) => !item.disabled);
+        const allChecked = items.length > 0 && items.every((item) => item.checked);
+        const selectAll = document.querySelector(`.js-select-all[data-group="${group}"]`);
+        if (selectAll) {
+          selectAll.checked = allChecked;
+        }
+      };
+
+      selectAllBoxes.forEach((selectAll) => {
+        const group = selectAll.dataset.group;
+        selectAll.addEventListener("change", () => {
+          document
+            .querySelectorAll(`.js-select-item[data-group="${group}"]`)
+            .forEach((item) => {
+              if (!item.disabled) {
+                item.checked = selectAll.checked;
+              }
+            });
+        });
+        updateSelectAllState(group);
+      });
+
+      document.querySelectorAll(".js-select-item").forEach((item) => {
+        item.addEventListener("change", () => updateSelectAllState(item.dataset.group));
+      });
+    </script>
   </body>
 </html>

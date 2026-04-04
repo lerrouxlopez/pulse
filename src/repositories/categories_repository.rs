@@ -37,10 +37,16 @@ pub fn update(
     Ok(changed)
 }
 
-pub fn delete(conn: &Connection, tournament_id: i64, id: i64) -> rusqlite::Result<usize> {
-    let changed = conn.execute(
+pub fn delete(conn: &mut Connection, tournament_id: i64, id: i64) -> rusqlite::Result<usize> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM team_categories WHERE category_id = ?1 AND tournament_id = ?2",
+        params![id, tournament_id],
+    )?;
+    let changed = tx.execute(
         "DELETE FROM categories WHERE id = ?1 AND tournament_id = ?2",
         params![id, tournament_id],
     )?;
+    tx.commit()?;
     Ok(changed)
 }

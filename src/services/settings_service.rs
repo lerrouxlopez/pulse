@@ -100,7 +100,7 @@ pub fn delete(
     entity: SettingsEntity,
     id: i64,
 ) -> Result<(), String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
     let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
@@ -109,11 +109,11 @@ pub fn delete(
 
     let changed = match entity {
         SettingsEntity::Division => divisions_repository::delete(&conn, tournament_id, id),
-        SettingsEntity::Category => categories_repository::delete(&conn, tournament_id, id),
+        SettingsEntity::Category => categories_repository::delete(&mut conn, tournament_id, id),
         SettingsEntity::WeightClass => weight_classes_repository::delete(&conn, tournament_id, id),
-        SettingsEntity::Event => events_repository::delete(&conn, tournament_id, id),
+        SettingsEntity::Event => events_repository::delete(&mut conn, tournament_id, id),
     }
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|_| "Unable to delete item. It may be in use.".to_string())?;
 
     if changed == 0 {
         return Err("Item not found for this tournament.".to_string());
