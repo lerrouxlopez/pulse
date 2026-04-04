@@ -553,10 +553,10 @@ body {
   border: 1px solid #d6deea;
   border-top: none;
   border-radius: 0 0 10px 10px;
-  padding: 12px 12px 14px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   background: #ffffff;
 }
 
@@ -564,12 +564,14 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 0;
+  border-radius: 12px;
   background: #d7e6ff;
   color: #1f2937;
   font-weight: 600;
   overflow: hidden;
+  min-height: 34px;
 }
 
 .fg-match.is-bye .fg-player {

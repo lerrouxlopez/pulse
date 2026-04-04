@@ -244,6 +244,42 @@ pub fn event_profile(
         items.sort_by(|a, b| a.slot.unwrap_or(0).cmp(&b.slot.unwrap_or(0)));
     }
 
+    fn format_match_time(raw: &str) -> Option<String> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let mut parts = trimmed.split('T');
+        let date_part = parts.next().unwrap_or("");
+        let time_part = parts.next().unwrap_or("");
+        let mut date_iter = date_part.split('-');
+        let year = date_iter.next().unwrap_or("");
+        let month = date_iter.next().unwrap_or("");
+        let day = date_iter.next().unwrap_or("");
+        let mut time_iter = time_part.split(':');
+        let hour_str = time_iter.next().unwrap_or("");
+        let minute = time_iter.next().unwrap_or("");
+        let hour: u32 = hour_str.parse().ok()?;
+        let (display_hour, suffix) = match hour {
+            0 => (12, "AM"),
+            1..=11 => (hour, "AM"),
+            12 => (12, "PM"),
+            _ => (hour - 12, "PM"),
+        };
+        if year.is_empty() || month.is_empty() || day.is_empty() || minute.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "{}/{}/{} {:02}:{:02}{}",
+            month,
+            day,
+            year,
+            display_hour,
+            minute,
+            suffix
+        ))
+    }
+
     let round1_count = rounds_map.get(&1).map(|r| r.len()).unwrap_or(0);
     let total_height =
         round1_count as f32 * box_total_height + (round1_count.saturating_sub(1) as f32) * gap;
@@ -313,6 +349,10 @@ pub fn event_profile(
                 String::new()
             };
             let match_number = match_number_by_id.get(&item.id).copied();
+            let formatted_time = item
+                .match_time
+                .as_deref()
+                .and_then(format_match_time);
             let header_label = if item.is_bye {
                 "BYE".to_string()
             } else if *round == max_round {
@@ -321,6 +361,11 @@ pub fn event_profile(
                 format!("Semi Finals Match (Match {})", match_number.unwrap_or(0))
             } else {
                 format!("Match {}", match_number.unwrap_or(0))
+            };
+            let header_label = if let Some(time_label) = formatted_time {
+                format!("{} - {}", header_label, time_label)
+            } else {
+                header_label
             };
             let center_y = if *round == 1 {
                 margin_top + (i as f32) * (box_total_height + gap) + (box_total_height / 2.0)
