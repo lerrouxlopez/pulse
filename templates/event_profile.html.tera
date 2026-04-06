@@ -129,9 +129,6 @@
               </div>
             </div>
             {% endfor %}
-            <div class="fg-match fg-champion" style="left: {{ champion_x }}px; top: {{ champion_y }}px; width: {{ champion_width }}px; height: {{ champion_height }}px;">
-              <div class="fg-champ">Champion</div>
-            </div>
           </div>
         </section>
         <section class="panel">

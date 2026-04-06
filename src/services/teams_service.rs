@@ -23,8 +23,10 @@ pub fn list(state: &State<AppState>, user_id: i64, tournament_id: i64) -> Result
     let member_events =
         teams_repository::list_member_events(&mut conn, tournament_id).map_err(|_| "Storage error.")?;
     for member in members.iter_mut() {
-        if member.photo_url.is_none() {
-            if let Ok(url) = ensure_avatar_for_member(&mut conn, tournament_id, member.id, &member.name) {
+        if member.photo_url.is_none() || avatar_missing(member.photo_url.as_deref()) {
+            if let Ok(url) =
+                ensure_avatar_for_member(&mut conn, tournament_id, member.id, &member.name)
+            {
                 member.photo_url = Some(url);
             }
         }
@@ -485,6 +487,18 @@ fn ensure_avatar_for_member(
     let public_path = format!("/static/avatars/{}", filepath.file_name().unwrap().to_string_lossy());
     let _ = teams_repository::update_member_photo(conn, tournament_id, member_id, Some(&public_path));
     Ok(public_path)
+}
+
+fn avatar_missing(photo_url: Option<&str>) -> bool {
+    let Some(path) = photo_url else {
+        return true;
+    };
+    if !path.starts_with("/static/avatars/") {
+        return false;
+    }
+    let filename = path.trim_start_matches("/static/avatars/");
+    let filepath = Path::new("static").join("avatars").join(filename);
+    !filepath.exists()
 }
 
 fn initials_for(name: &str) -> String {
