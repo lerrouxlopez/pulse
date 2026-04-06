@@ -385,13 +385,42 @@ pub fn ensure_bracket_for_contact_event(
     scheduled_event_id: i64,
     event_id: i64,
 ) -> Result<(), String> {
-    let existing = list(state, user_id, tournament_id, scheduled_event_id)?;
-    if !existing.is_empty() {
-        return Ok(());
-    }
     let competitors = list_competitors(state, user_id, tournament_id, event_id)?;
     if competitors.is_empty() {
         return Ok(());
+    }
+    let existing = list(state, user_id, tournament_id, scheduled_event_id)?;
+    if !existing.is_empty() {
+        let mut existing_ids = std::collections::HashSet::new();
+        for item in &existing {
+            if let Some(id) = item.red_member_id {
+                existing_ids.insert(id);
+            }
+            if let Some(id) = item.blue_member_id {
+                existing_ids.insert(id);
+            }
+        }
+        let competitor_ids: std::collections::HashSet<i64> =
+            competitors.iter().map(|c| c.member_id).collect();
+        let has_new_competitors = !competitor_ids.is_subset(&existing_ids);
+        let has_locked_matches = existing.iter().any(|m| {
+            m.status.eq_ignore_ascii_case("Finished")
+                || m.status.eq_ignore_ascii_case("Forfeit")
+                || m.winner_side.is_some()
+        });
+        if !has_new_competitors {
+            return Ok(());
+        }
+        if has_locked_matches {
+            return Ok(());
+        }
+        let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+        matches_repository::delete_by_scheduled_event(
+            &mut conn,
+            tournament_id,
+            scheduled_event_id,
+        )
+        .map_err(|_| "Storage error.".to_string())?;
     }
 
     let mut current_round: Vec<BracketParticipant> = randomize_competitors(competitors)

@@ -156,6 +156,21 @@ pub fn delete(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Resu
     Ok(conn.affected_rows() as usize)
 }
 
+pub fn delete_by_scheduled_event(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "DELETE FROM matches WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id",
+        params! {
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
 pub fn get_by_id(
     conn: &mut PooledConn,
     tournament_id: i64,
