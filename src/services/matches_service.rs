@@ -29,7 +29,7 @@ pub fn list_competitors(
     state: &State<AppState>,
     user_id: i64,
     tournament_id: i64,
-    event_id: i64,
+    scheduled_event_id: i64,
 ) -> Result<Vec<EventCompetitor>, String> {
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
@@ -37,11 +37,35 @@ pub fn list_competitors(
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    let (division_filter, weight_class_filter, is_contact) = scheduled
+        .as_ref()
+        .map(|event| (event.division_id, event.weight_class_id, event.contact_type.eq_ignore_ascii_case("Contact")))
+        .unwrap_or((None, None, false));
+    let event_id = scheduled
+        .as_ref()
+        .map(|event| event.event_id)
+        .unwrap_or(scheduled_event_id);
     let rows = teams_repository::list_event_competitors(&mut conn, tournament_id, event_id)
         .map_err(|_| "Storage error.".to_string())?;
     Ok(rows
         .into_iter()
-        .map(|(member_id, team_id, name, photo_url)| EventCompetitor {
+        .filter(|(_, _, _, _, division_id, weight_class_id, _)| {
+            if !is_contact {
+                return true;
+            }
+            let division_ok = match division_filter {
+                Some(required) => division_id.map(|id| id == required).unwrap_or(false),
+                None => false,
+            };
+            let weight_ok = match (weight_class_filter, weight_class_id) {
+                (Some(required), Some(current)) => required == *current,
+                _ => false,
+            };
+            division_ok && weight_ok
+        })
+        .map(|(member_id, team_id, name, photo_url, _, _, _)| EventCompetitor {
             member_id,
             team_id,
             name,
@@ -383,9 +407,9 @@ pub fn ensure_bracket_for_contact_event(
     user_id: i64,
     tournament_id: i64,
     scheduled_event_id: i64,
-    event_id: i64,
+    _event_id: i64,
 ) -> Result<(), String> {
-    let competitors = list_competitors(state, user_id, tournament_id, event_id)?;
+    let competitors = list_competitors(state, user_id, tournament_id, scheduled_event_id)?;
     if competitors.is_empty() {
         return Ok(());
     }

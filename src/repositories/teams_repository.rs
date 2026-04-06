@@ -23,17 +23,18 @@ pub fn list_teams(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Ve
 
 pub fn list_members(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Vec<TeamMember>> {
     conn.exec_map(
-        "SELECT id, name, team_id, notes, weight_class, division_id, photo_url
+        "SELECT id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url
          FROM team_members
          WHERE tournament_id = ?
          ORDER BY id",
         (tournament_id,),
-        |(id, name, team_id, notes, weight_class, division_id, photo_url)| TeamMember {
+        |(id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url)| TeamMember {
             id,
             name,
             team_id,
             notes,
             weight_class,
+            weight_class_id,
             division_id,
             division_name: None,
             category_ids: Vec::new(),
@@ -85,18 +86,20 @@ pub fn create_member(
     name: &str,
     notes: Option<&str>,
     weight_class: Option<&str>,
+    weight_class_id: Option<i64>,
     division_id: Option<i64>,
     photo_url: Option<&str>,
 ) -> mysql::Result<i64> {
     conn.exec_drop(
-        "INSERT INTO team_members (tournament_id, team_id, name, notes, weight_class, division_id, photo_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO team_members (tournament_id, team_id, name, notes, weight_class, weight_class_id, division_id, photo_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             tournament_id,
             team_id,
             name,
             notes,
             weight_class,
+            weight_class_id,
             division_id,
             photo_url,
         ),
@@ -123,17 +126,19 @@ pub fn update_member(
     name: &str,
     notes: Option<&str>,
     weight_class: Option<&str>,
+    weight_class_id: Option<i64>,
     division_id: Option<i64>,
     photo_url: Option<&str>,
 ) -> mysql::Result<usize> {
     conn.exec_drop(
         "UPDATE team_members
-         SET name = ?, notes = ?, weight_class = ?, division_id = ?, photo_url = ?
+         SET name = ?, notes = ?, weight_class = ?, weight_class_id = ?, division_id = ?, photo_url = ?
          WHERE id = ? AND tournament_id = ?",
         (
             name,
             notes,
             weight_class,
+            weight_class_id,
             division_id,
             photo_url,
             member_id,
@@ -161,20 +166,21 @@ pub fn get_member(
     tournament_id: i64,
     member_id: i64,
 ) -> mysql::Result<Option<TeamMember>> {
-    let row: Option<(i64, String, i64, Option<String>, Option<String>, Option<i64>, Option<String>)> =
+    let row: Option<(i64, String, i64, Option<String>, Option<String>, Option<i64>, Option<i64>, Option<String>)> =
         conn.exec_first(
-            "SELECT id, name, team_id, notes, weight_class, division_id, photo_url
+            "SELECT id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url
              FROM team_members
              WHERE id = ? AND tournament_id = ?",
             (member_id, tournament_id),
         )?;
     Ok(row.map(
-        |(id, name, team_id, notes, weight_class, division_id, photo_url)| TeamMember {
+        |(id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url)| TeamMember {
             id,
             name,
             team_id,
             notes,
             weight_class,
+            weight_class_id,
             division_id,
             division_name: None,
             category_ids: Vec::new(),
@@ -244,15 +250,17 @@ pub fn list_event_competitors(
     conn: &mut PooledConn,
     tournament_id: i64,
     event_id: i64,
-) -> mysql::Result<Vec<(i64, i64, String, Option<String>)>> {
+) -> mysql::Result<Vec<(i64, i64, String, Option<String>, Option<i64>, Option<i64>, Option<String>)>> {
     conn.exec_map(
-        "SELECT tm.id, tm.team_id, tm.name, tm.photo_url
+        "SELECT tm.id, tm.team_id, tm.name, tm.photo_url, tm.division_id, tm.weight_class_id, tm.weight_class
          FROM team_members tm
          JOIN team_member_events tme ON tme.member_id = tm.id
          WHERE tm.tournament_id = ? AND tme.tournament_id = ? AND tme.event_id = ?
          ORDER BY tm.id",
         (tournament_id, tournament_id, event_id),
-        |(id, team_id, name, photo_url)| (id, team_id, name, photo_url),
+        |(id, team_id, name, photo_url, division_id, weight_class_id, weight_class)| {
+            (id, team_id, name, photo_url, division_id, weight_class_id, weight_class)
+        },
     )
 }
 

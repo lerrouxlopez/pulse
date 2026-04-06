@@ -1,6 +1,6 @@
 use crate::db;
 use crate::models::{NamedItem, Team, TeamMember};
-use crate::repositories::{teams_repository, tournaments_repository};
+use crate::repositories::{teams_repository, tournaments_repository, weight_classes_repository};
 use crate::state::AppState;
 use mysql::prelude::*;
 use rocket::State;
@@ -54,6 +54,7 @@ pub fn list(state: &State<AppState>, user_id: i64, tournament_id: i64) -> Result
                 team_id: member.team_id,
                 notes: member.notes.clone(),
                 weight_class: member.weight_class.clone(),
+                weight_class_id: member.weight_class_id,
                 division_id: member.division_id,
                 division_name: member
                     .division_id
@@ -210,6 +211,7 @@ pub fn add_member(
         category_ids,
         event_ids,
     )?;
+    let weight_class_id = resolve_weight_class_id(&mut conn, tournament_id, weight_class)?;
     let member_id = teams_repository::create_member(
         &mut conn,
         tournament_id,
@@ -217,6 +219,7 @@ pub fn add_member(
         trimmed,
         notes,
         weight_class,
+        weight_class_id,
         division_id,
         photo_url,
     )
@@ -343,6 +346,11 @@ pub fn update_member(
     } else {
         event_ids.unwrap_or(existing_event_ids)
     };
+    let next_weight_id = if clear_weight_class {
+        None
+    } else {
+        resolve_weight_class_id(&mut conn, tournament_id, next_weight.as_deref())?
+    };
     validate_member_selection(
         &mut conn,
         tournament_id,
@@ -366,6 +374,7 @@ pub fn update_member(
         &next_name,
         next_notes.as_deref(),
         next_weight.as_deref(),
+        next_weight_id,
         next_division_id,
         next_photo.as_deref(),
     )
@@ -376,6 +385,26 @@ pub fn update_member(
         return Err("Player not found for this tournament.".to_string());
     }
     Ok(())
+}
+
+fn resolve_weight_class_id(
+    conn: &mut mysql::PooledConn,
+    tournament_id: i64,
+    weight_class: Option<&str>,
+) -> Result<Option<i64>, String> {
+    let trimmed = match weight_class {
+        Some(value) => value.trim(),
+        None => return Ok(None),
+    };
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let found = weight_classes_repository::get_by_name(conn, tournament_id, trimmed)
+        .map_err(|_| "Storage error.".to_string())?;
+    match found {
+        Some(item) => Ok(Some(item.id)),
+        None => Err("Weight class not found.".to_string()),
+    }
 }
 
 fn validate_member_selection(

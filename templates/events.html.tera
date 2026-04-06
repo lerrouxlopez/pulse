@@ -54,7 +54,7 @@
             </div>
             <div class="col-md-3">
               <label class="form-label text-cream-60">Contact Type</label>
-              <select class="form-select" name="contact_type">
+              <select class="form-select js-contact-type" name="contact_type">
                 {% for option in contact_types %}
                 <option value="{{ option }}">{{ option }}</option>
                 {% endfor %}
@@ -76,6 +76,42 @@
               <label class="form-label text-cream-60">Date & Time</label>
               <input class="form-control" type="datetime-local" name="event_time" />
             </div>
+            <div class="col-12 js-contact-only d-none">
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label text-cream-60">Point System</label>
+                  <select class="form-select" name="point_system">
+                    <option value="5-10 points">5-10 points</option>
+                    <option value="Must 8/10 points">Must 8/10 points</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-cream-60">Time</label>
+                  <select class="form-select" name="time_rule">
+                    <option value="1 round | 2 minutes">1 round | 2 minutes</option>
+                    <option value="3 rounds | 1 minute">3 rounds | 1 minute</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-cream-60">Division</label>
+                  <select class="form-select" name="division_id">
+                    <option value="">Select division</option>
+                    {% for division in divisions %}
+                    <option value="{{ division.id }}">{{ division.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-cream-60">Weight Class</label>
+                  <select class="form-select" name="weight_class_id">
+                    <option value="">Select weight class</option>
+                    {% for weight in weight_classes %}
+                    <option value="{{ weight.id }}">{{ weight.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            </div>
             <div class="col-md-6 d-flex align-items-end justify-content-end">
               <button class="btn btn-outline-light" type="submit">Add Event</button>
             </div>
@@ -93,6 +129,10 @@
                   <th>Status</th>
                   <th>Location</th>
                   <th>Date & Time</th>
+                  <th>Point System</th>
+                  <th>Time</th>
+                  <th>Division</th>
+                  <th>Weight Class</th>
                   <th class="text-end">Actions</th>
                 </tr>
               </thead>
@@ -106,6 +146,10 @@
                   <td>{{ item.status }}</td>
                   <td>{{ item.location | default(value="") }}</td>
                   <td>{{ item.event_time | default(value="") }}</td>
+                  <td>{{ item.point_system | default(value="") }}</td>
+                  <td>{{ item.time_rule | default(value="") }}</td>
+                  <td>{{ item.division_name | default(value="") }}</td>
+                  <td>{{ item.weight_class_label | default(value="") }}</td>
                   <td class="text-end">
                     <div class="d-flex justify-content-end gap-2">
                       <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editEventModal-{{ item.id }}">
@@ -119,7 +163,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="6" class="text-cream-60">No events scheduled yet.</td>
+                  <td colspan="10" class="text-cream-60">No events scheduled yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -148,7 +192,7 @@
                     </div>
                     <div class="col-md-3">
                       <label class="form-label text-muted">Contact Type</label>
-                      <select class="form-select" name="contact_type">
+                      <select class="form-select js-contact-type" name="contact_type" data-contact-block="#edit-contact-{{ item.id }}">
                         {% for option in contact_types %}
                         <option value="{{ option }}" {% if option == item.contact_type %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
@@ -170,6 +214,42 @@
                       <label class="form-label text-muted">Date & Time</label>
                       <input class="form-control" type="datetime-local" name="event_time" value="{{ item.event_time | default(value="") }}" />
                     </div>
+                    <div class="col-12 js-contact-only{% if item.contact_type != "Contact" %} d-none{% endif %}" id="edit-contact-{{ item.id }}">
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Point System</label>
+                          <select class="form-select" name="point_system">
+                            <option value="5-10 points" {% if item.point_system == "5-10 points" %}selected{% endif %}>5-10 points</option>
+                            <option value="Must 8/10 points" {% if item.point_system == "Must 8/10 points" %}selected{% endif %}>Must 8/10 points</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Time</label>
+                          <select class="form-select" name="time_rule">
+                            <option value="1 round | 2 minutes" {% if item.time_rule == "1 round | 2 minutes" %}selected{% endif %}>1 round | 2 minutes</option>
+                            <option value="3 rounds | 1 minute" {% if item.time_rule == "3 rounds | 1 minute" %}selected{% endif %}>3 rounds | 1 minute</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Division</label>
+                          <select class="form-select" name="division_id">
+                            <option value="">Select division</option>
+                            {% for division in divisions %}
+                            <option value="{{ division.id }}" {% if item.division_id == division.id %}selected{% endif %}>{{ division.name }}</option>
+                            {% endfor %}
+                          </select>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Weight Class</label>
+                          <select class="form-select" name="weight_class_id">
+                            <option value="">Select weight class</option>
+                            {% for weight in weight_classes %}
+                            <option value="{{ weight.id }}" {% if item.weight_class_id == weight.id %}selected{% endif %}>{{ weight.name }}</option>
+                            {% endfor %}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div class="modal-footer">
@@ -189,5 +269,23 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script>
+      const contactSelectors = document.querySelectorAll(".js-contact-type");
+      const toggleContactBlock = (select, block) => {
+        if (!block) {
+          return;
+        }
+        const isContact = String(select.value || "").toLowerCase() === "contact";
+        block.classList.toggle("d-none", !isContact);
+      };
+
+      contactSelectors.forEach((select) => {
+        const target = select.dataset.contactBlock
+          ? document.querySelector(select.dataset.contactBlock)
+          : select.closest("form")?.querySelector(".js-contact-only");
+        toggleContactBlock(select, target);
+        select.addEventListener("change", () => toggleContactBlock(select, target));
+      });
+    </script>
   </body>
 </html>
