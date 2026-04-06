@@ -1,4 +1,4 @@
-use crate::services::{auth_service, settings_service, teams_service, tournament_service};
+use crate::services::{access_service, auth_service, settings_service, teams_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
 use crate::state::AppState;
 use rocket::form::{Form, FromForm};
@@ -83,6 +83,11 @@ pub fn teams_page(
             )))
         }
     };
+    if !access_service::user_has_permission(state, user.id, tournament.id, "teams") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
@@ -107,6 +112,7 @@ pub fn teams_page(
             success: success,
             active: "teams",
             is_setup: tournament.is_setup,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
         },
     ))
 }
@@ -141,6 +147,11 @@ pub fn team_profile(
             )))
         }
     };
+    if !access_service::user_has_permission(state, user.id, tournament.id, "teams") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
@@ -249,6 +260,7 @@ pub fn team_profile(
             coverage_division: coverage_division,
             coverage_category: coverage_category,
             coverage_event: coverage_event,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
         },
     ))
 }

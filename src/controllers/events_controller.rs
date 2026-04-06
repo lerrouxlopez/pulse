@@ -1,5 +1,5 @@
 use crate::models::ScheduledMatch;
-use crate::services::{auth_service, matches_service, scheduled_events_service, settings_service, tournament_service};
+use crate::services::{access_service, auth_service, matches_service, scheduled_events_service, settings_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
 use crate::state::AppState;
 use rocket::form::{Form, FromForm};
@@ -63,6 +63,11 @@ pub fn events_page(
             )))
         }
     };
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
@@ -89,6 +94,7 @@ pub fn events_page(
             success: success,
             active: "events",
             is_setup: tournament.is_setup,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
         },
     ))
 }
@@ -120,6 +126,11 @@ pub fn event_profile(
             )))
         }
     };
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     let event = match scheduled_events_service::get_by_id(state, user.id, tournament.id, id) {
         Ok(Some(event)) => event,
@@ -484,6 +495,7 @@ pub fn event_profile(
             contact_match_rows: contact_match_rows,
             active: "events",
             is_setup: tournament.is_setup,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
         },
     ))
 }

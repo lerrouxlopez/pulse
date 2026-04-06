@@ -30,3 +30,24 @@ pub fn find_user_by_id(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Opt
 pub fn find_user_id_by_email(conn: &mut PooledConn, email: &str) -> mysql::Result<Option<i64>> {
     conn.exec_first("SELECT id FROM users WHERE email = ?", (email,))
 }
+
+pub fn list_all(conn: &mut PooledConn) -> mysql::Result<Vec<(i64, String, String)>> {
+    conn.exec_map(
+        "SELECT id, name, email FROM users ORDER BY name",
+        (),
+        |(id, name, email)| (id, name, email),
+    )
+}
+
+pub fn update_user(
+    conn: &mut PooledConn,
+    user_id: i64,
+    name: &str,
+    email: &str,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+        (name, email, user_id),
+    )?;
+    Ok(conn.affected_rows() as usize)
+}

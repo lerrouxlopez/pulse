@@ -1,6 +1,7 @@
 use crate::db;
 use crate::models::Tournament;
 use crate::repositories::{tournament_users_repository, tournaments_repository, users_repository};
+use crate::services::access_service;
 use crate::slug::slugify;
 use crate::state::AppState;
 use rocket::State;
@@ -33,6 +34,8 @@ pub fn create(state: &State<AppState>, user_id: i64, name: &str) -> Option<Tourn
     let base_slug = slugify(name);
     let slug = unique_slug(&mut conn, &base_slug).ok()?;
     let tournament_id = tournaments_repository::create(&mut conn, user_id, name, &slug).ok()?;
+    let _ = access_service::ensure_owner_role(state, tournament_id);
+    let _ = access_service::assign_owner(state, tournament_id, user_id);
     tournaments_repository::get_by_id(&mut conn, tournament_id).ok()?
 }
 

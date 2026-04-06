@@ -1,5 +1,5 @@
 use crate::models::MatchRow;
-use crate::services::{auth_service, match_service, scheduled_events_service, tournament_service};
+use crate::services::{access_service, auth_service, match_service, scheduled_events_service, tournament_service};
 use crate::state::AppState;
 use rocket::http::Cookie;
 use rocket::response::Redirect;
@@ -42,6 +42,7 @@ pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> 
             show_tournament_modal: true,
             current_tournament_name: Option::<String>::None,
             tournament_slug: Option::<String>::None,
+            allowed_pages: Vec::<String>::new(),
         },
     ))
 }
@@ -82,6 +83,36 @@ pub fn tournament_dashboard(
         )));
     }
 
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    if !access_service::user_has_permission(state, user.id, tournament.id, "dashboard") {
+        if allowed_pages.iter().any(|item| item.eq_ignore_ascii_case("events")) {
+            return Err(Redirect::to(uri!(
+                crate::controllers::events_controller::events_page(
+                    slug = tournament.slug,
+                    error = Option::<String>::None,
+                    success = Option::<String>::None
+                )
+            )));
+        }
+        if allowed_pages.iter().any(|item| item.eq_ignore_ascii_case("teams")) {
+            return Err(Redirect::to(uri!(
+                crate::controllers::teams_controller::teams_page(
+                    slug = tournament.slug,
+                    error = Option::<String>::None,
+                    success = Option::<String>::None
+                )
+            )));
+        }
+        return Err(Redirect::to(uri!(
+            crate::controllers::settings_controller::settings_page(
+                slug = tournament.slug,
+                error = Some("Access denied.".to_string()),
+                success = Option::<String>::None,
+                tab = Option::<String>::None
+            )
+        )));
+    }
+
     let tournaments = tournament_service::list_by_user(state, user.id);
     let matches = match_service::list_featured_matches();
     let outcomes = scheduled_events_service::list_outcomes(state, user.id, tournament.id).unwrap_or_default();
@@ -97,6 +128,7 @@ pub fn tournament_dashboard(
             show_tournament_modal: false,
             current_tournament_name: tournament.name,
             tournament_slug: tournament.slug,
+            allowed_pages: allowed_pages,
         },
     ))
 }

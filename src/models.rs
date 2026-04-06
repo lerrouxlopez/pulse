@@ -112,6 +112,7 @@ pub struct Role {
 pub struct AccessUser {
     pub id: i64,
     pub name: String,
+    pub email: String,
     pub role_id: Option<i64>,
     pub role_name: Option<String>,
 }

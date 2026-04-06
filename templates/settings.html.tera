@@ -82,6 +82,11 @@
                 Access
               </button>
             </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link {% if active_tab == 'roles' %}active{% endif %}" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles-pane" type="button" role="tab">
+                Roles
+              </button>
+            </li>
           </ul>
 
           <div class="tab-content pt-4" id="settingsTabsContent">
@@ -441,6 +446,150 @@
                         {% else %}
                         <tr>
                           <td class="text-cream-60">No users added yet.</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade {% if active_tab == 'roles' %}show active{% endif %}" id="roles-pane" role="tabpanel">
+              <div class="row g-4">
+                <div class="col-lg-6">
+                  <h5 class="fw-semibold mb-2">Create Role</h5>
+                  <p class="text-cream-60">Define a role and then assign permissions below.</p>
+                  {% if not is_owner %}
+                  <p class="text-cream-60 mb-3">Only the owner can manage roles and permissions.</p>
+                  {% endif %}
+                  <form action="/{{ tournament_slug }}/settings/roles" method="post" class="d-flex flex-wrap gap-2 mb-4">
+                    <input class="form-control flex-grow-1" name="name" placeholder="Role name" {% if not is_owner %}disabled{% endif %} />
+                    <button class="btn btn-outline-light" type="submit" {% if not is_owner %}disabled{% endif %}>Add Role</button>
+                  </form>
+
+                  <h5 class="fw-semibold mb-2">Roles & Permissions</h5>
+                  <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>Role</th>
+                          <th>Permissions</th>
+                          <th class="text-end">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for role in roles %}
+                        <tr>
+                          <td class="fw-semibold">
+                            {{ role.name }}{% if role.is_owner %} <span class="text-cream-60">(Owner)</span>{% endif %}
+                          </td>
+                          <td>
+                            <form action="/{{ tournament_slug }}/settings/roles/{{ role.id }}/permissions" method="post" class="d-flex flex-wrap gap-2">
+                              {% for perm in permissions %}
+                              <label class="form-check form-check-inline text-cream-60 mb-0">
+                                <input class="form-check-input" type="checkbox" name="permissions" value="{{ perm }}"
+                                  {% if perm in role.permissions %}checked{% endif %}
+                                  {% if role.is_owner %}disabled{% endif %} />
+                                <span class="form-check-label text-cream-75">{{ perm | title }}</span>
+                              </label>
+                              {% endfor %}
+                              <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-light" type="submit" {% if role.is_owner or not is_owner %}disabled{% endif %}>Save</button>
+                              </div>
+                            </form>
+                          </td>
+                          <td class="text-end">
+                            <form action="/{{ tournament_slug }}/settings/roles/{{ role.id }}/delete" method="post">
+                              <button class="btn btn-sm btn-outline-danger" type="submit" {% if role.is_owner or not is_owner %}disabled{% endif %}>Delete</button>
+                            </form>
+                          </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                          <td colspan="3" class="text-cream-60">No roles yet.</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="col-lg-6">
+                  <h5 class="fw-semibold mb-2">Create User</h5>
+                  <p class="text-cream-60">Owner can create users and assign a role immediately.</p>
+                  <form action="/{{ tournament_slug }}/settings/roles/users/create" method="post" class="d-flex flex-column gap-2 mb-4">
+                    <input class="form-control" name="name" placeholder="Full name" {% if not is_owner %}disabled{% endif %} />
+                    <input class="form-control" name="email" placeholder="Email" {% if not is_owner %}disabled{% endif %} />
+                    <input class="form-control" type="password" name="password" placeholder="Temporary password" {% if not is_owner %}disabled{% endif %} />
+                    <select class="form-select" name="role_id" {% if not is_owner %}disabled{% endif %}>
+                      <option value="">Select role</option>
+                      {% for role in roles %}
+                      <option value="{{ role.id }}">{{ role.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <button class="btn btn-outline-light align-self-start" type="submit" {% if not is_owner %}disabled{% endif %}>Create User</button>
+                  </form>
+
+                  <h5 class="fw-semibold mb-2">Add Existing User</h5>
+                  <p class="text-cream-60">Attach an existing user account to this tournament.</p>
+                  <form action="/{{ tournament_slug }}/settings/roles/users/add" method="post" class="d-flex flex-column gap-2 mb-4">
+                    <select class="form-select" name="user_id" {% if not is_owner %}disabled{% endif %}>
+                      <option value="">Select user</option>
+                      {% for user in available_users %}
+                      <option value="{{ user.id }}">{{ user.name }} ({{ user.email }})</option>
+                      {% endfor %}
+                    </select>
+                    <select class="form-select" name="role_id" {% if not is_owner %}disabled{% endif %}>
+                      <option value="">Select role</option>
+                      {% for role in roles %}
+                      <option value="{{ role.id }}">{{ role.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <button class="btn btn-outline-light align-self-start" type="submit" {% if not is_owner %}disabled{% endif %}>Add User</button>
+                  </form>
+
+                  <h5 class="fw-semibold mb-2">Users</h5>
+                  <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>User</th>
+                          <th>Email</th>
+                          <th>Role</th>
+                          <th class="text-end">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for user in access_users %}
+                        <tr>
+                          <td>
+                            <input class="form-control" name="name" value="{{ user.name }}" form="user-update-{{ user.id }}" {% if not is_owner %}disabled{% endif %} />
+                          </td>
+                          <td>
+                            <input class="form-control" name="email" value="{{ user.email }}" form="user-update-{{ user.id }}" {% if not is_owner %}disabled{% endif %} />
+                          </td>
+                          <td>
+                            <select class="form-select" name="role_id" form="user-update-{{ user.id }}" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %}>
+                              {% for role in roles %}
+                              <option value="{{ role.id }}" {% if user.role_id == role.id %}selected{% endif %}>{{ role.name }}</option>
+                              {% endfor %}
+                            </select>
+                          </td>
+                          <td class="text-end">
+                              <div class="d-flex justify-content-end gap-2">
+                                <form id="user-update-{{ user.id }}" action="/{{ tournament_slug }}/settings/roles/users/{{ user.id }}/update" method="post">
+                                  <button class="btn btn-sm btn-outline-light" type="submit" {% if not is_owner %}disabled{% endif %}>Save</button>
+                                </form>
+                              </div>
+                            <form action="/{{ tournament_slug }}/settings/roles/users/{{ user.id }}/delete" method="post" class="d-inline">
+                              <button class="btn btn-sm btn-outline-danger" type="submit" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %}>Delete</button>
+                            </form>
+                          </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                          <td colspan="4" class="text-cream-60">No users added yet.</td>
                         </tr>
                         {% endfor %}
                       </tbody>

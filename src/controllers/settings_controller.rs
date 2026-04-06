@@ -1,6 +1,7 @@
-use crate::services::{auth_service, settings_service, tournament_service};
+use crate::services::{access_service, auth_service, settings_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
 use crate::state::AppState;
+use mysql::prelude::Queryable;
 use rocket::form::{Form, FromForm};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::response::Redirect;
@@ -15,6 +16,43 @@ pub struct NameForm {
 #[derive(FromForm)]
 pub struct InviteForm {
     pub email: String,
+}
+
+#[derive(FromForm)]
+pub struct RoleForm {
+    pub name: String,
+}
+
+#[derive(FromForm)]
+pub struct RolePermissionsForm {
+    pub permissions: Vec<String>,
+}
+
+#[derive(FromForm)]
+pub struct UserRoleForm {
+    pub user_id: i64,
+    pub role_id: i64,
+}
+
+#[derive(FromForm)]
+pub struct CreateUserForm {
+    pub name: String,
+    pub email: String,
+    pub password: String,
+    pub role_id: Option<i64>,
+}
+
+#[derive(FromForm)]
+pub struct UpdateUserForm {
+    pub name: String,
+    pub email: String,
+    pub role_id: Option<i64>,
+}
+
+#[derive(FromForm)]
+pub struct AddExistingUserForm {
+    pub user_id: i64,
+    pub role_id: Option<i64>,
 }
 
 #[derive(FromForm)]
@@ -50,6 +88,13 @@ pub fn settings_page(
             )))
         }
     };
+    let _ = access_service::ensure_owner_role(state, tournament.id);
+    let _ = access_service::assign_owner(state, tournament.id, tournament.user_id);
+    if !access_service::user_has_permission(state, user.id, tournament.id, "settings") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
@@ -57,7 +102,10 @@ pub fn settings_page(
     let categories = settings_service::list(state, tournament.id, SettingsEntity::Category);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
     let events = settings_service::list(state, tournament.id, SettingsEntity::Event);
-    let access_users = tournament_service::list_access_users(state, tournament.id);
+    let access_users = access_service::list_access_users(state, tournament.id);
+    let available_users = access_service::list_users_not_in_tournament(state, tournament.id);
+    let roles = access_service::list_roles(state, tournament.id);
+    let permissions = access_service::permissions();
     let can_complete_setup =
         !divisions.is_empty() && !categories.is_empty() && !weight_classes.is_empty() && !events.is_empty();
     let category_names: Vec<String> = categories.iter().map(|item| item.name.to_lowercase()).collect();
@@ -65,6 +113,7 @@ pub fn settings_page(
     let weight_names: Vec<String> = weight_classes.iter().map(|item| item.name.to_lowercase()).collect();
 
     let active_tab = tab.unwrap_or_else(|| "divisions".to_string());
+    let is_owner = access_service::is_owner(state, user.id, tournament.id);
     Ok(Template::render(
         "settings",
         context! {
@@ -80,11 +129,17 @@ pub fn settings_page(
             events: events,
             event_names: event_names,
             access_users: access_users,
+            available_users: available_users,
+            roles: roles,
+            permissions: permissions,
             error: error,
             success: success,
             active: "settings",
             active_tab: active_tab,
             can_complete_setup: can_complete_setup,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            is_owner: is_owner,
+            tournament_owner_id: tournament.user_id,
         },
     ))
 }
@@ -737,6 +792,330 @@ pub fn invite_user(
             error = Some(message),
             success = Option::<String>::None,
             tab = Some("access".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles", data = "<form>")]
+pub fn create_role(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<RoleForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can manage roles.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::create_role(state, tournament.id, &form.name) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("Role created.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles/<id>/permissions", data = "<form>")]
+pub fn update_role_permissions(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+    form: Form<RolePermissionsForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can manage roles.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::update_role_permissions(state, tournament.id, id, &form.permissions) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("Role permissions updated.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles/<id>/delete")]
+pub fn delete_role(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can manage roles.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::delete_role(state, tournament.id, id) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("Role deleted.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles/users/assign", data = "<form>")]
+pub fn assign_user_role(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<UserRoleForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can assign roles.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::assign_user_role(state, tournament.id, form.user_id, form.role_id) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("User role updated.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles/users/create", data = "<form>")]
+pub fn create_user(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<CreateUserForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can create users.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    let password = form.password.trim();
+    if password.len() < 6 {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Password must be at least 6 characters.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    let new_user_id = match auth_service::register(
+        state,
+        crate::models::RegisterForm {
+            name: form.name.clone(),
+            email: form.email.clone(),
+            password: form.password.clone(),
+        },
+    ) {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug,
+                error = Some("Unable to create user.".to_string()),
+                success = Option::<String>::None,
+                tab = Some("roles".to_string())
+            ))));
+        }
+    };
+    let mut conn = match crate::db::open_conn(&state.pool) {
+        Ok(conn) => conn,
+        Err(_) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug,
+                error = Some("Storage error.".to_string()),
+                success = Option::<String>::None,
+                tab = Some("roles".to_string())
+            ))));
+        }
+    };
+    let _ = conn.exec_drop(
+        "INSERT IGNORE INTO tournament_users (tournament_id, user_id) VALUES (?, ?)",
+        (tournament.id, new_user_id),
+    );
+    if let Some(role_id) = form.role_id {
+        let _ = access_service::assign_user_role(state, tournament.id, new_user_id, role_id);
+    }
+    Ok(Redirect::to(uri!(settings_page(
+        slug = slug,
+        error = Option::<String>::None,
+        success = Some("User created.".to_string()),
+        tab = Some("roles".to_string())
+    ))))
+}
+
+#[post("/<slug>/settings/roles/users/<id>/update", data = "<form>")]
+pub fn update_user(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+    form: Form<UpdateUserForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can manage users.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::update_user(state, tournament.id, id, &form.name, &form.email) {
+        Ok(_) => {
+            if let Some(role_id) = form.role_id {
+                let _ = access_service::assign_user_role(state, tournament.id, id, role_id);
+            }
+            Ok(Redirect::to(uri!(settings_page(
+                slug = slug,
+                error = Option::<String>::None,
+                success = Some("User updated.".to_string()),
+                tab = Some("roles".to_string())
+            ))))
+        }
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles/users/<id>/delete")]
+pub fn delete_user(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can manage users.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::remove_user_from_tournament(state, tournament.id, id) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("User removed.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/roles/users/add", data = "<form>")]
+pub fn add_existing_user(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<AddExistingUserForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Only the owner can manage users.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    if form.user_id <= 0 {
+        return Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some("Select a user to add.".to_string()),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
+        ))));
+    }
+    match access_service::add_existing_user(state, tournament.id, form.user_id, form.role_id) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("User added.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("roles".to_string())
         )))),
     }
 }
