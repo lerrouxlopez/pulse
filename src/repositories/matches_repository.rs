@@ -5,19 +5,22 @@ use mysql::{params, PooledConn, Row};
 fn row_to_match(row: Row) -> ScheduledMatch {
     let id: i64 = row.get(0).unwrap_or_default();
     let scheduled_event_id: i64 = row.get(1).unwrap_or_default();
-    let mat: Option<String> = row.get(2);
-    let category: Option<String> = row.get(3);
-    let red: Option<String> = row.get(4);
-    let blue: Option<String> = row.get(5);
-    let status: String = row.get(6).unwrap_or_default();
-    let location: Option<String> = row.get(7);
-    let match_time: Option<String> = row.get(8);
+    let mat: Option<String> = row.get::<Option<String>, _>(2).unwrap_or(None);
+    let category: Option<String> = row.get::<Option<String>, _>(3).unwrap_or(None);
+    let red: Option<String> = row.get::<Option<String>, _>(4).unwrap_or(None);
+    let blue: Option<String> = row.get::<Option<String>, _>(5).unwrap_or(None);
+    let status: String = row
+        .get::<Option<String>, _>(6)
+        .unwrap_or(None)
+        .unwrap_or_default();
+    let location: Option<String> = row.get::<Option<String>, _>(7).unwrap_or(None);
+    let match_time: Option<String> = row.get::<Option<String>, _>(8).unwrap_or(None);
     let round: Option<i64> = row.get(9);
     let slot: Option<i64> = row.get(10);
     let red_member_id: Option<i64> = row.get(11);
     let blue_member_id: Option<i64> = row.get(12);
     let is_bye: i64 = row.get(13).unwrap_or_default();
-    let winner_side: Option<String> = row.get(14);
+    let winner_side: Option<String> = row.get::<Option<String>, _>(14).unwrap_or(None);
 
     ScheduledMatch {
         id,
@@ -44,7 +47,7 @@ pub fn list(
     scheduled_event_id: i64,
 ) -> mysql::Result<Vec<ScheduledMatch>> {
     conn.exec_map(
-        "SELECT id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side
+        "SELECT id, scheduled_event_id, mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
          FROM matches
          WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id
          ORDER BY id DESC",
@@ -159,7 +162,7 @@ pub fn get_by_id(
     id: i64,
 ) -> mysql::Result<Option<ScheduledMatch>> {
     let row: Option<Row> = conn.exec_first(
-        "SELECT id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side
+        "SELECT id, scheduled_event_id, mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
          FROM matches
          WHERE id = :id AND tournament_id = :tournament_id",
         params! {
@@ -178,7 +181,7 @@ pub fn get_by_round_slot(
     slot: i64,
 ) -> mysql::Result<Option<ScheduledMatch>> {
     let row: Option<Row> = conn.exec_first(
-        "SELECT id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side
+        "SELECT id, scheduled_event_id, mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
          FROM matches
          WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id AND round = :round AND slot = :slot",
         params! {
