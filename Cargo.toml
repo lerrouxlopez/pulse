@@ -7,7 +7,8 @@ edition = "2021"
 rocket = { version = "0.5.0", features = ["secrets"] }
 rocket_dyn_templates = { version = "0.1.0", features = ["tera"] }
 serde = { version = "1", features = ["derive"] }
-rusqlite = { version = "0.32.1", features = ["bundled"] }
+mysql = "24.0"
+dotenvy = "0.15"
 argon2 = "0.5.3"
 rand_core = "0.6.4"
 image = { version = "0.25.2", default-features = false, features = ["png", "jpeg"] }

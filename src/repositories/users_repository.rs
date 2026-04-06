@@ -1,51 +1,32 @@
 use crate::models::{UserAuth, UserSummary};
-use rusqlite::{params, Connection};
+use mysql::prelude::*;
+use mysql::PooledConn;
 
 pub fn create_user(
-    conn: &Connection,
+    conn: &mut PooledConn,
     name: &str,
     email: &str,
     password_hash: &str,
-) -> rusqlite::Result<i64> {
-    conn.execute(
-        "INSERT INTO users (name, email, password_hash) VALUES (?1, ?2, ?3)",
-        params![name, email, password_hash],
+) -> mysql::Result<i64> {
+    conn.exec_drop(
+        "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+        (name, email, password_hash),
     )?;
-    Ok(conn.last_insert_rowid())
+    Ok(conn.last_insert_id() as i64)
 }
 
-pub fn find_user_by_email(conn: &Connection, email: &str) -> rusqlite::Result<Option<UserAuth>> {
-    let mut stmt = conn.prepare("SELECT id, password_hash FROM users WHERE email = ?1")?;
-    let mut rows = stmt.query(params![email])?;
-    if let Some(row) = rows.next()? {
-        Ok(Some(UserAuth {
-            id: row.get(0)?,
-            password_hash: row.get(1)?,
-        }))
-    } else {
-        Ok(None)
-    }
+pub fn find_user_by_email(conn: &mut PooledConn, email: &str) -> mysql::Result<Option<UserAuth>> {
+    let row: Option<(i64, String)> =
+        conn.exec_first("SELECT id, password_hash FROM users WHERE email = ?", (email,))?;
+    Ok(row.map(|(id, password_hash)| UserAuth { id, password_hash }))
 }
 
-pub fn find_user_by_id(conn: &Connection, user_id: i64) -> rusqlite::Result<Option<UserSummary>> {
-    let mut stmt = conn.prepare("SELECT id, name FROM users WHERE id = ?1")?;
-    let mut rows = stmt.query(params![user_id])?;
-    if let Some(row) = rows.next()? {
-        Ok(Some(UserSummary {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        }))
-    } else {
-        Ok(None)
-    }
+pub fn find_user_by_id(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Option<UserSummary>> {
+    let row: Option<(i64, String)> =
+        conn.exec_first("SELECT id, name FROM users WHERE id = ?", (user_id,))?;
+    Ok(row.map(|(id, name)| UserSummary { id, name }))
 }
 
-pub fn find_user_id_by_email(conn: &Connection, email: &str) -> rusqlite::Result<Option<i64>> {
-    let mut stmt = conn.prepare("SELECT id FROM users WHERE email = ?1")?;
-    let mut rows = stmt.query(params![email])?;
-    if let Some(row) = rows.next()? {
-        Ok(Some(row.get(0)?))
-    } else {
-        Ok(None)
-    }
+pub fn find_user_id_by_email(conn: &mut PooledConn, email: &str) -> mysql::Result<Option<i64>> {
+    conn.exec_first("SELECT id FROM users WHERE email = ?", (email,))
 }

@@ -9,7 +9,7 @@ use argon2::{
 use rand_core::OsRng;
 use rocket::http::CookieJar;
 use rocket::State;
-use rusqlite::ErrorCode;
+use mysql::Error;
 
 pub enum AuthError {
     Validation(String),
@@ -32,9 +32,9 @@ pub fn register(state: &State<AppState>, form: RegisterForm) -> Result<i64, Auth
         .map_err(|_| AuthError::Storage)?
         .to_string();
 
-    let conn = db::open_conn(&state.db_path).map_err(|_| AuthError::Storage)?;
+    let mut conn = db::open_conn(&state.pool).map_err(|_| AuthError::Storage)?;
     let result = users_repository::create_user(
-        &conn,
+        &mut conn,
         form.name.trim(),
         &form.email.trim().to_lowercase(),
         &password_hash,
@@ -42,18 +42,14 @@ pub fn register(state: &State<AppState>, form: RegisterForm) -> Result<i64, Auth
 
     match result {
         Ok(user_id) => Ok(user_id),
-        Err(rusqlite::Error::SqliteFailure(error, _))
-            if error.code == ErrorCode::ConstraintViolation =>
-        {
-            Err(AuthError::EmailTaken)
-        }
+        Err(Error::MySqlError(ref err)) if err.code == 1062 => Err(AuthError::EmailTaken),
         Err(_) => Err(AuthError::Storage),
     }
 }
 
 pub fn login(state: &State<AppState>, form: LoginForm) -> Result<i64, AuthError> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| AuthError::Storage)?;
-    let user = users_repository::find_user_by_email(&conn, &form.email.trim().to_lowercase())
+    let mut conn = db::open_conn(&state.pool).map_err(|_| AuthError::Storage)?;
+    let user = users_repository::find_user_by_email(&mut conn, &form.email.trim().to_lowercase())
         .map_err(|_| AuthError::Storage)?;
     if let Some(user) = user {
         let parsed_hash = PasswordHash::new(&user.password_hash).map_err(|_| AuthError::Storage)?;
@@ -70,6 +66,6 @@ pub fn login(state: &State<AppState>, form: LoginForm) -> Result<i64, AuthError>
 
 pub fn current_user(state: &State<AppState>, jar: &CookieJar<'_>) -> Option<UserSummary> {
     let user_id = jar.get("user_id")?.value().parse::<i64>().ok()?;
-    let conn = db::open_conn(&state.db_path).ok()?;
-    users_repository::find_user_by_id(&conn, user_id).ok()?
+    let mut conn = db::open_conn(&state.pool).ok()?;
+    users_repository::find_user_by_id(&mut conn, user_id).ok()?
 }

@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use mysql::Pool;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db_path: PathBuf,
+    pub pool: Pool,
 }

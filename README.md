@@ -7,7 +7,9 @@ Martial Arts Tournament app.
    - `cargo run`
 3. Open `http://localhost:8000`.
 
-SQLite data is stored in `data/pulse.db`.
+Set `DATABASE_URL` to a MariaDB/MySQL connection string, e.g.
+`mysql://root@127.0.0.1:3306/pulse-db`.
+You can use a `.env` file (see `.env.example`).
 
 ## Deployment (RunCloud + GHCR)
 This repo includes a Dockerfile and a GitHub Actions workflow that builds and pushes
@@ -27,8 +29,7 @@ services:
     environment:
       ROCKET_ADDRESS: 0.0.0.0
       ROCKET_PORT: 8001
-    volumes:
-      - /opt/pulse/data/pulse.db:/app/data/pulse.db
+      DATABASE_URL: mysql://root:YOUR_PASSWORD@127.0.0.1:3306/pulse-db
 ```
 
 Then point RunCloud's Nginx vhost to `http://127.0.0.1:8001`.
