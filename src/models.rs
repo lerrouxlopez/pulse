@@ -72,6 +72,7 @@ pub struct TeamMember {
     pub team_id: i64,
     pub notes: Option<String>,
     pub weight_class: Option<String>,
+    pub weight_class_id: Option<i64>,
     pub division_id: Option<i64>,
     pub division_name: Option<String>,
     pub category_ids: Vec<i64>,
@@ -88,6 +89,13 @@ pub struct ScheduledEvent {
     pub status: String,
     pub location: Option<String>,
     pub event_time: Option<String>,
+    pub point_system: Option<String>,
+    pub time_rule: Option<String>,
+    pub division_id: Option<i64>,
+    pub weight_class_id: Option<i64>,
+    pub division_name: Option<String>,
+    pub weight_class_name: Option<String>,
+    pub weight_class_label: Option<String>,
 }
 
 #[derive(Serialize)]

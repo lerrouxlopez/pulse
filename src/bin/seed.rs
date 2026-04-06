@@ -32,10 +32,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (tournament_id,),
         |(id, name)| (id, name),
     )?;
-    let weight_classes: Vec<String> = conn.exec_map(
-        "SELECT name FROM weight_classes WHERE tournament_id = ?",
+    let weight_classes: Vec<(i64, String)> = conn.exec_map(
+        "SELECT id, name FROM weight_classes WHERE tournament_id = ?",
         (tournament_id,),
-        |name| name,
+        |(id, name)| (id, name),
     )?;
 
     if weight_classes.is_empty() {
@@ -157,8 +157,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         while member_ids.len() < target_players as usize {
             conn.exec_drop(
-                "INSERT INTO team_members (tournament_id, team_id, name, weight_class) VALUES (?, ?, ?, ?)",
-                (tournament_id, team_id, "Temp Player", &weight_classes[0]),
+                "INSERT INTO team_members (tournament_id, team_id, name, weight_class, weight_class_id) VALUES (?, ?, ?, ?, ?)",
+                (
+                    tournament_id,
+                    team_id,
+                    "Temp Player",
+                    &weight_classes[0].1,
+                    weight_classes[0].0,
+                ),
             )?;
             member_ids.push(conn.last_insert_id() as i64);
         }
@@ -168,11 +174,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let first = &first_names[(player_index - 1) % first_names.len()];
             let last = &last_names[(player_index - 1 + team_idx) % last_names.len()];
             let name = format!("{} {}", first, last);
-            let weight = &weight_classes[(player_index - 1) % weight_classes.len()];
+            let (weight_id, weight_name) = &weight_classes[(player_index - 1) % weight_classes.len()];
             let division_id = divisions[(player_index - 1) % divisions.len()].0;
             conn.exec_drop(
-                "UPDATE team_members SET name = ?, weight_class = ?, division_id = ? WHERE id = ? AND tournament_id = ?",
-                (name, weight, division_id, member_id, tournament_id),
+                "UPDATE team_members SET name = ?, weight_class = ?, weight_class_id = ?, division_id = ? WHERE id = ? AND tournament_id = ?",
+                (name, weight_name, weight_id, division_id, member_id, tournament_id),
             )?;
 
             let mut cat_ids = Vec::new();

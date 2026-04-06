@@ -17,6 +17,10 @@ pub struct EventForm {
     pub status: String,
     pub location: Option<String>,
     pub event_time: Option<String>,
+    pub point_system: Option<String>,
+    pub time_rule: Option<String>,
+    pub division_id: Option<i64>,
+    pub weight_class_id: Option<i64>,
 }
 
 #[derive(FromForm)]
@@ -64,6 +68,8 @@ pub fn events_page(
 
     let events = scheduled_events_service::list(state, user.id, tournament.id).unwrap_or_default();
     let event_options = settings_service::list(state, tournament.id, SettingsEntity::Event);
+    let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
+    let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
     let scheduled_ids: Vec<i64> = events.iter().map(|item| item.event_id).collect();
     let contact_types = scheduled_events_service::contact_types();
     let statuses = scheduled_events_service::statuses();
@@ -76,6 +82,8 @@ pub fn events_page(
             tournament_slug: tournament.slug,
             events: events,
             event_options: event_options,
+            divisions: divisions,
+            weight_classes: weight_classes,
             scheduled_ids: scheduled_ids,
             contact_types: contact_types,
             statuses: statuses,
@@ -148,7 +156,7 @@ pub fn event_profile(
     }
     let match_statuses = matches_service::statuses();
     let competitors =
-        matches_service::list_competitors(state, user.id, tournament.id, event.event_id)
+        matches_service::list_competitors(state, user.id, tournament.id, event.id)
             .unwrap_or_default();
     let is_contact = event.contact_type.eq_ignore_ascii_case("Contact");
     let max_round = matches
@@ -448,21 +456,6 @@ pub fn event_profile(
         }
     }
 
-    let final_connector = {
-        let start_x = champion_x - 20.0;
-        let start_y = final_center_y;
-        let end_x = champion_x;
-        let end_y = final_center_y;
-        let mid_x = (start_x + end_x) / 2.0;
-        format!(
-            "M {} {} L {} {} L {} {} L {} {}",
-            start_x, start_y, mid_x, start_y, mid_x, end_y, end_x, end_y
-        )
-    };
-    bracket_connectors.push(BracketConnector {
-        path: final_connector,
-    });
-
     let canvas_width = champion_x + champion_width + margin_left;
 
     Ok(Template::render(
@@ -509,6 +502,16 @@ pub fn create_event(
         .ok_or(Status::NotFound)?;
     let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
     let event_time = form.event_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
+    let point_system = form
+        .point_system
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let time_rule = form
+        .time_rule
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     match scheduled_events_service::create(
         state,
         user.id,
@@ -518,6 +521,10 @@ pub fn create_event(
         &form.status,
         location,
         event_time,
+        point_system,
+        time_rule,
+        form.division_id,
+        form.weight_class_id,
     ) {
         Ok(_) => Ok(Redirect::to(uri!(events_page(
             slug = slug,
@@ -545,6 +552,16 @@ pub fn update_event(
         .ok_or(Status::NotFound)?;
     let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
     let event_time = form.event_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
+    let point_system = form
+        .point_system
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let time_rule = form
+        .time_rule
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     match scheduled_events_service::update(
         state,
         user.id,
@@ -555,6 +572,10 @@ pub fn update_event(
         &form.status,
         location,
         event_time,
+        point_system,
+        time_rule,
+        form.division_id,
+        form.weight_class_id,
     ) {
         Ok(_) => Ok(Redirect::to(uri!(events_page(
             slug = slug,

@@ -120,6 +120,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             name TEXT NOT NULL,
             notes TEXT,
             weight_class TEXT,
+            weight_class_id BIGINT,
             division_id BIGINT,
             photo_url TEXT,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
@@ -135,6 +136,10 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             status TEXT NOT NULL,
             location TEXT,
             event_time TEXT,
+            point_system TEXT,
+            time_rule TEXT,
+            division_id BIGINT,
+            weight_class_id BIGINT,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
             UNIQUE KEY idx_scheduled_events_unique (tournament_id, event_id)
         )",
