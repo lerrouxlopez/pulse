@@ -1,165 +1,160 @@
 use crate::models::{Tournament, UserSummary};
-use rusqlite::{params, Connection};
+use mysql::prelude::*;
+use mysql::PooledConn;
 
-pub fn get_by_id(conn: &Connection, tournament_id: i64) -> rusqlite::Result<Option<Tournament>> {
-    let mut stmt =
-        conn.prepare("SELECT id, name, slug, is_setup, user_id, started_at FROM tournaments WHERE id = ?1")?;
-    let mut rows = stmt.query(params![tournament_id])?;
-    if let Some(row) = rows.next()? {
-        let is_setup_value: i64 = row.get(3)?;
-        Ok(Some(Tournament {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            slug: row.get(2)?,
+pub fn get_by_id(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Option<Tournament>> {
+    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
+        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments WHERE id = ?",
+        (tournament_id,),
+    )?;
+    Ok(row.map(
+        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
+            id,
+            name,
+            slug,
             is_setup: is_setup_value != 0,
-            user_id: row.get(4)?,
-            started_at: row.get(5)?,
-        }))
-    } else {
-        Ok(None)
-    }
+            user_id,
+            started_at,
+        },
+    ))
 }
 
 pub fn get_by_id_for_user(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     user_id: i64,
-) -> rusqlite::Result<Option<Tournament>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, slug, is_setup, user_id, started_at FROM tournaments
-         WHERE id = ?1
-           AND (user_id = ?2 OR EXISTS (
-             SELECT 1 FROM tournament_users WHERE tournament_id = ?1 AND user_id = ?2
+) -> mysql::Result<Option<Tournament>> {
+    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
+        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments
+         WHERE id = ?
+           AND (user_id = ? OR EXISTS (
+             SELECT 1 FROM tournament_users WHERE tournament_id = ? AND user_id = ?
            ))",
+        (tournament_id, user_id, tournament_id, user_id),
     )?;
-    let mut rows = stmt.query(params![tournament_id, user_id])?;
-    if let Some(row) = rows.next()? {
-        let is_setup_value: i64 = row.get(3)?;
-        Ok(Some(Tournament {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            slug: row.get(2)?,
+    Ok(row.map(
+        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
+            id,
+            name,
+            slug,
             is_setup: is_setup_value != 0,
-            user_id: row.get(4)?,
-            started_at: row.get(5)?,
-        }))
-    } else {
-        Ok(None)
-    }
+            user_id,
+            started_at,
+        },
+    ))
 }
 
-pub fn list_by_user(conn: &Connection, user_id: i64) -> rusqlite::Result<Vec<Tournament>> {
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT t.id, t.name, t.slug, t.is_setup, t.user_id, t.started_at
+pub fn list_by_user(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Vec<Tournament>> {
+    conn.exec_map(
+        "SELECT DISTINCT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
          FROM tournaments t
          LEFT JOIN tournament_users tu ON tu.tournament_id = t.id
-         WHERE t.user_id = ?1 OR tu.user_id = ?1
+         WHERE t.user_id = ? OR tu.user_id = ?
          ORDER BY t.id DESC",
-    )?;
-    let rows = stmt.query_map(params![user_id], |row| {
-        let is_setup_value: i64 = row.get(3)?;
-        Ok(Tournament {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            slug: row.get(2)?,
+        (user_id, user_id),
+        |(id, name, slug, is_setup_value, user_id, started_at): (
+            i64,
+            String,
+            String,
+            i64,
+            i64,
+            Option<String>,
+        )| Tournament {
+            id,
+            name,
+            slug,
             is_setup: is_setup_value != 0,
-            user_id: row.get(4)?,
-            started_at: row.get(5)?,
-        })
-    })?;
-    let mut items = Vec::new();
-    for row in rows {
-        items.push(row?);
-    }
-    Ok(items)
+            user_id,
+            started_at,
+        },
+    )
 }
 
-pub fn create(conn: &Connection, user_id: i64, name: &str, slug: &str) -> rusqlite::Result<i64> {
-    conn.execute(
-        "INSERT INTO tournaments (user_id, name, slug, is_setup) VALUES (?1, ?2, ?3, 0)",
-        params![user_id, name, slug],
+pub fn create(conn: &mut PooledConn, user_id: i64, name: &str, slug: &str) -> mysql::Result<i64> {
+    conn.exec_drop(
+        "INSERT INTO tournaments (user_id, name, slug, is_setup) VALUES (?, ?, ?, 0)",
+        (user_id, name, slug),
     )?;
-    Ok(conn.last_insert_rowid())
+    Ok(conn.last_insert_id() as i64)
 }
 
-pub fn set_setup(conn: &Connection, tournament_id: i64, is_setup: bool) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE tournaments SET is_setup = ?1 WHERE id = ?2",
-        params![if is_setup { 1 } else { 0 }, tournament_id],
+pub fn set_setup(conn: &mut PooledConn, tournament_id: i64, is_setup: bool) -> mysql::Result<()> {
+    conn.exec_drop(
+        "UPDATE tournaments SET is_setup = ? WHERE id = ?",
+        (if is_setup { 1 } else { 0 }, tournament_id),
     )?;
     Ok(())
 }
 
-pub fn get_by_slug(conn: &Connection, slug: &str) -> rusqlite::Result<Option<Tournament>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, slug, is_setup, user_id, started_at FROM tournaments WHERE slug = ?1",
+pub fn get_by_slug(conn: &mut PooledConn, slug: &str) -> mysql::Result<Option<Tournament>> {
+    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
+        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments WHERE slug = ?",
+        (slug,),
     )?;
-    let mut rows = stmt.query(params![slug])?;
-    if let Some(row) = rows.next()? {
-        let is_setup_value: i64 = row.get(3)?;
-        Ok(Some(Tournament {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            slug: row.get(2)?,
+    Ok(row.map(
+        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
+            id,
+            name,
+            slug,
             is_setup: is_setup_value != 0,
-            user_id: row.get(4)?,
-            started_at: row.get(5)?,
-        }))
-    } else {
-        Ok(None)
-    }
+            user_id,
+            started_at,
+        },
+    ))
 }
 
 pub fn get_by_slug_for_user(
-    conn: &Connection,
+    conn: &mut PooledConn,
     slug: &str,
     user_id: i64,
-) -> rusqlite::Result<Option<Tournament>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, slug, is_setup, user_id, started_at FROM tournaments
-         WHERE slug = ?1
-           AND (user_id = ?2 OR EXISTS (
-             SELECT 1 FROM tournament_users WHERE tournament_id = tournaments.id AND user_id = ?2
+) -> mysql::Result<Option<Tournament>> {
+    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
+        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments
+         WHERE slug = ?
+           AND (user_id = ? OR EXISTS (
+             SELECT 1 FROM tournament_users WHERE tournament_id = tournaments.id AND user_id = ?
            ))",
+        (slug, user_id, user_id),
     )?;
-    let mut rows = stmt.query(params![slug, user_id])?;
-    if let Some(row) = rows.next()? {
-        let is_setup_value: i64 = row.get(3)?;
-        Ok(Some(Tournament {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            slug: row.get(2)?,
+    Ok(row.map(
+        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
+            id,
+            name,
+            slug,
             is_setup: is_setup_value != 0,
-            user_id: row.get(4)?,
-            started_at: row.get(5)?,
-        }))
-    } else {
-        Ok(None)
-    }
+            user_id,
+            started_at,
+        },
+    ))
 }
 
-pub fn slug_exists(conn: &Connection, slug: &str) -> rusqlite::Result<bool> {
-    let mut stmt = conn.prepare("SELECT 1 FROM tournaments WHERE slug = ?1 LIMIT 1")?;
-    let mut rows = stmt.query(params![slug])?;
-    Ok(rows.next()?.is_some())
+pub fn slug_exists(conn: &mut PooledConn, slug: &str) -> mysql::Result<bool> {
+    let row: Option<i64> = conn.exec_first(
+        "SELECT 1 FROM tournaments WHERE slug = ? LIMIT 1",
+        (slug,),
+    )?;
+    Ok(row.is_some())
 }
 
 pub fn user_has_access(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     user_id: i64,
-) -> rusqlite::Result<bool> {
-    let mut stmt = conn.prepare(
+) -> mysql::Result<bool> {
+    let row: Option<i64> = conn.exec_first(
         "SELECT 1
-         WHERE EXISTS (SELECT 1 FROM tournaments WHERE id = ?1 AND user_id = ?2)
-            OR EXISTS (SELECT 1 FROM tournament_users WHERE tournament_id = ?1 AND user_id = ?2)",
+         WHERE EXISTS (SELECT 1 FROM tournaments WHERE id = ? AND user_id = ?)
+            OR EXISTS (SELECT 1 FROM tournament_users WHERE tournament_id = ? AND user_id = ?)",
+        (tournament_id, user_id, tournament_id, user_id),
     )?;
-    let mut rows = stmt.query(params![tournament_id, user_id])?;
-    Ok(rows.next()?.is_some())
+    Ok(row.is_some())
 }
 
-pub fn list_access_users(conn: &Connection, tournament_id: i64) -> rusqlite::Result<Vec<UserSummary>> {
-    let mut stmt = conn.prepare(
+pub fn list_access_users(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+) -> mysql::Result<Vec<UserSummary>> {
+    conn.exec_map(
         "SELECT id, name FROM users WHERE id = (SELECT user_id FROM tournaments WHERE id = ?1)
          UNION
          SELECT users.id, users.name
@@ -167,35 +162,23 @@ pub fn list_access_users(conn: &Connection, tournament_id: i64) -> rusqlite::Res
          INNER JOIN tournament_users ON tournament_users.user_id = users.id
          WHERE tournament_users.tournament_id = ?1
          ORDER BY name",
-    )?;
-    let rows = stmt.query_map(params![tournament_id], |row| {
-        Ok(UserSummary {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })?;
-    let mut items = Vec::new();
-    for row in rows {
-        items.push(row?);
-    }
-    Ok(items)
+        (tournament_id,),
+        |(id, name)| UserSummary { id, name },
+    )
 }
 
-pub fn list_missing_slugs(conn: &Connection) -> rusqlite::Result<Vec<(i64, String)>> {
-    let mut stmt =
-        conn.prepare("SELECT id, name FROM tournaments WHERE slug IS NULL OR slug = ''")?;
-    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
-    let mut items = Vec::new();
-    for row in rows {
-        items.push(row?);
-    }
-    Ok(items)
+pub fn list_missing_slugs(conn: &mut PooledConn) -> mysql::Result<Vec<(i64, String)>> {
+    conn.exec_map(
+        "SELECT id, name FROM tournaments WHERE slug IS NULL OR slug = ''",
+        (),
+        |(id, name)| (id, name),
+    )
 }
 
-pub fn update_slug(conn: &Connection, tournament_id: i64, slug: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE tournaments SET slug = ?1 WHERE id = ?2",
-        params![slug, tournament_id],
+pub fn update_slug(conn: &mut PooledConn, tournament_id: i64, slug: &str) -> mysql::Result<()> {
+    conn.exec_drop(
+        "UPDATE tournaments SET slug = ? WHERE id = ?",
+        (slug, tournament_id),
     )?;
     Ok(())
 }

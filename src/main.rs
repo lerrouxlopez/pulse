@@ -12,15 +12,18 @@ mod state;
 use rocket::fs::{relative, FileServer};
 use rocket_dyn_templates::Template;
 use state::AppState;
-use std::path::PathBuf;
+use std::env;
 
 #[launch]
 fn rocket() -> _ {
-    let db_path = PathBuf::from("data/pulse.db");
-    let _ = db::init_db(&db_path);
-    let _ = services::tournament_service::ensure_slugs(&db_path);
+    let _ = dotenvy::dotenv();
+    let db_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "mysql://root@127.0.0.1:3306/pulse-db".to_string());
+    let pool = mysql::Pool::new(db_url.as_str()).expect("failed to create MySQL pool");
+    let _ = db::init_db(&pool);
+    let _ = services::tournament_service::ensure_slugs(&pool);
     rocket::build()
-        .manage(AppState { db_path })
+        .manage(AppState { pool })
         .mount(
             "/",
             routes![

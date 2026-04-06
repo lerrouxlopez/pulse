@@ -1,41 +1,63 @@
 use crate::models::ScheduledMatch;
-use rusqlite::{params, Connection};
+use mysql::prelude::*;
+use mysql::{params, PooledConn, Row};
 
-pub fn list(conn: &Connection, tournament_id: i64, scheduled_event_id: i64) -> rusqlite::Result<Vec<ScheduledMatch>> {
-    let mut stmt = conn.prepare(
+fn row_to_match(row: Row) -> ScheduledMatch {
+    let id: i64 = row.get(0).unwrap_or_default();
+    let scheduled_event_id: i64 = row.get(1).unwrap_or_default();
+    let mat: Option<String> = row.get(2);
+    let category: Option<String> = row.get(3);
+    let red: Option<String> = row.get(4);
+    let blue: Option<String> = row.get(5);
+    let status: String = row.get(6).unwrap_or_default();
+    let location: Option<String> = row.get(7);
+    let match_time: Option<String> = row.get(8);
+    let round: Option<i64> = row.get(9);
+    let slot: Option<i64> = row.get(10);
+    let red_member_id: Option<i64> = row.get(11);
+    let blue_member_id: Option<i64> = row.get(12);
+    let is_bye: i64 = row.get(13).unwrap_or_default();
+    let winner_side: Option<String> = row.get(14);
+
+    ScheduledMatch {
+        id,
+        scheduled_event_id,
+        mat,
+        category,
+        red,
+        blue,
+        status,
+        location,
+        match_time,
+        round,
+        slot,
+        red_member_id,
+        blue_member_id,
+        is_bye: is_bye != 0,
+        winner_side,
+    }
+}
+
+pub fn list(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> mysql::Result<Vec<ScheduledMatch>> {
+    conn.exec_map(
         "SELECT id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side
          FROM matches
-         WHERE tournament_id = ?1 AND scheduled_event_id = ?2
+         WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id
          ORDER BY id DESC",
-    )?;
-    let rows = stmt.query_map(params![tournament_id, scheduled_event_id], |row| {
-        Ok(ScheduledMatch {
-            id: row.get(0)?,
-            scheduled_event_id: row.get(1)?,
-            mat: row.get(2)?,
-            category: row.get(3)?,
-            red: row.get(4)?,
-            blue: row.get(5)?,
-            status: row.get(6)?,
-            location: row.get(7)?,
-            match_time: row.get(8)?,
-            round: row.get(9)?,
-            slot: row.get(10)?,
-            red_member_id: row.get(11)?,
-            blue_member_id: row.get(12)?,
-            is_bye: row.get::<_, i64>(13)? != 0,
-            winner_side: row.get(14)?,
-        })
-    })?;
-    let mut items = Vec::new();
-    for row in rows {
-        items.push(row?);
-    }
-    Ok(items)
+        params! {
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+        },
+        row_to_match,
+    )
 }
 
 pub fn create(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     scheduled_event_id: i64,
     mat: Option<&str>,
@@ -50,32 +72,32 @@ pub fn create(
     red_member_id: Option<i64>,
     blue_member_id: Option<i64>,
     is_bye: bool,
-) -> rusqlite::Result<i64> {
-    conn.execute(
+) -> mysql::Result<i64> {
+    conn.exec_drop(
         "INSERT INTO matches (tournament_id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
-        params![
-            tournament_id,
-            scheduled_event_id,
-            mat,
-            category,
-            red,
-            blue,
-            status,
-            location,
-            match_time,
-            round,
-            slot,
-            red_member_id,
-            blue_member_id,
-            if is_bye { 1 } else { 0 }
-        ],
+         VALUES (:tournament_id, :scheduled_event_id, :mat, :category, :red, :blue, :status, :location, :match_time, :round, :slot, :red_member_id, :blue_member_id, :is_bye, NULL)",
+        params! {
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+            "mat" => mat,
+            "category" => category,
+            "red" => red,
+            "blue" => blue,
+            "status" => status,
+            "location" => location,
+            "match_time" => match_time,
+            "round" => round,
+            "slot" => slot,
+            "red_member_id" => red_member_id,
+            "blue_member_id" => blue_member_id,
+            "is_bye" => if is_bye { 1 } else { 0 },
+        },
     )?;
-    Ok(conn.last_insert_rowid())
+    Ok(conn.last_insert_id() as i64)
 }
 
 pub fn update(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     id: i64,
     scheduled_event_id: i64,
@@ -92,106 +114,79 @@ pub fn update(
     blue_member_id: Option<i64>,
     is_bye: bool,
     winner_side: Option<&str>,
-) -> rusqlite::Result<usize> {
-    conn.execute(
+) -> mysql::Result<usize> {
+    conn.exec_drop(
         "UPDATE matches
-         SET mat = ?1, category = ?2, red = ?3, blue = ?4, status = ?5, location = ?6, match_time = ?7,
-             round = ?8, slot = ?9, red_member_id = ?10, blue_member_id = ?11, is_bye = ?12, winner_side = ?13
-         WHERE id = ?14 AND tournament_id = ?15 AND scheduled_event_id = ?16",
-        params![
-            mat,
-            category,
-            red,
-            blue,
-            status,
-            location,
-            match_time,
-            round,
-            slot,
-            red_member_id,
-            blue_member_id,
-            if is_bye { 1 } else { 0 },
-            winner_side,
-            id,
-            tournament_id,
-            scheduled_event_id
-        ],
-    )
+         SET mat = :mat, category = :category, red = :red, blue = :blue, status = :status, location = :location, match_time = :match_time,
+             round = :round, slot = :slot, red_member_id = :red_member_id, blue_member_id = :blue_member_id, is_bye = :is_bye, winner_side = :winner_side
+         WHERE id = :id AND tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id",
+        params! {
+            "mat" => mat,
+            "category" => category,
+            "red" => red,
+            "blue" => blue,
+            "status" => status,
+            "location" => location,
+            "match_time" => match_time,
+            "round" => round,
+            "slot" => slot,
+            "red_member_id" => red_member_id,
+            "blue_member_id" => blue_member_id,
+            "is_bye" => if is_bye { 1 } else { 0 },
+            "winner_side" => winner_side,
+            "id" => id,
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
 }
 
-pub fn delete(conn: &Connection, tournament_id: i64, id: i64) -> rusqlite::Result<usize> {
-    conn.execute(
-        "DELETE FROM matches WHERE id = ?1 AND tournament_id = ?2",
-        params![id, tournament_id],
-    )
+pub fn delete(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "DELETE FROM matches WHERE id = :id AND tournament_id = :tournament_id",
+        params! {
+            "id" => id,
+            "tournament_id" => tournament_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
 }
 
 pub fn get_by_id(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     id: i64,
-) -> rusqlite::Result<Option<ScheduledMatch>> {
-    let mut stmt = conn.prepare(
+) -> mysql::Result<Option<ScheduledMatch>> {
+    let row: Option<Row> = conn.exec_first(
         "SELECT id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side
          FROM matches
-         WHERE id = ?1 AND tournament_id = ?2",
+         WHERE id = :id AND tournament_id = :tournament_id",
+        params! {
+            "id" => id,
+            "tournament_id" => tournament_id,
+        },
     )?;
-    let mut rows = stmt.query(params![id, tournament_id])?;
-    if let Some(row) = rows.next()? {
-        Ok(Some(ScheduledMatch {
-            id: row.get(0)?,
-            scheduled_event_id: row.get(1)?,
-            mat: row.get(2)?,
-            category: row.get(3)?,
-            red: row.get(4)?,
-            blue: row.get(5)?,
-            status: row.get(6)?,
-            location: row.get(7)?,
-            match_time: row.get(8)?,
-            round: row.get(9)?,
-            slot: row.get(10)?,
-            red_member_id: row.get(11)?,
-            blue_member_id: row.get(12)?,
-            is_bye: row.get::<_, i64>(13)? != 0,
-            winner_side: row.get(14)?,
-        }))
-    } else {
-        Ok(None)
-    }
+    Ok(row.map(row_to_match))
 }
 
 pub fn get_by_round_slot(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     scheduled_event_id: i64,
     round: i64,
     slot: i64,
-) -> rusqlite::Result<Option<ScheduledMatch>> {
-    let mut stmt = conn.prepare(
+) -> mysql::Result<Option<ScheduledMatch>> {
+    let row: Option<Row> = conn.exec_first(
         "SELECT id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side
          FROM matches
-         WHERE tournament_id = ?1 AND scheduled_event_id = ?2 AND round = ?3 AND slot = ?4",
+         WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id AND round = :round AND slot = :slot",
+        params! {
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+            "round" => round,
+            "slot" => slot,
+        },
     )?;
-    let mut rows = stmt.query(params![tournament_id, scheduled_event_id, round, slot])?;
-    if let Some(row) = rows.next()? {
-        Ok(Some(ScheduledMatch {
-            id: row.get(0)?,
-            scheduled_event_id: row.get(1)?,
-            mat: row.get(2)?,
-            category: row.get(3)?,
-            red: row.get(4)?,
-            blue: row.get(5)?,
-            status: row.get(6)?,
-            location: row.get(7)?,
-            match_time: row.get(8)?,
-            round: row.get(9)?,
-            slot: row.get(10)?,
-            red_member_id: row.get(11)?,
-            blue_member_id: row.get(12)?,
-            is_bye: row.get::<_, i64>(13)? != 0,
-            winner_side: row.get(14)?,
-        }))
-    } else {
-        Ok(None)
-    }
+    Ok(row.map(row_to_match))
 }

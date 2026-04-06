@@ -1,46 +1,40 @@
 use crate::models::NamedItem;
-use rusqlite::{params, Connection};
+use mysql::prelude::*;
+use mysql::PooledConn;
 
-pub fn list(conn: &Connection, tournament_id: i64) -> rusqlite::Result<Vec<NamedItem>> {
-    let mut stmt = conn.prepare("SELECT id, name FROM weight_classes WHERE tournament_id = ?1 ORDER BY id")?;
-    let rows = stmt.query_map(params![tournament_id], |row| {
-        Ok(NamedItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })?;
-    let mut items = Vec::new();
-    for row in rows {
-        items.push(row?);
-    }
-    Ok(items)
+pub fn list(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Vec<NamedItem>> {
+    conn.exec_map(
+        "SELECT id, name FROM weight_classes WHERE tournament_id = ? ORDER BY id",
+        (tournament_id,),
+        |(id, name)| NamedItem { id, name },
+    )
 }
 
-pub fn create(conn: &Connection, tournament_id: i64, name: &str) -> rusqlite::Result<i64> {
-    conn.execute(
-        "INSERT INTO weight_classes (tournament_id, name) VALUES (?1, ?2)",
-        params![tournament_id, name],
+pub fn create(conn: &mut PooledConn, tournament_id: i64, name: &str) -> mysql::Result<i64> {
+    conn.exec_drop(
+        "INSERT INTO weight_classes (tournament_id, name) VALUES (?, ?)",
+        (tournament_id, name),
     )?;
-    Ok(conn.last_insert_rowid())
+    Ok(conn.last_insert_id() as i64)
 }
 
 pub fn update(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     id: i64,
     name: &str,
-) -> rusqlite::Result<usize> {
-    let changed = conn.execute(
-        "UPDATE weight_classes SET name = ?1 WHERE id = ?2 AND tournament_id = ?3",
-        params![name, id, tournament_id],
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE weight_classes SET name = ? WHERE id = ? AND tournament_id = ?",
+        (name, id, tournament_id),
     )?;
-    Ok(changed)
+    Ok(conn.affected_rows() as usize)
 }
 
-pub fn delete(conn: &Connection, tournament_id: i64, id: i64) -> rusqlite::Result<usize> {
-    let changed = conn.execute(
-        "DELETE FROM weight_classes WHERE id = ?1 AND tournament_id = ?2",
-        params![id, tournament_id],
+pub fn delete(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "DELETE FROM weight_classes WHERE id = ? AND tournament_id = ?",
+        (id, tournament_id),
     )?;
-    Ok(changed)
+    Ok(conn.affected_rows() as usize)
 }

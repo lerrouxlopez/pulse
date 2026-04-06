@@ -1,78 +1,72 @@
 use crate::models::ScheduledEvent;
-use rusqlite::{params, Connection};
+use mysql::prelude::*;
+use mysql::PooledConn;
 
-pub fn list(conn: &Connection, tournament_id: i64) -> rusqlite::Result<Vec<ScheduledEvent>> {
-    let mut stmt = conn.prepare(
+pub fn list(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Vec<ScheduledEvent>> {
+    conn.exec_map(
         "SELECT se.id, se.event_id, e.name, se.contact_type, se.status, se.location, se.event_time
          FROM scheduled_events se
          JOIN events e ON e.id = se.event_id
-         WHERE se.tournament_id = ?1
+         WHERE se.tournament_id = ?
          ORDER BY se.id DESC",
-    )?;
-    let rows = stmt.query_map(params![tournament_id], |row| {
-        Ok(ScheduledEvent {
-            id: row.get(0)?,
-            event_id: row.get(1)?,
-            event_name: row.get(2)?,
-            contact_type: row.get(3)?,
-            status: row.get(4)?,
-            location: row.get(5)?,
-            event_time: row.get(6)?,
-        })
-    })?;
-    let mut items = Vec::new();
-    for row in rows {
-        items.push(row?);
-    }
-    Ok(items)
+        (tournament_id,),
+        |(id, event_id, event_name, contact_type, status, location, event_time)| ScheduledEvent {
+            id,
+            event_id,
+            event_name,
+            contact_type,
+            status,
+            location,
+            event_time,
+        },
+    )
 }
 
 pub fn get_by_id(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     id: i64,
-) -> rusqlite::Result<Option<ScheduledEvent>> {
-    let mut stmt = conn.prepare(
+) -> mysql::Result<Option<ScheduledEvent>> {
+    let row: Option<(i64, i64, String, String, String, Option<String>, Option<String>)> =
+        conn.exec_first(
         "SELECT se.id, se.event_id, e.name, se.contact_type, se.status, se.location, se.event_time
          FROM scheduled_events se
          JOIN events e ON e.id = se.event_id
-         WHERE se.tournament_id = ?1 AND se.id = ?2",
-    )?;
-    let mut rows = stmt.query(params![tournament_id, id])?;
-    if let Some(row) = rows.next()? {
-        Ok(Some(ScheduledEvent {
-            id: row.get(0)?,
-            event_id: row.get(1)?,
-            event_name: row.get(2)?,
-            contact_type: row.get(3)?,
-            status: row.get(4)?,
-            location: row.get(5)?,
-            event_time: row.get(6)?,
-        }))
-    } else {
-        Ok(None)
-    }
+         WHERE se.tournament_id = ? AND se.id = ?",
+            (tournament_id, id),
+        )?;
+    Ok(row.map(
+        |(id, event_id, event_name, contact_type, status, location, event_time)| ScheduledEvent {
+            id,
+            event_id,
+            event_name,
+            contact_type,
+            status,
+            location,
+            event_time,
+        },
+    ))
 }
 
 pub fn create(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     event_id: i64,
     contact_type: &str,
     status: &str,
     location: Option<&str>,
     event_time: Option<&str>,
-) -> rusqlite::Result<i64> {
-    conn.execute(
+) -> mysql::Result<i64> {
+    conn.exec_drop(
         "INSERT INTO scheduled_events (tournament_id, event_id, contact_type, status, location, event_time)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![tournament_id, event_id, contact_type, status, location, event_time],
+         VALUES (?, ?, ?, ?, ?, ?)",
+        (tournament_id, event_id, contact_type, status, location, event_time),
     )?;
-    Ok(conn.last_insert_rowid())
+    Ok(conn.last_insert_id() as i64)
 }
 
 pub fn update(
-    conn: &Connection,
+    conn: &mut PooledConn,
     tournament_id: i64,
     id: i64,
     event_id: i64,
@@ -80,26 +74,28 @@ pub fn update(
     status: &str,
     location: Option<&str>,
     event_time: Option<&str>,
-) -> rusqlite::Result<usize> {
-    conn.execute(
+) -> mysql::Result<usize> {
+    conn.exec_drop(
         "UPDATE scheduled_events
-         SET event_id = ?1, contact_type = ?2, status = ?3, location = ?4, event_time = ?5
-         WHERE id = ?6 AND tournament_id = ?7",
-        params![
+         SET event_id = ?, contact_type = ?, status = ?, location = ?, event_time = ?
+         WHERE id = ? AND tournament_id = ?",
+        (
             event_id,
             contact_type,
             status,
             location,
             event_time,
             id,
-            tournament_id
-        ],
-    )
+            tournament_id,
+        ),
+    )?;
+    Ok(conn.affected_rows() as usize)
 }
 
-pub fn delete(conn: &Connection, tournament_id: i64, id: i64) -> rusqlite::Result<usize> {
-    conn.execute(
-        "DELETE FROM scheduled_events WHERE id = ?1 AND tournament_id = ?2",
-        params![id, tournament_id],
-    )
+pub fn delete(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "DELETE FROM scheduled_events WHERE id = ? AND tournament_id = ?",
+        (id, tournament_id),
+    )?;
+    Ok(conn.affected_rows() as usize)
 }

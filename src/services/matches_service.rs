@@ -15,13 +15,13 @@ pub fn list(
     tournament_id: i64,
     scheduled_event_id: i64,
 ) -> Result<Vec<ScheduledMatch>, String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
-    matches_repository::list(&conn, tournament_id, scheduled_event_id)
+    matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
         .map_err(|_| "Storage error.".to_string())
 }
 
@@ -31,13 +31,13 @@ pub fn list_competitors(
     tournament_id: i64,
     event_id: i64,
 ) -> Result<Vec<EventCompetitor>, String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
-    let rows = teams_repository::list_event_competitors(&conn, tournament_id, event_id)
+    let rows = teams_repository::list_event_competitors(&mut conn, tournament_id, event_id)
         .map_err(|_| "Storage error.".to_string())?;
     Ok(rows
         .into_iter()
@@ -68,8 +68,8 @@ pub fn create(
     blue_member_id: Option<i64>,
     is_bye: bool,
 ) -> Result<(), String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
@@ -77,13 +77,13 @@ pub fn create(
     if !MATCH_STATUSES.iter().any(|value| value.eq_ignore_ascii_case(status)) {
         return Err("Invalid match status.".to_string());
     }
-    let scheduled = scheduled_events_repository::get_by_id(&conn, tournament_id, scheduled_event_id)
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
         .map_err(|_| "Storage error.".to_string())?;
     if scheduled.is_none() {
         return Err("Event not found for this tournament.".to_string());
     }
     matches_repository::create(
-        &conn,
+        &mut conn,
         tournament_id,
         scheduled_event_id,
         mat,
@@ -122,8 +122,8 @@ pub fn update(
     blue_member_id: Option<i64>,
     is_bye: bool,
 ) -> Result<(), String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
@@ -132,7 +132,7 @@ pub fn update(
         return Err("Invalid match status.".to_string());
     }
     let changed = matches_repository::update(
-        &conn,
+        &mut conn,
         tournament_id,
         id,
         scheduled_event_id,
@@ -163,13 +163,13 @@ pub fn delete(
     tournament_id: i64,
     id: i64,
 ) -> Result<(), String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
-    let changed = matches_repository::delete(&conn, tournament_id, id)
+    let changed = matches_repository::delete(&mut conn, tournament_id, id)
         .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
@@ -190,17 +190,17 @@ pub fn update_schedule(
     location: Option<&str>,
     match_time: Option<&str>,
 ) -> Result<(), String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
-    let existing = matches_repository::get_by_id(&conn, tournament_id, id)
+    let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
         .map_err(|_| "Storage error.".to_string())?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
     let changed = matches_repository::update(
-        &conn,
+        &mut conn,
         tournament_id,
         id,
         scheduled_event_id,
@@ -236,8 +236,8 @@ pub fn update_contact_match(
     match_time: Option<&str>,
     winner_side: Option<&str>,
 ) -> Result<(), String> {
-    let conn = db::open_conn(&state.db_path).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&conn, tournament_id, user_id)
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
     if !has_access {
         return Err("Tournament not found.".to_string());
@@ -245,13 +245,13 @@ pub fn update_contact_match(
     if !MATCH_STATUSES.iter().any(|value| value.eq_ignore_ascii_case(status)) {
         return Err("Invalid match status.".to_string());
     }
-    let existing = matches_repository::get_by_id(&conn, tournament_id, id)
+    let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
         .map_err(|_| "Storage error.".to_string())?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
 
     if !(status.eq_ignore_ascii_case("Finished") || status.eq_ignore_ascii_case("Forfeit")) {
         let changed = matches_repository::update(
-            &conn,
+            &mut conn,
             tournament_id,
             id,
             scheduled_event_id,
@@ -300,7 +300,7 @@ pub fn update_contact_match(
     let winner_label = winner_label.ok_or_else(|| "Winner not found.".to_string())?;
 
     let changed = matches_repository::update(
-        &conn,
+        &mut conn,
         tournament_id,
         id,
         scheduled_event_id,
@@ -335,7 +335,7 @@ pub fn update_contact_match(
     let next_round = round + 1;
     let next_slot = (slot + 1) / 2;
     let mut target = matches_repository::get_by_round_slot(
-        &conn,
+        &mut conn,
         tournament_id,
         scheduled_event_id,
         next_round,
@@ -351,7 +351,7 @@ pub fn update_contact_match(
             target_match.blue_member_id = Some(winner_id).flatten();
         }
         let changed = matches_repository::update(
-            &conn,
+            &mut conn,
             tournament_id,
             target_match.id,
             scheduled_event_id,
