@@ -104,6 +104,42 @@
           </div>
         </section>
 
+        <section class="panel mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Event Outcomes</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">Event</th>
+                  <th scope="col">Division</th>
+                  <th scope="col">Weight Class</th>
+                  <th scope="col">Winner</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in outcomes %}
+                <tr>
+                  <td>{{ item.event_name }}</td>
+                  <td>{{ item.division_name | default(value="") }}</td>
+                  <td>{{ item.weight_class_label | default(value="") }}</td>
+                  <td>{{ item.winner_name | default(value="") }}</td>
+                  <td>
+                    <span class="pill status-ok">{{ item.status }}</span>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="text-cream-60">No outcomes yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="panel">
           <h4 class="fw-semibold mb-3">Quick Actions</h4>
           <div class="d-flex flex-wrap gap-3">

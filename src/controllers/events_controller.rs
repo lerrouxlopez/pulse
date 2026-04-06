@@ -70,7 +70,6 @@ pub fn events_page(
     let event_options = settings_service::list(state, tournament.id, SettingsEntity::Event);
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
-    let scheduled_ids: Vec<i64> = events.iter().map(|item| item.event_id).collect();
     let contact_types = scheduled_events_service::contact_types();
     let statuses = scheduled_events_service::statuses();
 
@@ -84,7 +83,6 @@ pub fn events_page(
             event_options: event_options,
             divisions: divisions,
             weight_classes: weight_classes,
-            scheduled_ids: scheduled_ids,
             contact_types: contact_types,
             statuses: statuses,
             error: error,

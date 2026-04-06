@@ -55,6 +55,20 @@ pub fn get_by_id(
     Ok(event)
 }
 
+pub fn list_outcomes(
+    state: &State<AppState>,
+    user_id: i64,
+    tournament_id: i64,
+) -> Result<Vec<ScheduledEvent>, String> {
+    let mut events = list(state, user_id, tournament_id)?;
+    events.retain(|item| {
+        item.status.eq_ignore_ascii_case("Finished")
+            && item.winner_member_id.is_some()
+            && item.winner_name.as_ref().map(|name| !name.trim().is_empty()).unwrap_or(false)
+    });
+    Ok(events)
+}
+
 pub fn create(
     state: &State<AppState>,
     user_id: i64,
@@ -113,11 +127,9 @@ pub fn create(
             return Err("Weight class not found.".to_string());
         }
         if existing.iter().any(|item| {
-            item.event_id == event_id
-                && item.division_id == Some(division_id)
-                && item.weight_class_id == Some(weight_class_id)
+            item.division_id == Some(division_id) && item.weight_class_id == Some(weight_class_id)
         }) {
-            return Err("Event already scheduled for this division and weight class.".to_string());
+            return Err("Division and weight class already scheduled.".to_string());
         }
     } else if existing.iter().any(|item| item.event_id == event_id) {
         return Err("Event is already scheduled for this tournament.".to_string());
@@ -207,11 +219,10 @@ pub fn update(
         }
         if existing.iter().any(|item| {
             item.id != id
-                && item.event_id == event_id
                 && item.division_id == Some(division_id)
                 && item.weight_class_id == Some(weight_class_id)
         }) {
-            return Err("Event already scheduled for this division and weight class.".to_string());
+            return Err("Division and weight class already scheduled.".to_string());
         }
     } else if existing.iter().any(|item| item.event_id == event_id && item.id != id) {
         return Err("Event is already scheduled for this tournament.".to_string());

@@ -1,5 +1,5 @@
 use crate::models::MatchRow;
-use crate::services::{auth_service, match_service, tournament_service};
+use crate::services::{auth_service, match_service, scheduled_events_service, tournament_service};
 use crate::state::AppState;
 use rocket::http::Cookie;
 use rocket::response::Redirect;
@@ -35,6 +35,7 @@ pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> 
         context! {
             name: user.name,
             matches: Vec::<MatchRow>::new(),
+            outcomes: Vec::<crate::models::ScheduledEvent>::new(),
             is_setup: false,
             active: "dashboard",
             tournaments: tournaments,
@@ -83,11 +84,13 @@ pub fn tournament_dashboard(
 
     let tournaments = tournament_service::list_by_user(state, user.id);
     let matches = match_service::list_featured_matches();
+    let outcomes = scheduled_events_service::list_outcomes(state, user.id, tournament.id).unwrap_or_default();
     Ok(Template::render(
         "dashboard",
         context! {
             name: user.name,
             matches: matches,
+            outcomes: outcomes,
             is_setup: tournament.is_setup,
             active: "dashboard",
             tournaments: tournaments,

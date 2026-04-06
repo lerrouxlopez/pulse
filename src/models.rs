@@ -93,9 +93,27 @@ pub struct ScheduledEvent {
     pub time_rule: Option<String>,
     pub division_id: Option<i64>,
     pub weight_class_id: Option<i64>,
+    pub winner_member_id: Option<i64>,
     pub division_name: Option<String>,
     pub weight_class_name: Option<String>,
     pub weight_class_label: Option<String>,
+    pub winner_name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct Role {
+    pub id: i64,
+    pub name: String,
+    pub is_owner: bool,
+    pub permissions: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct AccessUser {
+    pub id: i64,
+    pub name: String,
+    pub role_id: Option<i64>,
+    pub role_name: Option<String>,
 }
 
 #[derive(Serialize)]

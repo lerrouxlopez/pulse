@@ -46,9 +46,7 @@
               <label class="form-label text-cream-60">Event</label>
               <select class="form-select" name="event_id">
                 {% for option in event_options %}
-                  {% if option.id not in scheduled_ids %}
                   <option value="{{ option.id }}">{{ option.name }}</option>
-                  {% endif %}
                 {% endfor %}
               </select>
             </div>

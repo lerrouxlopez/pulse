@@ -40,6 +40,34 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     )?;
 
     conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS tournament_roles (
+            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            tournament_id BIGINT NOT NULL,
+            name TEXT NOT NULL,
+            is_owner TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+        )",
+    )?;
+
+    conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS role_permissions (
+            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            role_id BIGINT NOT NULL,
+            permission_key TEXT NOT NULL
+        )",
+    )?;
+
+    conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS tournament_user_roles (
+            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            tournament_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            role_id BIGINT NOT NULL,
+            UNIQUE KEY idx_tournament_user_roles_unique (tournament_id, user_id)
+        )",
+    )?;
+
+    conn.query_drop(
         "CREATE TABLE IF NOT EXISTS divisions (
             id BIGINT PRIMARY KEY AUTO_INCREMENT,
             tournament_id BIGINT NOT NULL,
@@ -140,6 +168,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             time_rule TEXT,
             division_id BIGINT,
             weight_class_id BIGINT,
+            winner_member_id BIGINT,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
             UNIQUE KEY idx_scheduled_events_unique (tournament_id, event_id)
         )",

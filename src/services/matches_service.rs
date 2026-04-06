@@ -6,6 +6,7 @@ use crate::repositories::{
 use crate::state::AppState;
 use std::time::{SystemTime, UNIX_EPOCH};
 use rocket::State;
+use mysql::prelude::Queryable;
 
 const MATCH_STATUSES: [&str; 3] = ["Scheduled", "Forfeit", "Finished"];
 
@@ -272,6 +273,8 @@ pub fn update_contact_match(
     let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
         .map_err(|_| "Storage error.".to_string())?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
 
     if !(status.eq_ignore_ascii_case("Finished") || status.eq_ignore_ascii_case("Forfeit")) {
         let changed = matches_repository::update(
@@ -396,6 +399,32 @@ pub fn update_contact_match(
         .map_err(|_| "Storage error.".to_string())?;
         if changed == 0 {
             return Err("Next round match not found.".to_string());
+        }
+    }
+
+    if let Some(scheduled_event) = scheduled {
+        if scheduled_event.contact_type.eq_ignore_ascii_case("Contact") {
+            let is_final = conn
+                .exec_first::<Option<i64>, _, _>(
+                    "SELECT id FROM matches WHERE tournament_id = ? AND scheduled_event_id = ? AND round > ? LIMIT 1",
+                    (tournament_id, scheduled_event_id, round),
+                )
+                .map_err(|_| "Storage error.".to_string())?
+                .is_none();
+            if is_final {
+                let winner_member_id = match winner_side {
+                    "red" => existing.red_member_id,
+                    "blue" => existing.blue_member_id,
+                    _ => None,
+                };
+                let _ = scheduled_events_repository::update_status_and_winner(
+                    &mut conn,
+                    tournament_id,
+                    scheduled_event_id,
+                    "Finished",
+                    winner_member_id,
+                );
+            }
         }
     }
 
