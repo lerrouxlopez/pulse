@@ -5,12 +5,24 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     let mut conn = pool.get_conn()?;
 
     conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (
+            id VARCHAR(255) PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+        )",
+    )?;
+
+    conn.query_drop(
         "CREATE TABLE IF NOT EXISTS users (
             id BIGINT PRIMARY KEY AUTO_INCREMENT,
             name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+            user_type TEXT NOT NULL DEFAULT 'system',
+            tournament_id BIGINT NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+            UNIQUE KEY idx_users_unique (tournament_id, email(191)),
+            KEY idx_users_type (user_type),
+            KEY idx_users_tournament_id (tournament_id)
         )",
     )?;
 
@@ -24,18 +36,6 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             started_at TEXT,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
             UNIQUE KEY idx_tournaments_slug (slug)
-        )",
-    )?;
-
-    conn.query_drop(
-        "CREATE TABLE IF NOT EXISTS tournament_users (
-            id BIGINT PRIMARY KEY AUTO_INCREMENT,
-            tournament_id BIGINT NOT NULL,
-            user_id BIGINT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-            UNIQUE KEY idx_tournament_users_unique (tournament_id, user_id),
-            KEY idx_tournament_users_tournament_id (tournament_id),
-            KEY idx_tournament_users_user_id (user_id)
         )",
     )?;
 
@@ -218,9 +218,134 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
         )",
     )?;
 
+    apply_user_roles_redo_migration(&mut conn)?;
+
     Ok(())
 }
 
 pub fn open_conn(pool: &Pool) -> mysql::Result<PooledConn> {
     pool.get_conn()
+}
+
+fn apply_user_roles_redo_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260407_user_roles_redo";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if column_exists(conn, "users", "user_type")? == false {
+        conn.query_drop(
+            "ALTER TABLE users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'system'",
+        )?;
+    }
+    if column_exists(conn, "users", "tournament_id")? == false {
+        conn.query_drop(
+            "ALTER TABLE users ADD COLUMN tournament_id BIGINT NOT NULL DEFAULT 0",
+        )?;
+    }
+
+    drop_unique_index_on_email(conn)?;
+
+    if !index_exists(conn, "users", "idx_users_unique")? {
+        conn.query_drop(
+            "CREATE UNIQUE INDEX idx_users_unique ON users (tournament_id, email(191))",
+        )?;
+    }
+    if !index_exists(conn, "users", "idx_users_type")? {
+        conn.query_drop("CREATE INDEX idx_users_type ON users (user_type)")?;
+    }
+    if !index_exists(conn, "users", "idx_users_tournament_id")? {
+        conn.query_drop("CREATE INDEX idx_users_tournament_id ON users (tournament_id)")?;
+    }
+
+    if table_exists(conn, "tournament_users")? {
+        conn.query_drop(
+            "CREATE TEMPORARY TABLE tmp_tournament_users
+             SELECT user_id, COUNT(*) AS cnt, MIN(tournament_id) AS tournament_id
+             FROM tournament_users
+             GROUP BY user_id",
+        )?;
+        conn.query_drop(
+            "UPDATE users u
+             LEFT JOIN tournaments t ON t.user_id = u.id
+             LEFT JOIN tmp_tournament_users tu ON tu.user_id = u.id
+             SET u.user_type = CASE
+                 WHEN t.id IS NOT NULL THEN 'system'
+                 WHEN tu.cnt = 1 THEN 'tournament'
+                 ELSE 'system'
+             END,
+             u.tournament_id = CASE
+                 WHEN t.id IS NOT NULL THEN 0
+                 WHEN tu.cnt = 1 THEN tu.tournament_id
+                 ELSE 0
+             END",
+        )?;
+        conn.query_drop("DROP TABLE IF EXISTS tournament_users")?;
+    } else {
+        conn.query_drop(
+            "UPDATE users SET user_type = 'system' WHERE user_type IS NULL OR user_type = ''",
+        )?;
+        conn.query_drop(
+            "UPDATE users SET tournament_id = 0 WHERE tournament_id IS NULL",
+        )?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn migration_applied(conn: &mut PooledConn, migration_id: &str) -> mysql::Result<bool> {
+    let row: Option<String> = conn.exec_first(
+        "SELECT id FROM schema_migrations WHERE id = ?",
+        (migration_id,),
+    )?;
+    Ok(row.is_some())
+}
+
+fn table_exists(conn: &mut PooledConn, table: &str) -> mysql::Result<bool> {
+    let row: Option<String> = conn.exec_first(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+        (table,),
+    )?;
+    Ok(row.is_some())
+}
+
+fn column_exists(conn: &mut PooledConn, table: &str, column: &str) -> mysql::Result<bool> {
+    let row: Option<String> = conn.exec_first(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+        (table, column),
+    )?;
+    Ok(row.is_some())
+}
+
+fn index_exists(conn: &mut PooledConn, table: &str, index: &str) -> mysql::Result<bool> {
+    let row: Option<String> = conn.exec_first(
+        "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1",
+        (table, index),
+    )?;
+    Ok(row.is_some())
+}
+
+fn drop_unique_index_on_email(conn: &mut PooledConn) -> mysql::Result<()> {
+    let row: Option<String> = conn.exec_first(
+        "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'users'
+           AND COLUMN_NAME = 'email'
+           AND NON_UNIQUE = 0
+         LIMIT 1",
+        (),
+    )?;
+    if let Some(index_name) = row {
+        if index_name != "PRIMARY" && index_name != "idx_users_unique" {
+            conn.query_drop(format!(
+                "ALTER TABLE users DROP INDEX {}",
+                index_name
+            ))?;
+        }
+    }
+    Ok(())
 }

@@ -20,6 +20,23 @@ pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> 
         }
     };
 
+    if user.user_type.eq_ignore_ascii_case("tournament") {
+        if let Some(tournament) = tournament_service::get_by_id(state, user.tournament_id) {
+            jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
+            return Err(Redirect::to(uri!(
+                crate::controllers::dashboard_controller::tournament_dashboard(
+                    slug = tournament.slug
+                )
+            )));
+        }
+        return Err(Redirect::to(uri!(
+            crate::controllers::auth_controller::auth_page(
+                error = Some("Tournament not found.".to_string()),
+                success = Option::<String>::None
+            )
+        )));
+    }
+
     if let Some(last_slug) = jar.get("last_tournament_slug").map(|cookie| cookie.value().to_string()) {
         if tournament_service::get_by_slug_for_user(state, &last_slug, user.id).is_some() {
             return Err(Redirect::to(uri!(
@@ -43,6 +60,7 @@ pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> 
             current_tournament_name: Option::<String>::None,
             tournament_slug: Option::<String>::None,
             allowed_pages: Vec::<String>::new(),
+            is_system_user: true,
         },
     ))
 }
@@ -129,6 +147,7 @@ pub fn tournament_dashboard(
             current_tournament_name: tournament.name,
             tournament_slug: tournament.slug,
             allowed_pages: allowed_pages,
+            is_system_user: user.user_type.eq_ignore_ascii_case("system"),
         },
     ))
 }

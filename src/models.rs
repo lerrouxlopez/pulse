@@ -30,6 +30,14 @@ pub struct UserSummary {
     pub name: String,
 }
 
+#[derive(Serialize)]
+pub struct CurrentUser {
+    pub id: i64,
+    pub name: String,
+    pub user_type: String,
+    pub tournament_id: i64,
+}
+
 pub struct UserAuth {
     pub id: i64,
     pub password_hash: String,

@@ -379,7 +379,7 @@ body {
 .stat-card {
   border-radius: 18px;
   padding: 18px 20px;
-  color: #ffffff;
+  color: #000000;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -665,17 +665,17 @@ body {
 
 .status-ok {
   background: rgba(52, 168, 83, 0.25);
-  color: #a6f3c6;
+  color: #343639;
 }
 
 .status-live {
   background: rgba(66, 133, 244, 0.3);
-  color: #c2d7ff;
+  color: #343639;
 }
 
 .status-ready {
   background: rgba(250, 173, 20, 0.25);
-  color: #ffe6a7;
+  color: #343639;
 }
 
 @media (max-width: 991px) {

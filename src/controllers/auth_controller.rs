@@ -26,7 +26,7 @@ pub fn register(
     form: Form<RegisterForm>,
 ) -> Result<Redirect, Status> {
     let form = form.into_inner();
-    match auth_service::register(state, form) {
+    match auth_service::register_system_user(state, form) {
         Ok(user_id) => {
             jar.add(Cookie::new("user_id", user_id.to_string()));
             let tournament = tournament_service::create(state, user_id, "New Tournament")
@@ -59,7 +59,7 @@ pub fn login(
     form: Form<LoginForm>,
 ) -> Result<Redirect, Status> {
     let form = form.into_inner();
-    match auth_service::login(state, form) {
+    match auth_service::login_system_user(state, form) {
         Ok(user_id) => {
             jar.add(Cookie::new("user_id", user_id.to_string()));
             jar.remove(Cookie::from("tournament_id"));
@@ -68,6 +68,68 @@ pub fn login(
         Err(AuthError::InvalidCredentials) => Ok(Redirect::to(uri!(auth_page(
             error = Some("Invalid email or password.".to_string()),
             success = Option::<String>::None
+        )))),
+        Err(_) => Err(Status::InternalServerError),
+    }
+}
+
+#[get("/t/<slug>/login?<error>", rank = 1)]
+pub fn tournament_login_page(
+    state: &State<AppState>,
+    slug: String,
+    error: Option<String>,
+) -> Result<Template, Redirect> {
+    let tournament = match tournament_service::get_by_slug(state, &slug) {
+        Some(tournament) => tournament,
+        None => {
+            return Err(Redirect::to(uri!(
+                crate::controllers::auth_controller::auth_page(
+                    error = Some("Tournament not found.".to_string()),
+                    success = Option::<String>::None
+                )
+            )))
+        }
+    };
+    Ok(Template::render(
+        "tournament_login",
+        context! {
+            error: error,
+            tournament_name: tournament.name,
+            tournament_slug: tournament.slug,
+        },
+    ))
+}
+
+#[post("/t/<slug>/login", data = "<form>", rank = 1)]
+pub fn tournament_login(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<LoginForm>,
+) -> Result<Redirect, Status> {
+    let tournament = tournament_service::get_by_slug(state, &slug).ok_or(Status::NotFound)?;
+    let form = form.into_inner();
+    match auth_service::login_tournament_user(state, tournament.id, form) {
+        Ok(user_id) => {
+            jar.add(Cookie::new("user_id", user_id.to_string()));
+            jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
+            Ok(Redirect::to(uri!(
+                crate::controllers::dashboard_controller::tournament_dashboard(
+                    slug = tournament.slug
+                )
+            )))
+        }
+        Err(AuthError::InvalidCredentials) => Ok(Redirect::to(uri!(tournament_login_page(
+            slug = slug,
+            error = Some("Invalid email or password.".to_string())
+        )))),
+        Err(AuthError::EmailTaken) => Ok(Redirect::to(uri!(tournament_login_page(
+            slug = slug,
+            error = Some("Invalid email or password.".to_string())
+        )))),
+        Err(AuthError::Validation(message)) => Ok(Redirect::to(uri!(tournament_login_page(
+            slug = slug,
+            error = Some(message)
         )))),
         Err(_) => Err(Status::InternalServerError),
     }

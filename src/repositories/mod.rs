@@ -1,6 +1,5 @@
 pub mod users_repository;
 pub mod tournaments_repository;
-pub mod tournament_users_repository;
 pub mod tournament_roles_repository;
 pub mod role_permissions_repository;
 pub mod tournament_user_roles_repository;

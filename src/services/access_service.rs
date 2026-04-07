@@ -2,8 +2,9 @@ use crate::db;
 use crate::models::{AccessUser, Role};
 use crate::repositories::{
     role_permissions_repository, tournament_roles_repository, tournament_user_roles_repository,
-    tournaments_repository, users_repository, tournament_users_repository,
+    tournaments_repository, users_repository,
 };
+use crate::services::auth_service;
 use crate::state::AppState;
 use mysql::prelude::*;
 use rocket::State;
@@ -44,26 +45,56 @@ pub fn list_access_users(state: &State<AppState>, tournament_id: i64) -> Vec<Acc
         Ok(conn) => conn,
         Err(_) => return Vec::new(),
     };
-    let rows: Vec<(i64, String, String, Option<i64>, Option<String>)> = conn
-        .exec_map(
-            "SELECT u.id, u.name, u.email, tur.role_id, tr.name
-             FROM users u
-             LEFT JOIN tournament_user_roles tur ON tur.user_id = u.id AND tur.tournament_id = ?1
-             LEFT JOIN tournament_roles tr ON tr.id = tur.role_id
-             WHERE u.id = (SELECT user_id FROM tournaments WHERE id = ?1)
-                OR EXISTS (SELECT 1 FROM tournament_users WHERE tournament_id = ?1 AND user_id = u.id)
-             ORDER BY u.name",
+    let owner_id = conn
+        .exec_first::<i64, _, _>(
+            "SELECT user_id FROM tournaments WHERE id = ?",
             (tournament_id,),
-            |(id, name, email, role_id, role_name)| (id, name, email, role_id, role_name),
+        )
+        .unwrap_or(None);
+    let mut users: Vec<(i64, String, String)> = conn
+        .exec_map(
+            "SELECT id, name, email FROM users WHERE tournament_id = ? ORDER BY name",
+            (tournament_id,),
+            |(id, name, email)| (id, name, email),
         )
         .unwrap_or_default();
-    rows.into_iter()
-        .map(|(id, name, email, role_id, role_name)| AccessUser {
-            id,
-            name,
-            email,
-            role_id,
-            role_name,
+    if let Some(owner_id) = owner_id {
+        let owner: Option<(i64, String, String)> = conn
+            .exec_first(
+                "SELECT id, name, email FROM users WHERE id = ?",
+                (owner_id,),
+            )
+            .unwrap_or(None);
+        if let Some(owner) = owner {
+            if !users.iter().any(|(id, _, _)| *id == owner.0) {
+                users.push(owner);
+            }
+        }
+    }
+    users.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+    users
+        .into_iter()
+        .map(|(id, name, email)| {
+            let role: Option<(i64, String)> = conn
+                .exec_first(
+                    "SELECT tr.id, tr.name
+                     FROM tournament_user_roles tur
+                     JOIN tournament_roles tr ON tr.id = tur.role_id
+                     WHERE tur.tournament_id = ? AND tur.user_id = ?
+                     LIMIT 1",
+                    (tournament_id, id),
+                )
+                .unwrap_or(None);
+            let (role_id, role_name) = role
+                .map(|(role_id, role_name)| (Some(role_id), Some(role_name)))
+                .unwrap_or((None, None));
+            AccessUser {
+                id,
+                name,
+                email,
+                role_id,
+                role_name,
+            }
         })
         .collect()
 }
@@ -184,79 +215,37 @@ pub fn create_user(
     tournament_id: i64,
     name: &str,
     email: &str,
-    password_hash: &str,
+    password: &str,
     role_id: Option<i64>,
 ) -> Result<(), String> {
     let trimmed_name = name.trim();
     let trimmed_email = email.trim().to_lowercase();
-    if trimmed_name.is_empty() || trimmed_email.is_empty() || password_hash.is_empty() {
-        return Err("Name, email, and password are required.".to_string());
+    if trimmed_name.is_empty() || trimmed_email.is_empty() {
+        return Err("Name and email are required.".to_string());
     }
+    if password.len() < 6 {
+        return Err("Password must be at least 6 characters.".to_string());
+    }
+    let user_id = auth_service::create_tournament_user(
+        state,
+        tournament_id,
+        trimmed_name,
+        &trimmed_email,
+        password,
+    )
+    .map_err(|err| match err {
+        auth_service::AuthError::EmailTaken => "Email already used for this tournament.".to_string(),
+        auth_service::AuthError::Validation(message) => message,
+        _ => "Storage error.".to_string(),
+    })?;
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
-    let user_id = users_repository::create_user(&mut conn, trimmed_name, &trimmed_email, password_hash)
-        .map_err(|_| "Storage error.".to_string())?;
     conn.exec_drop(
-        "INSERT IGNORE INTO tournament_users (tournament_id, user_id) VALUES (?, ?)",
+        "UPDATE users SET user_type = 'tournament', tournament_id = ? WHERE id = ?",
         (tournament_id, user_id),
     )
     .map_err(|_| "Storage error.".to_string())?;
     if let Some(role_id) = role_id {
         let _ = tournament_user_roles_repository::set_user_role(&mut conn, tournament_id, user_id, role_id);
-    }
-    Ok(())
-}
-
-pub fn list_users_not_in_tournament(
-    state: &State<AppState>,
-    tournament_id: i64,
-) -> Vec<AccessUser> {
-    let mut conn = match db::open_conn(&state.pool) {
-        Ok(conn) => conn,
-        Err(_) => return Vec::new(),
-    };
-    let all_users = users_repository::list_all(&mut conn).unwrap_or_default();
-    let existing: Vec<i64> = conn
-        .exec_map(
-            "SELECT user_id FROM tournament_users WHERE tournament_id = ?",
-            (tournament_id,),
-            |user_id| user_id,
-        )
-        .unwrap_or_default();
-    let owner_id = tournaments_repository::get_by_id(&mut conn, tournament_id)
-        .ok()
-        .flatten()
-        .map(|t| t.user_id);
-    let mut excluded = existing;
-    if let Some(owner_id) = owner_id {
-        if !excluded.contains(&owner_id) {
-            excluded.push(owner_id);
-        }
-    }
-    all_users
-        .into_iter()
-        .filter(|(id, _, _)| !excluded.contains(id))
-        .map(|(id, name, email)| AccessUser {
-            id,
-            name,
-            email,
-            role_id: None,
-            role_name: None,
-        })
-        .collect()
-}
-
-pub fn add_existing_user(
-    state: &State<AppState>,
-    tournament_id: i64,
-    user_id: i64,
-    role_id: Option<i64>,
-) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
-    tournament_users_repository::add_user(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
-    if let Some(role_id) = role_id {
-        tournament_user_roles_repository::set_user_role(&mut conn, tournament_id, user_id, role_id)
-            .map_err(|_| "Storage error.".to_string())?;
     }
     Ok(())
 }
@@ -274,10 +263,13 @@ pub fn update_user(
         return Err("Name and email are required.".to_string());
     }
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
-    if !has_access {
-        return Err("User does not have tournament access.".to_string());
+    let matches: Option<i64> = conn.exec_first(
+        "SELECT id FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
+        (user_id, tournament_id),
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+    if matches.is_none() {
+        return Err("User not found for this tournament.".to_string());
     }
     users_repository::update_user(&mut conn, user_id, trimmed_name, &trimmed_email)
         .map_err(|_| "Storage error.".to_string())?;
@@ -296,10 +288,22 @@ pub fn remove_user_from_tournament(
     if tournament.user_id == user_id {
         return Err("Cannot remove the owner.".to_string());
     }
+    let matches: Option<i64> = conn
+        .exec_first(
+            "SELECT id FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
+            (user_id, tournament_id),
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+    if matches.is_none() {
+        return Err("User not found for this tournament.".to_string());
+    }
     tournament_user_roles_repository::remove_user(&mut conn, tournament_id, user_id)
         .map_err(|_| "Storage error.".to_string())?;
-    crate::repositories::tournament_users_repository::remove_user(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+    conn.exec_drop(
+        "DELETE FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
+        (user_id, tournament_id),
+    )
+    .map_err(|_| "Storage error.".to_string())?;
     Ok(())
 }
 

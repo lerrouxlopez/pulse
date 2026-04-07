@@ -25,12 +25,16 @@ pub fn get_by_id_for_user(
     user_id: i64,
 ) -> mysql::Result<Option<Tournament>> {
     let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
-        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments
-         WHERE id = ?
-           AND (user_id = ? OR EXISTS (
-             SELECT 1 FROM tournament_users WHERE tournament_id = ? AND user_id = ?
-           ))",
-        (tournament_id, user_id, tournament_id, user_id),
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
+         FROM tournaments t
+         JOIN users u ON u.id = ?
+         WHERE t.id = ?
+           AND (
+             (u.user_type = 'system' AND t.user_id = u.id)
+             OR (u.user_type = 'tournament' AND u.tournament_id = t.id)
+             OR u.tournament_id = t.id
+           )",
+        (user_id, tournament_id),
     )?;
     Ok(row.map(
         |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
@@ -46,12 +50,13 @@ pub fn get_by_id_for_user(
 
 pub fn list_by_user(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Vec<Tournament>> {
     conn.exec_map(
-        "SELECT DISTINCT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
          FROM tournaments t
-         LEFT JOIN tournament_users tu ON tu.tournament_id = t.id
-         WHERE t.user_id = ? OR tu.user_id = ?
+         JOIN users u ON u.id = ?
+         WHERE (u.user_type = 'system' AND t.user_id = u.id)
+            OR (u.user_type = 'tournament' AND t.id = u.tournament_id)
          ORDER BY t.id DESC",
-        (user_id, user_id),
+        (user_id,),
         |(id, name, slug, is_setup_value, user_id, started_at): (
             i64,
             String,
@@ -109,12 +114,16 @@ pub fn get_by_slug_for_user(
     user_id: i64,
 ) -> mysql::Result<Option<Tournament>> {
     let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
-        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments
-         WHERE slug = ?
-           AND (user_id = ? OR EXISTS (
-             SELECT 1 FROM tournament_users WHERE tournament_id = tournaments.id AND user_id = ?
-           ))",
-        (slug, user_id, user_id),
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
+         FROM tournaments t
+         JOIN users u ON u.id = ?
+         WHERE t.slug = ?
+           AND (
+             (u.user_type = 'system' AND t.user_id = u.id)
+             OR (u.user_type = 'tournament' AND u.tournament_id = t.id)
+             OR u.tournament_id = t.id
+           )",
+        (user_id, slug),
     )?;
     Ok(row.map(
         |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
@@ -143,9 +152,16 @@ pub fn user_has_access(
 ) -> mysql::Result<bool> {
     let row: Option<i64> = conn.exec_first(
         "SELECT 1
-         WHERE EXISTS (SELECT 1 FROM tournaments WHERE id = ? AND user_id = ?)
-            OR EXISTS (SELECT 1 FROM tournament_users WHERE tournament_id = ? AND user_id = ?)",
-        (tournament_id, user_id, tournament_id, user_id),
+         FROM users u
+         WHERE u.id = ?
+           AND (
+             (u.user_type = 'system' AND EXISTS (
+                SELECT 1 FROM tournaments t WHERE t.id = ? AND t.user_id = u.id
+             ))
+             OR (u.user_type = 'tournament' AND u.tournament_id = ?)
+             OR u.tournament_id = ?
+           )",
+        (user_id, tournament_id, tournament_id, tournament_id),
     )?;
     Ok(row.is_some())
 }
@@ -155,12 +171,10 @@ pub fn list_access_users(
     tournament_id: i64,
 ) -> mysql::Result<Vec<UserSummary>> {
     conn.exec_map(
-        "SELECT id, name FROM users WHERE id = (SELECT user_id FROM tournaments WHERE id = ?1)
-         UNION
-         SELECT users.id, users.name
+        "SELECT id, name
          FROM users
-         INNER JOIN tournament_users ON tournament_users.user_id = users.id
-         WHERE tournament_users.tournament_id = ?1
+         WHERE id = (SELECT user_id FROM tournaments WHERE id = ?1)
+            OR (user_type = 'tournament' AND tournament_id = ?1)
          ORDER BY name",
         (tournament_id,),
         |(id, name)| UserSummary { id, name },

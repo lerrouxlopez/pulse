@@ -37,7 +37,7 @@
 
         <h2 class="fw-bold mt-4 mb-2">Welcome back</h2>
         <p class="text-cream-75 mb-4">
-          Sign in to manage tournaments or create a new event.
+          System users sign in here to manage tournaments.
         </p>
 
         {% if error %}
@@ -105,6 +105,7 @@
                 Sign in
               </button>
             </form>
+            <p class="text-cream-60 mt-3 mb-0">Tournament users sign in using the tournament link provided by the organizer.</p>
           </div>
           <div class="tab-pane fade" id="register" role="tabpanel">
             <form action="/register" method="post" class="d-grid gap-3">

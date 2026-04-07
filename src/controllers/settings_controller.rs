@@ -1,7 +1,6 @@
 use crate::services::{access_service, auth_service, settings_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
 use crate::state::AppState;
-use mysql::prelude::Queryable;
 use rocket::form::{Form, FromForm};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::response::Redirect;
@@ -11,11 +10,6 @@ use rocket_dyn_templates::{context, Template};
 #[derive(FromForm)]
 pub struct NameForm {
     pub name: String,
-}
-
-#[derive(FromForm)]
-pub struct InviteForm {
-    pub email: String,
 }
 
 #[derive(FromForm)]
@@ -46,12 +40,6 @@ pub struct CreateUserForm {
 pub struct UpdateUserForm {
     pub name: String,
     pub email: String,
-    pub role_id: Option<i64>,
-}
-
-#[derive(FromForm)]
-pub struct AddExistingUserForm {
-    pub user_id: i64,
     pub role_id: Option<i64>,
 }
 
@@ -103,7 +91,6 @@ pub fn settings_page(
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
     let events = settings_service::list(state, tournament.id, SettingsEntity::Event);
     let access_users = access_service::list_access_users(state, tournament.id);
-    let available_users = access_service::list_users_not_in_tournament(state, tournament.id);
     let roles = access_service::list_roles(state, tournament.id);
     let permissions = access_service::permissions();
     let can_complete_setup =
@@ -129,7 +116,6 @@ pub fn settings_page(
             events: events,
             event_names: event_names,
             access_users: access_users,
-            available_users: available_users,
             roles: roles,
             permissions: permissions,
             error: error,
@@ -770,32 +756,6 @@ pub fn delete_event(
     }
 }
 
-#[post("/<slug>/settings/invite", data = "<form>")]
-pub fn invite_user(
-    state: &State<AppState>,
-    jar: &CookieJar<'_>,
-    slug: String,
-    form: Form<InviteForm>,
-) -> Result<Redirect, Status> {
-    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
-    match tournament_service::invite_user_by_email(state, user.id, tournament.id, &form.email) {
-        Ok(_) => Ok(Redirect::to(uri!(settings_page(
-            slug = tournament.slug,
-            error = Option::<String>::None,
-            success = Some("Invite sent.".to_string()),
-            tab = Some("access".to_string())
-        )))),
-        Err(message) => Ok(Redirect::to(uri!(settings_page(
-            slug = tournament.slug,
-            error = Some(message),
-            success = Option::<String>::None,
-            tab = Some("access".to_string())
-        )))),
-    }
-}
-
 #[post("/<slug>/settings/roles", data = "<form>")]
 pub fn create_role(
     state: &State<AppState>,
@@ -951,57 +911,27 @@ pub fn create_user(
             tab = Some("roles".to_string())
         ))));
     }
-    let password = form.password.trim();
-    if password.len() < 6 {
-        return Ok(Redirect::to(uri!(settings_page(
+    match access_service::create_user(
+        state,
+        tournament.id,
+        &form.name,
+        &form.email,
+        &form.password,
+        form.role_id,
+    ) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
             slug = slug,
-            error = Some("Password must be at least 6 characters.".to_string()),
+            error = Option::<String>::None,
+            success = Some("Tournament user created.".to_string()),
+            tab = Some("roles".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
             success = Option::<String>::None,
             tab = Some("roles".to_string())
-        ))));
+        )))),
     }
-    let new_user_id = match auth_service::register(
-        state,
-        crate::models::RegisterForm {
-            name: form.name.clone(),
-            email: form.email.clone(),
-            password: form.password.clone(),
-        },
-    ) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            return Ok(Redirect::to(uri!(settings_page(
-                slug = slug,
-                error = Some("Unable to create user.".to_string()),
-                success = Option::<String>::None,
-                tab = Some("roles".to_string())
-            ))));
-        }
-    };
-    let mut conn = match crate::db::open_conn(&state.pool) {
-        Ok(conn) => conn,
-        Err(_) => {
-            return Ok(Redirect::to(uri!(settings_page(
-                slug = slug,
-                error = Some("Storage error.".to_string()),
-                success = Option::<String>::None,
-                tab = Some("roles".to_string())
-            ))));
-        }
-    };
-    let _ = conn.exec_drop(
-        "INSERT IGNORE INTO tournament_users (tournament_id, user_id) VALUES (?, ?)",
-        (tournament.id, new_user_id),
-    );
-    if let Some(role_id) = form.role_id {
-        let _ = access_service::assign_user_role(state, tournament.id, new_user_id, role_id);
-    }
-    Ok(Redirect::to(uri!(settings_page(
-        slug = slug,
-        error = Option::<String>::None,
-        success = Some("User created.".to_string()),
-        tab = Some("roles".to_string())
-    ))))
 }
 
 #[post("/<slug>/settings/roles/users/<id>/update", data = "<form>")]
@@ -1067,48 +997,6 @@ pub fn delete_user(
             slug = slug,
             error = Option::<String>::None,
             success = Some("User removed.".to_string()),
-            tab = Some("roles".to_string())
-        )))),
-        Err(message) => Ok(Redirect::to(uri!(settings_page(
-            slug = slug,
-            error = Some(message),
-            success = Option::<String>::None,
-            tab = Some("roles".to_string())
-        )))),
-    }
-}
-
-#[post("/<slug>/settings/roles/users/add", data = "<form>")]
-pub fn add_existing_user(
-    state: &State<AppState>,
-    jar: &CookieJar<'_>,
-    slug: String,
-    form: Form<AddExistingUserForm>,
-) -> Result<Redirect, Status> {
-    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
-    if !access_service::is_owner(state, user.id, tournament.id) {
-        return Ok(Redirect::to(uri!(settings_page(
-            slug = slug,
-            error = Some("Only the owner can manage users.".to_string()),
-            success = Option::<String>::None,
-            tab = Some("roles".to_string())
-        ))));
-    }
-    if form.user_id <= 0 {
-        return Ok(Redirect::to(uri!(settings_page(
-            slug = slug,
-            error = Some("Select a user to add.".to_string()),
-            success = Option::<String>::None,
-            tab = Some("roles".to_string())
-        ))));
-    }
-    match access_service::add_existing_user(state, tournament.id, form.user_id, form.role_id) {
-        Ok(_) => Ok(Redirect::to(uri!(settings_page(
-            slug = slug,
-            error = Option::<String>::None,
-            success = Some("User added.".to_string()),
             tab = Some("roles".to_string())
         )))),
         Err(message) => Ok(Redirect::to(uri!(settings_page(

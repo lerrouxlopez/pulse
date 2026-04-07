@@ -34,10 +34,12 @@
           </div>
           <div class="d-flex align-items-center gap-2">
             <span class="badge text-bg-light text-ink">Day 1 • 6 Mats • Live</span>
+            {% if is_system_user %}
             <form action="/tournaments/new" method="post">
               <input type="hidden" name="name" value="New Tournament" />
               <button class="btn btn-outline-light btn-sm" type="submit">Create New Tournament</button>
             </form>
+            {% endif %}
           </div>
         </header>
 
@@ -73,32 +75,39 @@
 
         <section class="panel mb-4">
           <div class="d-flex align-items-center justify-content-between mb-3">
-            <h3 class="fw-semibold mb-0">Live & Upcoming Matches</h3>
+            <h3 class="fw-semibold mb-0">Leaderboard</h3>
             <button class="btn btn-outline-light btn-sm">View all</button>
           </div>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0">
               <thead>
                 <tr>
-                  <th scope="col">Mat</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Red</th>
-                  <th scope="col">Blue</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">Rank</th>
+                  <th scope="col">Wins</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Division</th>
+                  <th scope="col">Class</th>
                 </tr>
               </thead>
               <tbody>
-                {% for row in matches %}
+
                 <tr>
-                  <td>{{ row.mat }}</td>
-                  <td>{{ row.category }}</td>
-                  <td>{{ row.red }}</td>
-                  <td>{{ row.blue }}</td>
-                  <td>
-                    <span class="pill {{ row.status_class }}">{{ row.status }}</span>
-                  </td>
+                  <td>1</td>
+                  <td>20</td>
+                  <td>Ping Lacson</td>
+                  <td>Manila Gays</td>
+                  <td>Male Division</td>
+                  <td>Bantam Weight</td>
                 </tr>
-                {% endfor %}
+                <tr>
+                  <td>2</td>
+                  <td>17</td>
+                  <td>Alex Rivera</td>
+                  <td>Dragon Dojo</td>
+                  <td>Male Division</td>
+                  <td>Bantam Weight</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -106,7 +115,7 @@
 
         <section class="panel mb-4">
           <div class="d-flex align-items-center justify-content-between mb-3">
-            <h3 class="fw-semibold mb-0">Event Outcomes</h3>
+            <h3 class="fw-semibold mb-0">Event Results</h3>
           </div>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0">
@@ -195,10 +204,12 @@
               </table>
             </div>
 
+            {% if is_system_user %}
             <form action="/tournaments/new" method="post" class="d-flex flex-wrap gap-2">
               <input class="form-control flex-grow-1" name="name" placeholder="New tournament name" />
               <button class="btn btn-primary" type="submit">Create Tournament</button>
             </form>
+            {% endif %}
           </div>
         </div>
       </div>

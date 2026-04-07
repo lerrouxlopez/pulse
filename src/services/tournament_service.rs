@@ -1,6 +1,6 @@
 use crate::db;
 use crate::models::Tournament;
-use crate::repositories::{tournament_users_repository, tournaments_repository, users_repository};
+use crate::repositories::tournaments_repository;
 use crate::services::access_service;
 use crate::slug::slugify;
 use crate::state::AppState;
@@ -67,35 +67,6 @@ pub fn list_access_users(state: &State<AppState>, tournament_id: i64) -> Vec<cra
         Err(_) => return Vec::new(),
     };
     tournaments_repository::list_access_users(&mut conn, tournament_id).unwrap_or_default()
-}
-
-pub fn invite_user_by_email(
-    state: &State<AppState>,
-    inviter_id: i64,
-    tournament_id: i64,
-    email: &str,
-) -> Result<(), String> {
-    let trimmed = email.trim().to_lowercase();
-    if trimmed.is_empty() {
-        return Err("Email is required.".to_string());
-    }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
-    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, inviter_id)
-        .map_err(|_| "Storage error.".to_string())?;
-    if !has_access {
-        return Err("Tournament not found.".to_string());
-    }
-    let user_id = users_repository::find_user_id_by_email(&mut conn, &trimmed)
-        .map_err(|_| "Storage error.".to_string())?
-        .ok_or_else(|| "No user found with that email.".to_string())?;
-    let already = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
-    if already {
-        return Err("User already has access.".to_string());
-    }
-    tournament_users_repository::add_user(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
-    Ok(())
 }
 
 pub fn ensure_slugs(pool: &Pool) -> bool {
