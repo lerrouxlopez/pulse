@@ -33,6 +33,21 @@ pub struct MatchForm {
     pub winner: Option<String>,
     pub location: Option<String>,
     pub match_time: Option<String>,
+    pub judge_1_id: Option<i64>,
+    pub judge_1_red_score: Option<i32>,
+    pub judge_1_blue_score: Option<i32>,
+    pub judge_2_id: Option<i64>,
+    pub judge_2_red_score: Option<i32>,
+    pub judge_2_blue_score: Option<i32>,
+    pub judge_3_id: Option<i64>,
+    pub judge_3_red_score: Option<i32>,
+    pub judge_3_blue_score: Option<i32>,
+    pub judge_4_id: Option<i64>,
+    pub judge_4_red_score: Option<i32>,
+    pub judge_4_blue_score: Option<i32>,
+    pub judge_5_id: Option<i64>,
+    pub judge_5_red_score: Option<i32>,
+    pub judge_5_blue_score: Option<i32>,
 }
 
 #[get("/<slug>/events?<error>&<success>")]
@@ -167,6 +182,7 @@ pub fn event_profile(
     let competitors =
         matches_service::list_competitors(state, user.id, tournament.id, event.id)
             .unwrap_or_default();
+    let judge_users = matches_service::list_judges(state, tournament.id);
     let is_contact = event.contact_type.eq_ignore_ascii_case("Contact");
     let max_round = matches
         .iter()
@@ -206,6 +222,13 @@ pub fn event_profile(
     }
 
     #[derive(Serialize)]
+    struct JudgeSlotView {
+        judge_user_id: Option<i64>,
+        red_score: i32,
+        blue_score: i32,
+    }
+
+    #[derive(Serialize)]
     struct ContactMatchRow {
         id: i64,
         round: Option<i64>,
@@ -213,6 +236,12 @@ pub fn event_profile(
         match_time: Option<String>,
         location: Option<String>,
         status: String,
+        winner_side: Option<String>,
+        red_label: Option<String>,
+        blue_label: Option<String>,
+        red_total_score: i32,
+        blue_total_score: i32,
+        judge_slots: Vec<JudgeSlotView>,
     }
 
     let mut competitor_map: HashMap<i64, (String, String)> = HashMap::new();
@@ -418,6 +447,19 @@ pub fn event_profile(
                 y: center_y - box_total_height / 2.0,
             });
 
+            let mut judge_slots: Vec<JudgeSlotView> = Vec::new();
+            for order in 1..=5 {
+                let existing_judge = item
+                    .judge_scores
+                    .iter()
+                    .find(|judge| judge.judge_order == order);
+                judge_slots.push(JudgeSlotView {
+                    judge_user_id: existing_judge.map(|judge| judge.judge_user_id),
+                    red_score: existing_judge.map(|judge| judge.red_score).unwrap_or(0),
+                    blue_score: existing_judge.map(|judge| judge.blue_score).unwrap_or(0),
+                });
+            }
+
             contact_match_rows.push(ContactMatchRow {
                 id: item.id,
                 round: item.round,
@@ -425,6 +467,12 @@ pub fn event_profile(
                 match_time: item.match_time.clone(),
                 location: item.location.clone(),
                 status: item.status.clone(),
+                winner_side: item.winner_side.clone(),
+                red_label: item.red.clone(),
+                blue_label: item.blue.clone(),
+                red_total_score: item.red_total_score,
+                blue_total_score: item.blue_total_score,
+                judge_slots,
             });
         }
     }
@@ -477,6 +525,7 @@ pub fn event_profile(
             matches: matches,
             match_statuses: match_statuses,
             competitors: competitors,
+            judge_users: judge_users,
             is_contact: is_contact,
             rounds: rounds,
             bracket_rounds: bracket_rounds,
@@ -676,6 +725,8 @@ pub fn create_match(
         None,
         None,
         false,
+        0,
+        0,
     ) {
         Ok(_) => Ok(Redirect::to(uri!(event_profile(
             slug = slug,
@@ -725,6 +776,7 @@ pub fn update_match(
                 location,
                 match_time,
                 form.winner.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty()),
+                build_judge_inputs(&form),
             )
     } else {
         let status = match form.status.as_deref() {
@@ -786,4 +838,25 @@ pub fn delete_match(
             success = Option::<String>::None
         )))),
     }
+}
+
+fn build_judge_inputs(form: &MatchForm) -> Vec<matches_service::MatchJudgeInput> {
+    let slots = [
+        (form.judge_1_id, form.judge_1_red_score, form.judge_1_blue_score),
+        (form.judge_2_id, form.judge_2_red_score, form.judge_2_blue_score),
+        (form.judge_3_id, form.judge_3_red_score, form.judge_3_blue_score),
+        (form.judge_4_id, form.judge_4_red_score, form.judge_4_blue_score),
+        (form.judge_5_id, form.judge_5_red_score, form.judge_5_blue_score),
+    ];
+
+    slots
+        .into_iter()
+        .filter_map(|(judge_user_id, red_score, blue_score)| {
+            judge_user_id.map(|judge_user_id| matches_service::MatchJudgeInput {
+                judge_user_id,
+                red_score: red_score.unwrap_or(0),
+                blue_score: blue_score.unwrap_or(0),
+            })
+        })
+        .collect()
 }

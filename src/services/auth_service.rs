@@ -57,6 +57,7 @@ pub fn create_tournament_user(
     name: &str,
     email: &str,
     password: &str,
+    photo_url: Option<&str>,
 ) -> Result<i64, AuthError> {
     let trimmed_name = name.trim();
     let trimmed_email = email.trim().to_lowercase();
@@ -73,6 +74,7 @@ pub fn create_tournament_user(
         trimmed_name,
         &trimmed_email,
         &password_hash,
+        photo_url,
     );
     match result {
         Ok(user_id) => Ok(user_id),

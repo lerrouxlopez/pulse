@@ -11,6 +11,7 @@
     {% endif %}
     {% if "events" in nav_perms %}
     <a class="nav-link {% if active == 'events' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/events{% else %}/dashboard{% endif %}">Events</a>
+    <a class="nav-link {% if active == 'matches' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/matches{% else %}/dashboard{% endif %}">Matches</a>
     {% endif %}
     {% if "teams" in nav_perms %}
     <a class="nav-link {% if active == 'teams' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/teams{% else %}/dashboard{% endif %}">Teams</a>

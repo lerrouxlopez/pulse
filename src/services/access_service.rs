@@ -88,12 +88,20 @@ pub fn list_access_users(state: &State<AppState>, tournament_id: i64) -> Vec<Acc
             let (role_id, role_name) = role
                 .map(|(role_id, role_name)| (Some(role_id), Some(role_name)))
                 .unwrap_or((None, None));
+            let photo_url = conn
+                .exec_first::<Option<String>, _, _>(
+                    "SELECT photo_url FROM users WHERE id = ?",
+                    (id,),
+                )
+                .unwrap_or(None)
+                .flatten();
             AccessUser {
                 id,
                 name,
                 email,
                 role_id,
                 role_name,
+                photo_url,
             }
         })
         .collect()
@@ -217,6 +225,7 @@ pub fn create_user(
     email: &str,
     password: &str,
     role_id: Option<i64>,
+    photo_url: Option<&str>,
 ) -> Result<(), String> {
     let trimmed_name = name.trim();
     let trimmed_email = email.trim().to_lowercase();
@@ -232,6 +241,7 @@ pub fn create_user(
         trimmed_name,
         &trimmed_email,
         password,
+        photo_url,
     )
     .map_err(|err| match err {
         auth_service::AuthError::EmailTaken => "Email already used for this tournament.".to_string(),
@@ -256,6 +266,7 @@ pub fn update_user(
     user_id: i64,
     name: &str,
     email: &str,
+    photo_url: Option<&str>,
 ) -> Result<(), String> {
     let trimmed_name = name.trim();
     let trimmed_email = email.trim().to_lowercase();
@@ -271,7 +282,7 @@ pub fn update_user(
     if matches.is_none() {
         return Err("User not found for this tournament.".to_string());
     }
-    users_repository::update_user(&mut conn, user_id, trimmed_name, &trimmed_email)
+    users_repository::update_user(&mut conn, user_id, trimmed_name, &trimmed_email, photo_url)
         .map_err(|_| "Storage error.".to_string())?;
     Ok(())
 }

@@ -9,7 +9,7 @@ pub fn create_system_user(
     password_hash: &str,
 ) -> mysql::Result<i64> {
     conn.exec_drop(
-        "INSERT INTO users (name, email, password_hash, user_type, tournament_id) VALUES (?, ?, ?, 'system', 0)",
+        "INSERT INTO users (name, email, password_hash, user_type, tournament_id, photo_url) VALUES (?, ?, ?, 'system', 0, NULL)",
         (name, email, password_hash),
     )?;
     Ok(conn.last_insert_id() as i64)
@@ -21,10 +21,11 @@ pub fn create_tournament_user(
     name: &str,
     email: &str,
     password_hash: &str,
+    photo_url: Option<&str>,
 ) -> mysql::Result<i64> {
     conn.exec_drop(
-        "INSERT INTO users (name, email, password_hash, user_type, tournament_id) VALUES (?, ?, ?, 'tournament', ?)",
-        (name, email, password_hash, tournament_id),
+        "INSERT INTO users (name, email, password_hash, user_type, tournament_id, photo_url) VALUES (?, ?, ?, 'tournament', ?, ?)",
+        (name, email, password_hash, tournament_id, photo_url),
     )?;
     Ok(conn.last_insert_id() as i64)
 }
@@ -65,15 +66,16 @@ pub fn find_user_profile_by_id(
     conn: &mut PooledConn,
     user_id: i64,
 ) -> mysql::Result<Option<CurrentUser>> {
-    let row: Option<(i64, String, String, i64)> = conn.exec_first(
-        "SELECT id, name, user_type, tournament_id FROM users WHERE id = ?",
+    let row: Option<(i64, String, String, i64, Option<String>)> = conn.exec_first(
+        "SELECT id, name, user_type, tournament_id, photo_url FROM users WHERE id = ?",
         (user_id,),
     )?;
-    Ok(row.map(|(id, name, user_type, tournament_id)| CurrentUser {
+    Ok(row.map(|(id, name, user_type, tournament_id, photo_url)| CurrentUser {
         id,
         name,
         user_type,
         tournament_id,
+        photo_url,
     }))
 }
 
@@ -82,10 +84,11 @@ pub fn update_user(
     user_id: i64,
     name: &str,
     email: &str,
+    photo_url: Option<&str>,
 ) -> mysql::Result<usize> {
     conn.exec_drop(
-        "UPDATE users SET name = ?, email = ? WHERE id = ?",
-        (name, email, user_id),
+        "UPDATE users SET name = ?, email = ?, photo_url = ? WHERE id = ?",
+        (name, email, photo_url, user_id),
     )?;
     Ok(conn.affected_rows() as usize)
 }

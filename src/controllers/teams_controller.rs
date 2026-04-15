@@ -589,23 +589,7 @@ async fn save_player_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<Str
             "Photo too large",
         ));
     }
-    if let Some(content_type) = upload.content_type() {
-        let is_supported = content_type
-            .extension()
-            .map(|ext| {
-                let ext = ext.as_str();
-                ext.eq_ignore_ascii_case("png")
-                    || ext.eq_ignore_ascii_case("jpg")
-                    || ext.eq_ignore_ascii_case("jpeg")
-            })
-            .unwrap_or(false);
-        if !is_supported {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Unsupported file type",
-            ));
-        }
-    }
+    // Don't trust the uploaded Content-Type; decode is the source of truth.
 
     let uploads_dir = Path::new("static").join("uploads");
     std::fs::create_dir_all(&uploads_dir)?;
@@ -618,8 +602,28 @@ async fn save_player_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<Str
     let raw_path = uploads_dir.join(raw_filename);
     upload.persist_to(&raw_path).await?;
 
-    let image = image::open(&raw_path)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image"))?;
+    let data = std::fs::read(&raw_path)?;
+    if data.len() < 4 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Upload was empty or truncated",
+        ));
+    }
+    let is_png = data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    let is_jpeg = data.starts_with(&[0xFF, 0xD8, 0xFF]);
+    if !(is_png || is_jpeg) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "File is not a PNG or JPEG",
+        ));
+    }
+
+    let reader = image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image format"))?;
+    let image = reader
+        .decode()
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Unable to decode image"))?;
     let (width, height) = image.dimensions();
     let crop_size = width.min(height);
     let x = (width - crop_size) / 2;

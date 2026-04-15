@@ -24,6 +24,15 @@
         {% include "partials/sidebar" %}
       </aside>
 
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
       <main class="content">
         <header class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
           <div class="d-flex align-items-center gap-3">
@@ -438,6 +447,7 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script src="/static/sidebar.js"></script>
     <script>
       const drawerToggles = document.querySelectorAll(".js-drawer-toggle");
       drawerToggles.forEach((toggle) => {

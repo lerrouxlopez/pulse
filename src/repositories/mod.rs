@@ -9,4 +9,5 @@ pub mod weight_classes_repository;
 pub mod events_repository;
 pub mod scheduled_events_repository;
 pub mod matches_repository;
+pub mod match_judges_repository;
 pub mod teams_repository;

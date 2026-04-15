@@ -19,6 +19,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             password_hash TEXT NOT NULL,
             user_type TEXT NOT NULL DEFAULT 'system',
             tournament_id BIGINT NOT NULL DEFAULT 0,
+            photo_url TEXT,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
             UNIQUE KEY idx_users_unique (tournament_id, email(191)),
             KEY idx_users_type (user_type),
@@ -192,7 +193,24 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             blue_member_id BIGINT,
             is_bye TINYINT(1) NOT NULL DEFAULT 0,
             winner_side TEXT,
+            red_total_score INT NOT NULL DEFAULT 0,
+            blue_total_score INT NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+        )",
+    )?;
+
+    conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS match_judges (
+            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            tournament_id BIGINT NOT NULL,
+            match_id BIGINT NOT NULL,
+            judge_user_id BIGINT NOT NULL,
+            judge_order INT NOT NULL DEFAULT 0,
+            red_score INT NOT NULL DEFAULT 0,
+            blue_score INT NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+            UNIQUE KEY idx_match_judges_match_judge (match_id, judge_user_id),
+            UNIQUE KEY idx_match_judges_match_order (match_id, judge_order)
         )",
     )?;
 
@@ -219,6 +237,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     )?;
 
     apply_user_roles_redo_migration(&mut conn)?;
+    apply_match_scoring_migration(&mut conn)?;
 
     Ok(())
 }
@@ -347,5 +366,44 @@ fn drop_unique_index_on_email(conn: &mut PooledConn) -> mysql::Result<()> {
             ))?;
         }
     }
+    Ok(())
+}
+
+fn apply_match_scoring_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260414_match_scoring_and_user_photos";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "users", "photo_url")? {
+        conn.query_drop("ALTER TABLE users ADD COLUMN photo_url TEXT")?;
+    }
+    if !column_exists(conn, "matches", "red_total_score")? {
+        conn.query_drop("ALTER TABLE matches ADD COLUMN red_total_score INT NOT NULL DEFAULT 0")?;
+    }
+    if !column_exists(conn, "matches", "blue_total_score")? {
+        conn.query_drop("ALTER TABLE matches ADD COLUMN blue_total_score INT NOT NULL DEFAULT 0")?;
+    }
+    if !table_exists(conn, "match_judges")? {
+        conn.query_drop(
+            "CREATE TABLE match_judges (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                tournament_id BIGINT NOT NULL,
+                match_id BIGINT NOT NULL,
+                judge_user_id BIGINT NOT NULL,
+                judge_order INT NOT NULL DEFAULT 0,
+                red_score INT NOT NULL DEFAULT 0,
+                blue_score INT NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+                UNIQUE KEY idx_match_judges_match_judge (match_id, judge_user_id),
+                UNIQUE KEY idx_match_judges_match_order (match_id, judge_order)
+            )",
+        )?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
     Ok(())
 }

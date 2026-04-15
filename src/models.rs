@@ -36,6 +36,7 @@ pub struct CurrentUser {
     pub name: String,
     pub user_type: String,
     pub tournament_id: i64,
+    pub photo_url: Option<String>,
 }
 
 pub struct UserAuth {
@@ -123,6 +124,17 @@ pub struct AccessUser {
     pub email: String,
     pub role_id: Option<i64>,
     pub role_name: Option<String>,
+    pub photo_url: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct MatchJudgeScore {
+    pub judge_user_id: i64,
+    pub judge_name: String,
+    pub judge_photo_url: Option<String>,
+    pub red_score: i32,
+    pub blue_score: i32,
+    pub judge_order: i32,
 }
 
 #[derive(Serialize)]
@@ -142,6 +154,9 @@ pub struct ScheduledMatch {
     pub blue_member_id: Option<i64>,
     pub is_bye: bool,
     pub winner_side: Option<String>,
+    pub red_total_score: i32,
+    pub blue_total_score: i32,
+    pub judge_scores: Vec<MatchJudgeScore>,
 }
 
 #[derive(Serialize, Clone)]
@@ -150,4 +165,50 @@ pub struct EventCompetitor {
     pub team_id: i64,
     pub name: String,
     pub photo_url: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct MatchCard {
+    pub id: i64,
+    pub event_id: i64,
+    pub event_name: String,
+    pub event_type: String,
+    pub division_name: Option<String>,
+    pub weight_class_name: Option<String>,
+    pub status: String,
+    pub status_class: String,
+    pub red_name: String,
+    pub blue_name: String,
+    pub red_photo_url: String,
+    pub blue_photo_url: String,
+}
+
+#[derive(Serialize)]
+pub struct JudgeScoreCard {
+    pub name: String,
+    pub photo_url: String,
+    pub red_score: i32,
+    pub blue_score: i32,
+}
+
+#[derive(Serialize)]
+pub struct MatchDetail {
+    pub id: i64,
+    pub event_id: i64,
+    pub event_name: String,
+    pub event_type: String,
+    pub division_name: Option<String>,
+    pub weight_class_name: Option<String>,
+    pub status: String,
+    pub status_class: String,
+    pub round_label: String,
+    pub red_name: String,
+    pub blue_name: String,
+    pub red_photo_url: String,
+    pub blue_photo_url: String,
+    pub red_total_score: i32,
+    pub blue_total_score: i32,
+    pub location: Option<String>,
+    pub match_time: Option<String>,
+    pub judges: Vec<JudgeScoreCard>,
 }

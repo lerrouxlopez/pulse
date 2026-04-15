@@ -24,6 +24,8 @@ fn row_to_match(row: Row) -> ScheduledMatch {
     let blue_member_id: Option<i64> = row.get::<Option<i64>, _>(12).unwrap_or(None);
     let is_bye: i64 = row.get::<Option<i64>, _>(13).unwrap_or(None).unwrap_or_default();
     let winner_side: Option<String> = row.get::<Option<String>, _>(14).unwrap_or(None);
+    let red_total_score: i32 = row.get::<Option<i32>, _>(15).unwrap_or(None).unwrap_or_default();
+    let blue_total_score: i32 = row.get::<Option<i32>, _>(16).unwrap_or(None).unwrap_or_default();
 
     ScheduledMatch {
         id,
@@ -41,6 +43,9 @@ fn row_to_match(row: Row) -> ScheduledMatch {
         blue_member_id,
         is_bye: is_bye != 0,
         winner_side,
+        red_total_score,
+        blue_total_score,
+        judge_scores: Vec::new(),
     }
 }
 
@@ -50,13 +55,29 @@ pub fn list(
     scheduled_event_id: i64,
 ) -> mysql::Result<Vec<ScheduledMatch>> {
     conn.exec_map(
-        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
          FROM matches
          WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id
          ORDER BY id DESC",
         params! {
             "tournament_id" => tournament_id,
             "scheduled_event_id" => scheduled_event_id,
+        },
+        row_to_match,
+    )
+}
+
+pub fn list_by_tournament(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+) -> mysql::Result<Vec<ScheduledMatch>> {
+    conn.exec_map(
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
+         FROM matches
+         WHERE tournament_id = :tournament_id
+         ORDER BY id DESC",
+        params! {
+            "tournament_id" => tournament_id,
         },
         row_to_match,
     )
@@ -78,10 +99,12 @@ pub fn create(
     red_member_id: Option<i64>,
     blue_member_id: Option<i64>,
     is_bye: bool,
+    red_total_score: i32,
+    blue_total_score: i32,
 ) -> mysql::Result<i64> {
     conn.exec_drop(
-        "INSERT INTO matches (tournament_id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side)
-         VALUES (:tournament_id, :scheduled_event_id, :mat, :category, :red, :blue, :status, :location, :match_time, :round, :slot, :red_member_id, :blue_member_id, :is_bye, NULL)",
+        "INSERT INTO matches (tournament_id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side, red_total_score, blue_total_score)
+         VALUES (:tournament_id, :scheduled_event_id, :mat, :category, :red, :blue, :status, :location, :match_time, :round, :slot, :red_member_id, :blue_member_id, :is_bye, NULL, :red_total_score, :blue_total_score)",
         params! {
             "tournament_id" => tournament_id,
             "scheduled_event_id" => scheduled_event_id,
@@ -97,6 +120,8 @@ pub fn create(
             "red_member_id" => red_member_id,
             "blue_member_id" => blue_member_id,
             "is_bye" => if is_bye { 1 } else { 0 },
+            "red_total_score" => red_total_score,
+            "blue_total_score" => blue_total_score,
         },
     )?;
     Ok(conn.last_insert_id() as i64)
@@ -120,11 +145,14 @@ pub fn update(
     blue_member_id: Option<i64>,
     is_bye: bool,
     winner_side: Option<&str>,
+    red_total_score: i32,
+    blue_total_score: i32,
 ) -> mysql::Result<usize> {
     conn.exec_drop(
         "UPDATE matches
          SET mat = :mat, category = :category, red = :red, blue = :blue, status = :status, location = :location, match_time = :match_time,
-             round = :round, slot = :slot, red_member_id = :red_member_id, blue_member_id = :blue_member_id, is_bye = :is_bye, winner_side = :winner_side
+             round = :round, slot = :slot, red_member_id = :red_member_id, blue_member_id = :blue_member_id, is_bye = :is_bye, winner_side = :winner_side,
+             red_total_score = :red_total_score, blue_total_score = :blue_total_score
          WHERE id = :id AND tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id",
         params! {
             "mat" => mat,
@@ -140,6 +168,8 @@ pub fn update(
             "blue_member_id" => blue_member_id,
             "is_bye" => if is_bye { 1 } else { 0 },
             "winner_side" => winner_side,
+            "red_total_score" => red_total_score,
+            "blue_total_score" => blue_total_score,
             "id" => id,
             "tournament_id" => tournament_id,
             "scheduled_event_id" => scheduled_event_id,
@@ -180,7 +210,7 @@ pub fn get_by_id(
     id: i64,
 ) -> mysql::Result<Option<ScheduledMatch>> {
     let row: Option<Row> = conn.exec_first(
-        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
          FROM matches
          WHERE id = :id AND tournament_id = :tournament_id",
         params! {
@@ -199,7 +229,7 @@ pub fn get_by_round_slot(
     slot: i64,
 ) -> mysql::Result<Option<ScheduledMatch>> {
     let row: Option<Row> = conn.exec_first(
-        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
          FROM matches
          WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id AND round = :round AND slot = :slot",
         params! {

@@ -24,6 +24,15 @@
         {% include "partials/sidebar" %}
       </aside>
 
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
       <main class="content">
         <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
           <div>
@@ -141,6 +150,8 @@
                   <th class="col-match">Match</th>
                   <th>Schedule</th>
                   <th class="col-location">Location</th>
+                  <th>Red Total</th>
+                  <th>Blue Total</th>
                   <th>Status</th>
                   <th class="text-end">Actions</th>
                 </tr>
@@ -152,6 +163,8 @@
                   <td>{{ match.matchup_label }}</td>
                   <td>{{ match.match_time | default(value="") }}</td>
                   <td>{{ match.location | default(value="") }}</td>
+                  <td>{{ match.red_total_score }}</td>
+                  <td>{{ match.blue_total_score }}</td>
                   <td>{{ match.status }}</td>
                   <td class="text-end">
                     <div class="d-flex justify-content-end gap-2">
@@ -166,7 +179,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="6" class="text-cream-60">No matches yet.</td>
+                  <td colspan="8" class="text-cream-60">No matches yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -222,6 +235,90 @@
         </section>
         {% endif %}
 
+        {% if is_contact %}
+        {% for match in contact_match_rows %}
+        <div class="modal fade" id="editMatchModal-{{ match.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit Match</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/update" method="post">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Status</label>
+                      <select class="form-select js-match-status" name="status" data-winner-target="winner-{{ match.id }}">
+                        {% for option in match_statuses %}
+                        <option value="{{ option }}" {% if option == match.status %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-md-6 d-none" id="winner-{{ match.id }}">
+                      <label class="form-label text-muted">Match Winner</label>
+                      <select class="form-select" name="winner">
+                        <option value="" {% if match.status != "Finished" and match.status != "Forfeit" %}selected{% endif %}>Select winner</option>
+                        {% if match.red_label %}
+                        <option value="red" {% if match.winner_side == "red" %}selected{% endif %}>{{ match.red_label }}</option>
+                        {% endif %}
+                        {% if match.blue_label %}
+                        <option value="blue" {% if match.winner_side == "blue" %}selected{% endif %}>{{ match.blue_label }}</option>
+                        {% endif %}
+                      </select>
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label text-muted">Judges (3-5)</label>
+                      <div class="d-flex flex-column gap-2">
+                        {% for slot in match.judge_slots %}
+                        <div class="row g-2 align-items-end">
+                          <div class="col-12 col-md-6">
+                            <label class="form-label text-muted mb-1">Judge {{ loop.index }}</label>
+                            <select class="form-select" name="judge_{{ loop.index }}_id">
+                              <option value="">Select judge</option>
+                              {% for judge in judge_users %}
+                              <option value="{{ judge.id }}"
+                                {% if slot.judge_user_id and slot.judge_user_id == judge.id %}selected{% endif %}>
+                                {{ judge.name }}
+                              </option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <div class="col-6 col-md-3">
+                            <label class="form-label text-muted mb-1">Red</label>
+                            <input class="form-control" type="number" min="0" name="judge_{{ loop.index }}_red_score" value="{{ slot.red_score }}" />
+                          </div>
+                          <div class="col-6 col-md-3">
+                            <label class="form-label text-muted mb-1">Blue</label>
+                            <input class="form-control" type="number" min="0" name="judge_{{ loop.index }}_blue_score" value="{{ slot.blue_score }}" />
+                          </div>
+                        </div>
+                        {% endfor %}
+                      </div>
+                      <p class="text-muted mb-0 mt-2">Totals are the sum of all judge scores.</p>
+                    </div>
+
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Location</label>
+                      <input class="form-control" name="location" value="{{ match.location | default(value="") }}" />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label text-muted">Date & Time</label>
+                      <input class="form-control" type="datetime-local" name="match_time" value="{{ match.match_time | default(value="") }}" />
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button class="btn btn-primary" type="submit">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
         {% for match in matches %}
         <div class="modal fade" id="editMatchModal-{{ match.id }}" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -233,7 +330,6 @@
               <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/update" method="post">
                 <div class="modal-body">
                   <div class="row g-3">
-                    {% if not is_contact %}
                     <div class="col-md-2">
                       <label class="form-label text-muted">Mat</label>
                       <input class="form-control" name="mat" value="{{ match.mat | default(value="") }}" />
@@ -258,29 +354,6 @@
                         {% endfor %}
                       </select>
                     </div>
-                    {% endif %}
-                    {% if is_contact %}
-                    <div class="col-md-3">
-                      <label class="form-label text-muted">Status</label>
-                      <select class="form-select js-match-status" name="status" data-winner-target="winner-{{ match.id }}">
-                        {% for option in match_statuses %}
-                        <option value="{{ option }}" {% if option == match.status %}selected{% endif %}>{{ option }}</option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                    <div class="col-md-6 d-none" id="winner-{{ match.id }}">
-                      <label class="form-label text-muted">Match Winner</label>
-                      <select class="form-select" name="winner">
-                        <option value="" {% if match.status != "Finished" and match.status != "Forfeit" %}selected{% endif %}>Select winner</option>
-                        {% if match.red %}
-                        <option value="red" {% if match.winner_side == "red" %}selected{% endif %}>{{ match.red }}</option>
-                        {% endif %}
-                        {% if match.blue %}
-                        <option value="blue" {% if match.winner_side == "blue" %}selected{% endif %}>{{ match.blue }}</option>
-                        {% endif %}
-                      </select>
-                    </div>
-                    {% endif %}
                     <div class="col-md-6">
                       <label class="form-label text-muted">Location</label>
                       <input class="form-control" name="location" value="{{ match.location | default(value="") }}" />
@@ -300,6 +373,7 @@
           </div>
         </div>
         {% endfor %}
+        {% endif %}
       </main>
     </div>
 
@@ -308,6 +382,7 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script src="/static/sidebar.js"></script>
     <script>
       const matchStatusSelectors = document.querySelectorAll(".js-match-status");
       const needsWinner = (value) => {
