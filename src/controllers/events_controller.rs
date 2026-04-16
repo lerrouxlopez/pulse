@@ -840,6 +840,32 @@ pub fn delete_match(
     }
 }
 
+#[post("/<slug>/events/<id>/reset-matchmaking")]
+pub fn reset_matchmaking(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
+        .ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Ok(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
+
+    match matches_service::reset_automatic_matchmaking(state, user.id, tournament.id, id) {
+        Ok(_) => Ok(Redirect::to(uri!(event_profile(slug = slug, id = id)))),
+        Err(message) => Ok(Redirect::to(uri!(events_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None
+        )))),
+    }
+}
+
 fn build_judge_inputs(form: &MatchForm) -> Vec<matches_service::MatchJudgeInput> {
     let slots = [
         (form.judge_1_id, form.judge_1_red_score, form.judge_1_blue_score),

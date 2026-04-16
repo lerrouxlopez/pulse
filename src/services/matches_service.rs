@@ -737,6 +737,8 @@ pub fn ensure_bracket_for_contact_event(
             return Ok(());
         }
         let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+        match_judges_repository::delete_by_scheduled_event(&mut conn, tournament_id, scheduled_event_id)
+            .map_err(|_| "Storage error.".to_string())?;
         matches_repository::delete_by_scheduled_event(
             &mut conn,
             tournament_id,
@@ -1192,6 +1194,44 @@ pub fn ensure_bracket_for_contact_event(
     }
 
     Ok(())
+}
+
+pub fn reset_automatic_matchmaking(
+    state: &State<AppState>,
+    user_id: i64,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> Result<(), String> {
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+
+    if !scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Err("Automatic matchmaking is only available for contact events.".to_string());
+    }
+
+    match_judges_repository::delete_by_scheduled_event(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    matches_repository::delete_by_scheduled_event(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
+
+    let _ = scheduled_events_repository::update_status_and_winner(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+        "Scheduled",
+        None,
+    );
+
+    // Rebuild the bracket (premade matches) using the same logic as the event page.
+    ensure_bracket_for_contact_event(state, user_id, tournament_id, scheduled_event_id, scheduled.event_id)
 }
 
 #[derive(Clone)]

@@ -68,6 +68,7 @@ fn rocket() -> _ {
                 controllers::events_controller::create_match,
                 controllers::events_controller::update_match,
                 controllers::events_controller::delete_match,
+                controllers::events_controller::reset_matchmaking,
                 controllers::matches_controller::matches_page,
                 controllers::matches_controller::match_page,
                 controllers::tournaments_controller::create_tournament,

@@ -107,7 +107,12 @@
 
         {% if is_contact %}
         <section class="panel bracket-panel mb-4">
-          <h3 class="fw-semibold mb-3">Bracket</h3>
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <h3 class="fw-semibold mb-0">Bracket</h3>
+            <form action="/{{ tournament_slug }}/events/{{ event.id }}/reset-matchmaking" method="post" onsubmit="return confirm('Reset automatic matchmaking? This will delete all matches in this event and recreate the bracket.');">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Reset Matchmaking</button>
+            </form>
+          </div>
           <div class="fg-canvas" style="width: {{ bracket_canvas_width }}px; height: {{ bracket_canvas_height }}px;">
             <svg class="fg-lines" width="{{ bracket_canvas_width }}" height="{{ bracket_canvas_height }}">
               {% for connector in bracket_connectors %}

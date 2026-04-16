@@ -98,6 +98,9 @@ pub fn create(
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
+    if existing.iter().any(|item| item.event_id == event_id) {
+        return Err("Event is already scheduled for this tournament.".to_string());
+    }
     if is_contact {
         let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
         let weight_class_id =
@@ -126,13 +129,6 @@ pub fn create(
         {
             return Err("Weight class not found.".to_string());
         }
-        if existing.iter().any(|item| {
-            item.division_id == Some(division_id) && item.weight_class_id == Some(weight_class_id)
-        }) {
-            return Err("Division and weight class already scheduled.".to_string());
-        }
-    } else if existing.iter().any(|item| item.event_id == event_id) {
-        return Err("Event is already scheduled for this tournament.".to_string());
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?
@@ -189,6 +185,9 @@ pub fn update(
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
+    if existing.iter().any(|item| item.id != id && item.event_id == event_id) {
+        return Err("Event is already scheduled for this tournament.".to_string());
+    }
     if is_contact {
         let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
         let weight_class_id =
@@ -217,15 +216,6 @@ pub fn update(
         {
             return Err("Weight class not found.".to_string());
         }
-        if existing.iter().any(|item| {
-            item.id != id
-                && item.division_id == Some(division_id)
-                && item.weight_class_id == Some(weight_class_id)
-        }) {
-            return Err("Division and weight class already scheduled.".to_string());
-        }
-    } else if existing.iter().any(|item| item.event_id == event_id && item.id != id) {
-        return Err("Event is already scheduled for this tournament.".to_string());
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?
