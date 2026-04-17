@@ -805,13 +805,64 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
   width: 30%;
 }
 
+.matches-table.matches-table-equal-4 th,
+.matches-table.matches-table-equal-4 td {
+  width: 25%;
+}
+
+.matches-table.matches-table-equal-4 .col-match {
+  width: 25%;
+}
+
+.matches-table.matches-table-equal-4 th.text-end,
+.matches-table.matches-table-equal-4 td.text-end {
+  width: 25%;
+}
+
+.matches-table.matches-table-equal-5 th,
+.matches-table.matches-table-equal-5 td {
+  width: 20%;
+}
+
+.matches-table.matches-table-equal-5 .col-match {
+  width: 20%;
+}
+
+.matches-table.matches-table-equal-5 th.text-end,
+.matches-table.matches-table-equal-5 td.text-end {
+  width: 20%;
+}
+
 .matches-table .col-location {
   width: 16%;
 }
 
 .matches-table th.text-end,
 .matches-table td.text-end {
-  width: 16%;
+  width: 25%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.matches-table td.text-end .match-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.matches-table td.text-end .match-timer-form {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-round-select {
+  width: 82px;
 }
 
 .matches-grid {
@@ -879,6 +930,12 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
   border: none;
   background: #ffffff;
   box-shadow: 0 14px 24px rgba(37, 99, 235, 0.12);
+}
+
+.score-corner-photo {
+  width: clamp(140px, 18vw, 220px);
+  height: clamp(140px, 18vw, 220px);
+  border-radius: 28px;
 }
 
 .match-fighter-name {
@@ -1079,6 +1136,27 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
   text-transform: uppercase;
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
 }
+
+.match-live-timer {
+  min-width: 180px;
+  text-align: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  color: #0f172a;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+
+.match-live-timer.is-expired {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.30);
+  box-shadow: 0 12px 26px rgba(185, 28, 28, 0.12);
+}
+
 
 .match-live-judges {
   display: grid;

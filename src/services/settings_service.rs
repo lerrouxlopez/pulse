@@ -1,8 +1,8 @@
 use crate::db;
 use crate::models::NamedItem;
 use crate::repositories::{
-    categories_repository, divisions_repository, events_repository, weight_classes_repository,
-    tournaments_repository,
+    categories_repository, divisions_repository, events_repository, tournaments_repository,
+    weight_classes_repository,
 };
 use crate::state::AppState;
 use rocket::State;
@@ -14,20 +14,24 @@ pub enum SettingsEntity {
     Event,
 }
 
-pub fn list(
-    state: &State<AppState>,
-    tournament_id: i64,
-    entity: SettingsEntity,
-) -> Vec<NamedItem> {
+pub fn list(state: &State<AppState>, tournament_id: i64, entity: SettingsEntity) -> Vec<NamedItem> {
     let mut conn = match db::open_conn(&state.pool) {
         Ok(conn) => conn,
         Err(_) => return Vec::new(),
     };
     match entity {
-        SettingsEntity::Division => divisions_repository::list(&mut conn, tournament_id).unwrap_or_default(),
-        SettingsEntity::Category => categories_repository::list(&mut conn, tournament_id).unwrap_or_default(),
-        SettingsEntity::WeightClass => weight_classes_repository::list(&mut conn, tournament_id).unwrap_or_default(),
-        SettingsEntity::Event => events_repository::list(&mut conn, tournament_id).unwrap_or_default(),
+        SettingsEntity::Division => {
+            divisions_repository::list(&mut conn, tournament_id).unwrap_or_default()
+        }
+        SettingsEntity::Category => {
+            categories_repository::list(&mut conn, tournament_id).unwrap_or_default()
+        }
+        SettingsEntity::WeightClass => {
+            weight_classes_repository::list(&mut conn, tournament_id).unwrap_or_default()
+        }
+        SettingsEntity::Event => {
+            events_repository::list(&mut conn, tournament_id).unwrap_or_default()
+        }
     }
 }
 
@@ -50,8 +54,12 @@ pub fn create(
     }
     match entity {
         SettingsEntity::Division => divisions_repository::create(&mut conn, tournament_id, trimmed),
-        SettingsEntity::Category => categories_repository::create(&mut conn, tournament_id, trimmed),
-        SettingsEntity::WeightClass => weight_classes_repository::create(&mut conn, tournament_id, trimmed),
+        SettingsEntity::Category => {
+            categories_repository::create(&mut conn, tournament_id, trimmed)
+        }
+        SettingsEntity::WeightClass => {
+            weight_classes_repository::create(&mut conn, tournament_id, trimmed)
+        }
         SettingsEntity::Event => events_repository::create(&mut conn, tournament_id, trimmed),
     }
     .map(|_| ())
@@ -78,8 +86,12 @@ pub fn update(
     }
 
     let changed = match entity {
-        SettingsEntity::Division => divisions_repository::update(&mut conn, tournament_id, id, trimmed),
-        SettingsEntity::Category => categories_repository::update(&mut conn, tournament_id, id, trimmed),
+        SettingsEntity::Division => {
+            divisions_repository::update(&mut conn, tournament_id, id, trimmed)
+        }
+        SettingsEntity::Category => {
+            categories_repository::update(&mut conn, tournament_id, id, trimmed)
+        }
         SettingsEntity::WeightClass => {
             weight_classes_repository::update(&mut conn, tournament_id, id, trimmed)
         }
@@ -110,7 +122,9 @@ pub fn delete(
     let changed = match entity {
         SettingsEntity::Division => divisions_repository::delete(&mut conn, tournament_id, id),
         SettingsEntity::Category => categories_repository::delete(&mut conn, tournament_id, id),
-        SettingsEntity::WeightClass => weight_classes_repository::delete(&mut conn, tournament_id, id),
+        SettingsEntity::WeightClass => {
+            weight_classes_repository::delete(&mut conn, tournament_id, id)
+        }
         SettingsEntity::Event => events_repository::delete(&mut conn, tournament_id, id),
     }
     .map_err(|_| "Unable to delete item. It may be in use.".to_string())?;

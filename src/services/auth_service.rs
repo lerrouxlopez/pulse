@@ -6,10 +6,10 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use mysql::Error;
 use rand_core::OsRng;
 use rocket::http::CookieJar;
 use rocket::State;
-use mysql::Error;
 
 pub enum AuthError {
     Validation(String),
@@ -85,8 +85,9 @@ pub fn create_tournament_user(
 
 pub fn login_system_user(state: &State<AppState>, form: LoginForm) -> Result<i64, AuthError> {
     let mut conn = db::open_conn(&state.pool).map_err(|_| AuthError::Storage)?;
-    let user = users_repository::find_system_user_by_email(&mut conn, &form.email.trim().to_lowercase())
-        .map_err(|_| AuthError::Storage)?;
+    let user =
+        users_repository::find_system_user_by_email(&mut conn, &form.email.trim().to_lowercase())
+            .map_err(|_| AuthError::Storage)?;
     if let Some(user) = user {
         let parsed_hash = PasswordHash::new(&user.password_hash).map_err(|_| AuthError::Storage)?;
         if Argon2::default()

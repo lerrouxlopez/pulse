@@ -205,12 +205,13 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             tournament_id BIGINT NOT NULL,
             match_id BIGINT NOT NULL,
             judge_user_id BIGINT NOT NULL,
+            fight_round BIGINT NOT NULL DEFAULT 1,
             judge_order INT NOT NULL DEFAULT 0,
             red_score INT NOT NULL DEFAULT 0,
             blue_score INT NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-            UNIQUE KEY idx_match_judges_match_judge (match_id, judge_user_id),
-            UNIQUE KEY idx_match_judges_match_order (match_id, judge_order)
+            UNIQUE KEY idx_match_judges_match_judge_round (match_id, judge_user_id, fight_round),
+            UNIQUE KEY idx_match_judges_match_order_round (match_id, judge_order, fight_round)
         )",
     )?;
 
@@ -238,6 +239,10 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
 
     apply_user_roles_redo_migration(&mut conn)?;
     apply_match_scoring_migration(&mut conn)?;
+    apply_match_timer_migration(&mut conn)?;
+    apply_match_timer_round_lock_migration(&mut conn)?;
+    apply_match_judge_round_scores_migration(&mut conn)?;
+    apply_scores_permission_migration(&mut conn)?;
 
     Ok(())
 }
@@ -253,14 +258,10 @@ fn apply_user_roles_redo_migration(conn: &mut PooledConn) -> mysql::Result<()> {
     }
 
     if column_exists(conn, "users", "user_type")? == false {
-        conn.query_drop(
-            "ALTER TABLE users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'system'",
-        )?;
+        conn.query_drop("ALTER TABLE users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'system'")?;
     }
     if column_exists(conn, "users", "tournament_id")? == false {
-        conn.query_drop(
-            "ALTER TABLE users ADD COLUMN tournament_id BIGINT NOT NULL DEFAULT 0",
-        )?;
+        conn.query_drop("ALTER TABLE users ADD COLUMN tournament_id BIGINT NOT NULL DEFAULT 0")?;
     }
 
     drop_unique_index_on_email(conn)?;
@@ -304,9 +305,7 @@ fn apply_user_roles_redo_migration(conn: &mut PooledConn) -> mysql::Result<()> {
         conn.query_drop(
             "UPDATE users SET user_type = 'system' WHERE user_type IS NULL OR user_type = ''",
         )?;
-        conn.query_drop(
-            "UPDATE users SET tournament_id = 0 WHERE tournament_id IS NULL",
-        )?;
+        conn.query_drop("UPDATE users SET tournament_id = 0 WHERE tournament_id IS NULL")?;
     }
 
     conn.exec_drop(
@@ -360,10 +359,7 @@ fn drop_unique_index_on_email(conn: &mut PooledConn) -> mysql::Result<()> {
     )?;
     if let Some(index_name) = row {
         if index_name != "PRIMARY" && index_name != "idx_users_unique" {
-            conn.query_drop(format!(
-                "ALTER TABLE users DROP INDEX {}",
-                index_name
-            ))?;
+            conn.query_drop(format!("ALTER TABLE users DROP INDEX {}", index_name))?;
         }
     }
     Ok(())
@@ -391,14 +387,120 @@ fn apply_match_scoring_migration(conn: &mut PooledConn) -> mysql::Result<()> {
                 tournament_id BIGINT NOT NULL,
                 match_id BIGINT NOT NULL,
                 judge_user_id BIGINT NOT NULL,
+                fight_round BIGINT NOT NULL DEFAULT 1,
                 judge_order INT NOT NULL DEFAULT 0,
                 red_score INT NOT NULL DEFAULT 0,
                 blue_score INT NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-                UNIQUE KEY idx_match_judges_match_judge (match_id, judge_user_id),
-                UNIQUE KEY idx_match_judges_match_order (match_id, judge_order)
+                UNIQUE KEY idx_match_judges_match_judge_round (match_id, judge_user_id, fight_round),
+                UNIQUE KEY idx_match_judges_match_order_round (match_id, judge_order, fight_round)
             )",
         )?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_match_judge_round_scores_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260417_match_judge_round_scores";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "match_judges", "fight_round")? {
+        conn.query_drop(
+            "ALTER TABLE match_judges ADD COLUMN fight_round BIGINT NOT NULL DEFAULT 1",
+        )?;
+    }
+
+    // Replace unique keys so judges can have one score per round.
+    if index_exists(conn, "match_judges", "idx_match_judges_match_judge")? {
+        conn.query_drop("DROP INDEX idx_match_judges_match_judge ON match_judges")?;
+    }
+    if index_exists(conn, "match_judges", "idx_match_judges_match_order")? {
+        conn.query_drop("DROP INDEX idx_match_judges_match_order ON match_judges")?;
+    }
+    if !index_exists(conn, "match_judges", "idx_match_judges_match_judge_round")? {
+        conn.query_drop(
+            "CREATE UNIQUE INDEX idx_match_judges_match_judge_round ON match_judges (match_id, judge_user_id, fight_round)",
+        )?;
+    }
+    if !index_exists(conn, "match_judges", "idx_match_judges_match_order_round")? {
+        conn.query_drop(
+            "CREATE UNIQUE INDEX idx_match_judges_match_order_round ON match_judges (match_id, judge_order, fight_round)",
+        )?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_scores_permission_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260417_scores_permission";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    // Ensure all Owner roles can access the Scores page.
+    conn.query_drop(
+        "INSERT INTO role_permissions (role_id, permission_key)
+         SELECT tr.id, 'scores'
+         FROM tournament_roles tr
+         LEFT JOIN role_permissions rp
+           ON rp.role_id = tr.id AND LOWER(rp.permission_key) = 'scores'
+         WHERE tr.is_owner = 1 AND rp.id IS NULL",
+    )?;
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_match_timer_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260417_match_timer_and_round";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "matches", "fight_round")? {
+        conn.query_drop("ALTER TABLE matches ADD COLUMN fight_round BIGINT")?;
+    }
+    if !column_exists(conn, "matches", "timer_started_at")? {
+        conn.query_drop("ALTER TABLE matches ADD COLUMN timer_started_at BIGINT")?;
+    }
+    if !column_exists(conn, "matches", "timer_duration_seconds")? {
+        conn.query_drop("ALTER TABLE matches ADD COLUMN timer_duration_seconds INT")?;
+    }
+    if !column_exists(conn, "matches", "timer_is_running")? {
+        conn.query_drop(
+            "ALTER TABLE matches ADD COLUMN timer_is_running TINYINT(1) NOT NULL DEFAULT 0",
+        )?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_match_timer_round_lock_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260417_match_timer_round_lock";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "matches", "timer_last_completed_round")? {
+        conn.query_drop("ALTER TABLE matches ADD COLUMN timer_last_completed_round BIGINT")?;
     }
 
     conn.exec_drop(

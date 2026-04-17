@@ -70,13 +70,15 @@ pub fn find_user_profile_by_id(
         "SELECT id, name, user_type, tournament_id, photo_url FROM users WHERE id = ?",
         (user_id,),
     )?;
-    Ok(row.map(|(id, name, user_type, tournament_id, photo_url)| CurrentUser {
-        id,
-        name,
-        user_type,
-        tournament_id,
-        photo_url,
-    }))
+    Ok(row.map(
+        |(id, name, user_type, tournament_id, photo_url)| CurrentUser {
+            id,
+            name,
+            user_type,
+            tournament_id,
+            photo_url,
+        },
+    ))
 }
 
 pub fn update_user(

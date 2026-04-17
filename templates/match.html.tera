@@ -44,7 +44,7 @@
 
         <section class="match-live-shell">
           <div class="match-live-head">
-            <span class="pill {{ match_item.status_class }}">{{ match_item.status }}</span>
+            <span id="js-live-status" class="pill {{ match_item.status_class }}">{{ match_item.status }}</span>
             <h2 class="match-live-title">{{ match_item.event_name }}</h2>
             <p class="match-live-meta mb-0">
               {% if match_item.division_name %}{{ match_item.division_name }}{% endif %}
@@ -59,12 +59,22 @@
                 <img src="{{ match_item.red_photo_url }}" alt="{{ match_item.red_name }}" class="match-live-photo" />
               </div>
               <div class="match-live-name">{{ match_item.red_name }}</div>
-              <div class="pill match-card-pill">Total: {{ match_item.red_total_score }}</div>
+              <div class="pill match-card-pill">Total: <span id="js-live-red-total">{{ match_item.red_total_score }}</span></div>
             </div>
 
             <div class="match-live-center">
               <div class="match-live-vs">VS</div>
-              <div class="match-live-round">{{ match_item.round_label }}</div>
+              <div id="js-live-round" class="match-live-round">{{ match_item.round_label }}</div>
+              <div
+                id="js-live-timer"
+                class="match-live-timer"
+                data-timer-started-at="{{ match_item.timer_started_at | default(value=0) }}"
+                data-timer-duration="{{ match_item.timer_duration_seconds | default(value=0) }}"
+                data-timer-running="{% if match_item.timer_is_running %}1{% else %}0{% endif %}"
+                aria-label="Match timer"
+              >
+                --:--
+              </div>
             </div>
 
             <div class="match-live-fighter is-blue">
@@ -72,31 +82,123 @@
                 <img src="{{ match_item.blue_photo_url }}" alt="{{ match_item.blue_name }}" class="match-live-photo" />
               </div>
               <div class="match-live-name">{{ match_item.blue_name }}</div>
-              <div class="pill match-card-pill">Total: {{ match_item.blue_total_score }}</div>
+              <div class="pill match-card-pill">Total: <span id="js-live-blue-total">{{ match_item.blue_total_score }}</span></div>
             </div>
           </div>
 
-          <div class="match-live-judges">
-            {% for judge in match_item.judges %}
-            <article class="judge-card">
-              <div class="judge-left">
-                <div class="judge-photo-frame">
-                  <img src="{{ judge.photo_url }}" alt="{{ judge.name }}" class="judge-photo" />
-                </div>
-                <div class="judge-meta">
-                  <h3 class="judge-name">{{ judge.name }}</h3>
-                </div>
-              </div>
-              <div class="judge-right">
-                <div class="judge-score-label">Score</div>
-                <div class="judge-score">Red: {{ judge.red_score }} | Blue: {{ judge.blue_score }}</div>
-              </div>
-            </article>
-            {% endfor %}
-          </div>
+          <div id="js-live-judges" class="match-live-judges"></div>
         </section>
       </main>
     </div>
     <script src="/static/sidebar.js"></script>
+    <script>
+      const statusEl = document.getElementById("js-live-status");
+      const roundEl = document.getElementById("js-live-round");
+      const redTotalEl = document.getElementById("js-live-red-total");
+      const blueTotalEl = document.getElementById("js-live-blue-total");
+      const timerEl = document.getElementById("js-live-timer");
+      const judgesEl = document.getElementById("js-live-judges");
+
+      const pad2 = (value) => String(Math.max(0, value)).padStart(2, "0");
+      const formatTimer = (seconds) => {
+        const minutes = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${pad2(minutes)}:${pad2(secs)}`;
+      };
+      const statusClass = (status) => {
+        const normalized = String(status || "").toLowerCase();
+        if (normalized === "finished") return "status-ok";
+        if (normalized === "ongoing") return "status-live";
+        return "status-ready";
+      };
+      const renderTimer = () => {
+        if (!timerEl) return;
+        const startedAt = Number(timerEl.dataset.timerStartedAt || "0");
+        const duration = Number(timerEl.dataset.timerDuration || "0");
+        const isRunning = timerEl.dataset.timerRunning === "1";
+        if (!duration) {
+          timerEl.textContent = "--:--";
+          timerEl.classList.remove("is-expired");
+          return;
+        }
+        if (!isRunning || !startedAt) {
+          timerEl.textContent = formatTimer(duration);
+          timerEl.classList.remove("is-expired");
+          return;
+        }
+        const now = Math.floor(Date.now() / 1000);
+        const elapsed = Math.max(0, now - startedAt);
+        const remaining = Math.max(0, duration - elapsed);
+        timerEl.textContent = formatTimer(remaining);
+        timerEl.classList.toggle("is-expired", remaining === 0);
+      };
+
+      const renderJudges = (judges) => {
+        if (!judgesEl) return;
+        judgesEl.innerHTML = (judges || [])
+          .map((judge) => {
+            const safeName = String(judge.name || "");
+            const safePhoto = String(judge.photo_url || "");
+            const red = Number(judge.red_score || 0);
+            const blue = Number(judge.blue_score || 0);
+            return `
+              <article class="judge-card">
+                <div class="judge-left">
+                  <div class="judge-photo-frame">
+                    <img src="${safePhoto}" alt="${safeName}" class="judge-photo" />
+                  </div>
+                  <div class="judge-meta">
+                    <h3 class="judge-name">${safeName}</h3>
+                  </div>
+                </div>
+                <div class="judge-right">
+                  <div class="judge-score-label">Score</div>
+                  <div class="judge-score">Red: ${red} | Blue: ${blue}</div>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      };
+
+      const pollUrl = `/{{ tournament_slug }}/matches/{{ match_item.id }}/live`;
+      let inFlight = false;
+      const poll = async () => {
+        if (inFlight) return;
+        inFlight = true;
+        try {
+          const res = await fetch(pollUrl, { credentials: "same-origin" });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (statusEl) {
+            statusEl.textContent = data.status || "";
+            statusEl.classList.remove("status-ok", "status-live", "status-ready");
+            statusEl.classList.add(statusClass(data.status));
+          }
+          if (roundEl) {
+            roundEl.textContent = data.round_label || "";
+          }
+          if (redTotalEl) redTotalEl.textContent = String(data.red_total_score ?? 0);
+          if (blueTotalEl) blueTotalEl.textContent = String(data.blue_total_score ?? 0);
+          if (timerEl) {
+            timerEl.dataset.timerStartedAt = String(data.timer_started_at ?? 0);
+            timerEl.dataset.timerDuration = String(data.timer_duration_seconds ?? 0);
+            timerEl.dataset.timerRunning = data.timer_is_running ? "1" : "0";
+            renderTimer();
+          }
+          renderJudges(data.judges);
+        } catch (_) {
+          // ignore
+        } finally {
+          inFlight = false;
+        }
+      };
+
+      renderJudges([]);
+      renderTimer();
+      poll();
+      setInterval(poll, 1000);
+      setInterval(renderTimer, 250);
+    </script>
   </body>
 </html>

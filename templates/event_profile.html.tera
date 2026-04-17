@@ -148,43 +148,75 @@
         <section class="panel">
           <h3 class="fw-semibold mb-3">Matches</h3>
           <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle mb-0 matches-table">
+            <table class="table table-dark table-hover align-middle mb-0 matches-table matches-table-equal-5">
+              <colgroup>
+                <col style="width: 18.75%">
+                <col style="width: 18.75%">
+                <col style="width: 18.75%">
+                <col style="width: 18.75%">
+                <col style="width: 25%">
+              </colgroup>
               <thead>
                 <tr>
-                  <th>Round</th>
                   <th class="col-match">Match</th>
                   <th>Schedule</th>
-                  <th class="col-location">Location</th>
-                  <th>Red Total</th>
-                  <th>Blue Total</th>
                   <th>Status</th>
+                  <th>Timer</th>
                   <th class="text-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {% for match in contact_match_rows %}
                 <tr>
-                  <td>{% if match.round %}Round {{ match.round }}{% else %}-{% endif %}</td>
                   <td>{{ match.matchup_label }}</td>
                   <td>{{ match.match_time | default(value="") }}</td>
-                  <td>{{ match.location | default(value="") }}</td>
-                  <td>{{ match.red_total_score }}</td>
-                  <td>{{ match.blue_total_score }}</td>
-                  <td>{{ match.status }}</td>
+                  <td class="js-match-row-status">{{ match.status }}</td>
+                  <td>
+                    <span
+                      class="js-match-row-timer"
+                      data-started-at="{{ match.timer_started_at | default(value=0) }}"
+                      data-duration="{{ match.timer_duration_seconds | default(value=0) }}"
+                      data-running="{% if match.timer_is_running %}1{% else %}0{% endif %}"
+                    >00:00:00</span>
+                  </td>
                   <td class="text-end">
-                    <div class="d-flex justify-content-end gap-2">
-                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}">
-                        Edit
+                    <div class="match-actions">
+                      {% set is_running = match.timer_is_running or match.status == "Ongoing" %}
+                      {% set last_completed = match.timer_last_completed_round | default(value=0) %}
+                      {% set selected_round = match.fight_round | default(value=1) %}
+                      {% if event.time_rule %}
+                      <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/toggle-timer" method="post" class="match-timer-form" data-running="{% if is_running %}1{% else %}0{% endif %}" data-last-completed-round="{{ last_completed }}">
+                        <button class="btn btn-sm {% if is_running %}btn-outline-warning{% else %}btn-outline-success{% endif %}" type="submit" {% if not is_running and selected_round <= last_completed %}disabled{% endif %}>
+                          {% if is_running %}Stop{% else %}Start{% endif %}
+                        </button>
+                        <select class="form-select form-select-sm match-round-select" name="fight_round" {% if is_running %}disabled{% endif %} aria-label="Select round">
+                          {% for option in fight_round_options %}
+                          <option value="{{ option }}" title="Round {{ option }}" {% if match.fight_round and option == match.fight_round %}selected{% elif (not match.fight_round) and option == 1 %}selected{% endif %}>R{{ option }}</option>
+                          {% endfor %}
+                        </select>
+                      </form>
+                      {% endif %}
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}" aria-label="Edit match" title="Edit">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                          <path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                        </svg>
                       </button>
                       <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/delete" method="post">
-                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete match" title="Delete">
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                            <path d="M3 6h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                            <path d="M8 6V4h8v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                            <path d="M6 6l1 16h10l1-16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                          </svg>
+                        </button>
                       </form>
                     </div>
                   </td>
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="8" class="text-cream-60">No matches yet.</td>
+                  <td colspan="5" class="text-cream-60">No matches yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -219,12 +251,34 @@
                   <td>{{ match.location | default(value="") }}</td>
                   <td>{{ match.match_time | default(value="") }}</td>
                   <td class="text-end">
-                    <div class="d-flex justify-content-end gap-2">
-                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}">
-                        Edit
+                    <div class="match-actions">
+                      {% set is_running = match.timer_is_running or match.status == "Ongoing" %}
+                      {% if event.time_rule %}
+                      <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/toggle-timer" method="post" class="match-timer-form">
+                        <button class="btn btn-sm {% if is_running %}btn-outline-warning{% else %}btn-outline-success{% endif %}" type="submit">
+                          {% if is_running %}Stop{% else %}Start{% endif %}
+                        </button>
+                        <select class="form-select form-select-sm match-round-select" name="fight_round" {% if is_running %}disabled{% endif %} aria-label="Select round">
+                          {% for option in fight_round_options %}
+                          <option value="{{ option }}" title="Round {{ option }}" {% if match.fight_round and option == match.fight_round %}selected{% elif (not match.fight_round) and option == 1 %}selected{% endif %}>R{{ option }}</option>
+                          {% endfor %}
+                        </select>
+                      </form>
+                      {% endif %}
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}" aria-label="Edit match" title="Edit">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                          <path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                        </svg>
                       </button>
                       <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/delete" method="post">
-                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete match" title="Delete">
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                            <path d="M3 6h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                            <path d="M8 6V4h8v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                            <path d="M6 6l1 16h10l1-16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                          </svg>
+                        </button>
                       </form>
                     </div>
                   </td>
@@ -414,6 +468,114 @@
         select.addEventListener("change", updateVisibility);
         updateVisibility();
       });
+    </script>
+    <script>
+      const timers = document.querySelectorAll(".js-match-row-timer");
+
+      const pad2 = (value) => String(Math.max(0, value)).padStart(2, "0");
+      const formatHms = (seconds) => {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${pad2(hours)}:${pad2(minutes)}:${pad2(secs)}`;
+      };
+
+      const refreshStartLock = (form) => {
+        if (!form) return;
+        const btn = form.querySelector("button[type='submit']");
+        const select = form.querySelector("select[name='fight_round']");
+        if (!btn || !select) return;
+
+        const lastCompleted = Number(form.dataset.lastCompletedRound || "0");
+        const selectedRound = Number(select.value || "1");
+        const isRunning = form.dataset.running === "1";
+
+        if (isRunning) {
+          btn.disabled = false;
+          return;
+        }
+        btn.disabled = selectedRound <= lastCompleted;
+      };
+
+      const completeRound = async (form) => {
+        if (!form || form.dataset.completing === "1") return;
+        form.dataset.completing = "1";
+
+        const data = new FormData(form);
+        data.set("auto_complete", "1");
+        try {
+          await fetch(form.action, { method: "POST", body: data, credentials: "same-origin" });
+        } catch (_) {
+          // Fall back to server-side enforcement on next refresh.
+        }
+
+        form.dataset.running = "0";
+        form.dataset.completing = "0";
+        const select = form.querySelector("select[name='fight_round']");
+        if (select) {
+          const completed = Number(select.value || "1");
+          form.dataset.lastCompletedRound = String(completed);
+          select.disabled = false;
+        }
+        const btn = form.querySelector("button[type='submit']");
+        if (btn) {
+          btn.classList.remove("btn-outline-warning");
+          btn.classList.add("btn-outline-success");
+          btn.textContent = "Start";
+        }
+        const statusCell = form.closest("tr")?.querySelector(".js-match-row-status");
+        if (statusCell) {
+          statusCell.textContent = "Scheduled";
+        }
+        refreshStartLock(form);
+      };
+
+      const renderTimers = () => {
+        timers.forEach((timerEl) => {
+          const startedAt = Number(timerEl.dataset.startedAt || "0");
+          const duration = Number(timerEl.dataset.duration || "0");
+          const isRunning = timerEl.dataset.running === "1";
+
+          if (!isRunning || !startedAt || !duration) {
+            if (!startedAt) {
+              timerEl.textContent = "00:00:00";
+            } else if (duration) {
+              // Completed or stopped; show best-known elapsed.
+              const now = Math.floor(Date.now() / 1000);
+              const elapsed = Math.max(0, now - startedAt);
+              timerEl.textContent = formatHms(Math.min(duration, elapsed));
+            } else {
+              timerEl.textContent = "00:00:00";
+            }
+            return;
+          }
+
+          const now = Math.floor(Date.now() / 1000);
+          const elapsed = Math.max(0, now - startedAt);
+          const capped = Math.min(duration, elapsed);
+          timerEl.textContent = formatHms(capped);
+
+          if (elapsed >= duration) {
+            timerEl.dataset.running = "0";
+            const form = timerEl.closest("tr")?.querySelector("form.match-timer-form");
+            if (form) {
+              completeRound(form);
+            }
+          }
+        });
+      };
+
+      document.querySelectorAll("form.match-timer-form").forEach((form) => {
+        const btn = form.querySelector("button[type='submit']");
+        const select = form.querySelector("select[name='fight_round']");
+        if (!btn || !select) return;
+
+        select.addEventListener("change", () => refreshStartLock(form));
+        refreshStartLock(form);
+      });
+
+      renderTimers();
+      setInterval(renderTimers, 250);
     </script>
   </body>
 </html>

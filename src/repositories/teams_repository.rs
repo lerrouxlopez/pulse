@@ -28,18 +28,20 @@ pub fn list_members(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<
          WHERE tournament_id = ?
          ORDER BY id",
         (tournament_id,),
-        |(id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url)| TeamMember {
-            id,
-            name,
-            team_id,
-            notes,
-            weight_class,
-            weight_class_id,
-            division_id,
-            division_name: None,
-            category_ids: Vec::new(),
-            event_ids: Vec::new(),
-            photo_url,
+        |(id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url)| {
+            TeamMember {
+                id,
+                name,
+                team_id,
+                notes,
+                weight_class,
+                weight_class_id,
+                division_id,
+                division_name: None,
+                category_ids: Vec::new(),
+                event_ids: Vec::new(),
+                photo_url,
+            }
         },
     )
 }
@@ -107,11 +109,7 @@ pub fn create_member(
     Ok(conn.last_insert_id() as i64)
 }
 
-pub fn delete_member(
-    conn: &mut PooledConn,
-    tournament_id: i64,
-    id: i64,
-) -> mysql::Result<usize> {
+pub fn delete_member(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Result<usize> {
     conn.exec_drop(
         "DELETE FROM team_members WHERE id = ? AND tournament_id = ?",
         (id, tournament_id),
@@ -166,26 +164,36 @@ pub fn get_member(
     tournament_id: i64,
     member_id: i64,
 ) -> mysql::Result<Option<TeamMember>> {
-    let row: Option<(i64, String, i64, Option<String>, Option<String>, Option<i64>, Option<i64>, Option<String>)> =
-        conn.exec_first(
-            "SELECT id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url
+    let row: Option<(
+        i64,
+        String,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<i64>,
+        Option<i64>,
+        Option<String>,
+    )> = conn.exec_first(
+        "SELECT id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url
              FROM team_members
              WHERE id = ? AND tournament_id = ?",
-            (member_id, tournament_id),
-        )?;
+        (member_id, tournament_id),
+    )?;
     Ok(row.map(
-        |(id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url)| TeamMember {
-            id,
-            name,
-            team_id,
-            notes,
-            weight_class,
-            weight_class_id,
-            division_id,
-            division_name: None,
-            category_ids: Vec::new(),
-            event_ids: Vec::new(),
-            photo_url,
+        |(id, name, team_id, notes, weight_class, weight_class_id, division_id, photo_url)| {
+            TeamMember {
+                id,
+                name,
+                team_id,
+                notes,
+                weight_class,
+                weight_class_id,
+                division_id,
+                division_name: None,
+                category_ids: Vec::new(),
+                event_ids: Vec::new(),
+                photo_url,
+            }
         },
     ))
 }
@@ -250,7 +258,17 @@ pub fn list_event_competitors(
     conn: &mut PooledConn,
     tournament_id: i64,
     event_id: i64,
-) -> mysql::Result<Vec<(i64, i64, String, Option<String>, Option<i64>, Option<i64>, Option<String>)>> {
+) -> mysql::Result<
+    Vec<(
+        i64,
+        i64,
+        String,
+        Option<String>,
+        Option<i64>,
+        Option<i64>,
+        Option<String>,
+    )>,
+> {
     conn.exec_map(
         "SELECT tm.id, tm.team_id, tm.name, tm.photo_url, tm.division_id, tm.weight_class_id, tm.weight_class
          FROM team_members tm

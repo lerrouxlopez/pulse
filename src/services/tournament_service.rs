@@ -4,8 +4,8 @@ use crate::repositories::tournaments_repository;
 use crate::services::access_service;
 use crate::slug::slugify;
 use crate::state::AppState;
-use rocket::State;
 use mysql::Pool;
+use rocket::State;
 
 pub fn get_by_id(state: &State<AppState>, tournament_id: i64) -> Option<Tournament> {
     let mut conn = db::open_conn(&state.pool).ok()?;
@@ -61,7 +61,10 @@ pub fn get_by_slug_for_user(
     tournaments_repository::get_by_slug_for_user(&mut conn, slug, user_id).ok()?
 }
 
-pub fn list_access_users(state: &State<AppState>, tournament_id: i64) -> Vec<crate::models::UserSummary> {
+pub fn list_access_users(
+    state: &State<AppState>,
+    tournament_id: i64,
+) -> Vec<crate::models::UserSummary> {
     let mut conn = match db::open_conn(&state.pool) {
         Ok(conn) => conn,
         Err(_) => return Vec::new(),

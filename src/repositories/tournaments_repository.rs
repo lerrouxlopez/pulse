@@ -138,10 +138,8 @@ pub fn get_by_slug_for_user(
 }
 
 pub fn slug_exists(conn: &mut PooledConn, slug: &str) -> mysql::Result<bool> {
-    let row: Option<i64> = conn.exec_first(
-        "SELECT 1 FROM tournaments WHERE slug = ? LIMIT 1",
-        (slug,),
-    )?;
+    let row: Option<i64> =
+        conn.exec_first("SELECT 1 FROM tournaments WHERE slug = ? LIMIT 1", (slug,))?;
     Ok(row.is_some())
 }
 

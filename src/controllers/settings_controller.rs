@@ -1,15 +1,15 @@
 use crate::db;
-use crate::services::{access_service, auth_service, settings_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
+use crate::services::{access_service, auth_service, settings_service, tournament_service};
 use crate::state::AppState;
+use image::{imageops::FilterType, GenericImageView};
+use mysql::prelude::*;
 use rocket::form::{Form, FromForm};
 use rocket::fs::TempFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
-use image::{imageops::FilterType, GenericImageView};
-use mysql::prelude::*;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -101,11 +101,19 @@ pub fn settings_page(
     let access_users = access_service::list_access_users(state, tournament.id);
     let roles = access_service::list_roles(state, tournament.id);
     let permissions = access_service::permissions();
-    let can_complete_setup =
-        !divisions.is_empty() && !categories.is_empty() && !weight_classes.is_empty() && !events.is_empty();
-    let category_names: Vec<String> = categories.iter().map(|item| item.name.to_lowercase()).collect();
+    let can_complete_setup = !divisions.is_empty()
+        && !categories.is_empty()
+        && !weight_classes.is_empty()
+        && !events.is_empty();
+    let category_names: Vec<String> = categories
+        .iter()
+        .map(|item| item.name.to_lowercase())
+        .collect();
     let event_names: Vec<String> = events.iter().map(|item| item.name.to_lowercase()).collect();
-    let weight_names: Vec<String> = weight_classes.iter().map(|item| item.name.to_lowercase()).collect();
+    let weight_names: Vec<String> = weight_classes
+        .iter()
+        .map(|item| item.name.to_lowercase())
+        .collect();
 
     let active_tab = tab.unwrap_or_else(|| "divisions".to_string());
     let is_owner = access_service::is_owner(state, user.id, tournament.id);
@@ -145,14 +153,16 @@ pub fn complete_setup(
     slug: String,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let categories = settings_service::list(state, tournament.id, SettingsEntity::Category);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
     let events = settings_service::list(state, tournament.id, SettingsEntity::Event);
-    let can_complete_setup =
-        !divisions.is_empty() && !categories.is_empty() && !weight_classes.is_empty() && !events.is_empty();
+    let can_complete_setup = !divisions.is_empty()
+        && !categories.is_empty()
+        && !weight_classes.is_empty()
+        && !events.is_empty();
 
     if !can_complete_setup {
         return Ok(Redirect::to(uri!(settings_page(
@@ -188,8 +198,8 @@ pub fn create_division(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::create(
         state,
         _user.id,
@@ -221,8 +231,8 @@ pub fn update_division(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::update(
         state,
         _user.id,
@@ -254,15 +264,9 @@ pub fn delete_division(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
-    match settings_service::delete(
-        state,
-        _user.id,
-        tournament.id,
-        SettingsEntity::Division,
-        id,
-    ) {
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
+    match settings_service::delete(state, _user.id, tournament.id, SettingsEntity::Division, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             slug = slug,
             error = Option::<String>::None,
@@ -286,8 +290,8 @@ pub fn create_category(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::create(
         state,
         _user.id,
@@ -318,8 +322,8 @@ pub fn create_category_options(
     form: Form<SettingsOptionsForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     if form.options.is_empty() {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -330,8 +334,10 @@ pub fn create_category_options(
     }
 
     let existing = settings_service::list(state, tournament.id, SettingsEntity::Category);
-    let mut existing_names: Vec<String> =
-        existing.iter().map(|item| item.name.to_lowercase()).collect();
+    let mut existing_names: Vec<String> = existing
+        .iter()
+        .map(|item| item.name.to_lowercase())
+        .collect();
 
     let mut added = 0usize;
     for option in &form.options {
@@ -383,8 +389,8 @@ pub fn update_category(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::update(
         state,
         _user.id,
@@ -416,15 +422,9 @@ pub fn delete_category(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
-    match settings_service::delete(
-        state,
-        _user.id,
-        tournament.id,
-        SettingsEntity::Category,
-        id,
-    ) {
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
+    match settings_service::delete(state, _user.id, tournament.id, SettingsEntity::Category, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             slug = slug,
             error = Option::<String>::None,
@@ -448,8 +448,8 @@ pub fn create_weight_class(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::create(
         state,
         _user.id,
@@ -480,8 +480,8 @@ pub fn create_weight_options(
     form: Form<SettingsOptionsForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     if form.options.is_empty() {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -492,8 +492,10 @@ pub fn create_weight_options(
     }
 
     let existing = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
-    let mut existing_names: Vec<String> =
-        existing.iter().map(|item| item.name.to_lowercase()).collect();
+    let mut existing_names: Vec<String> = existing
+        .iter()
+        .map(|item| item.name.to_lowercase())
+        .collect();
 
     let mut added = 0usize;
     for option in &form.options {
@@ -545,8 +547,8 @@ pub fn update_weight_class(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::update(
         state,
         _user.id,
@@ -578,8 +580,8 @@ pub fn delete_weight_class(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::delete(
         state,
         _user.id,
@@ -610,8 +612,8 @@ pub fn create_event(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::create(
         state,
         _user.id,
@@ -642,8 +644,8 @@ pub fn create_event_options(
     form: Form<SettingsOptionsForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     if form.options.is_empty() {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -654,8 +656,10 @@ pub fn create_event_options(
     }
 
     let existing = settings_service::list(state, tournament.id, SettingsEntity::Event);
-    let mut existing_names: Vec<String> =
-        existing.iter().map(|item| item.name.to_lowercase()).collect();
+    let mut existing_names: Vec<String> = existing
+        .iter()
+        .map(|item| item.name.to_lowercase())
+        .collect();
 
     let mut added = 0usize;
     for option in &form.options {
@@ -707,8 +711,8 @@ pub fn update_event(
     form: Form<NameForm>,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
     match settings_service::update(
         state,
         _user.id,
@@ -740,15 +744,9 @@ pub fn delete_event(
     id: i64,
 ) -> Result<Redirect, Status> {
     let _user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, _user.id)
-        .ok_or(Status::NotFound)?;
-    match settings_service::delete(
-        state,
-        _user.id,
-        tournament.id,
-        SettingsEntity::Event,
-        id,
-    ) {
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, _user.id).ok_or(Status::NotFound)?;
+    match settings_service::delete(state, _user.id, tournament.id, SettingsEntity::Event, id) {
         Ok(_) => Ok(Redirect::to(uri!(settings_page(
             slug = slug,
             error = Option::<String>::None,
@@ -772,8 +770,8 @@ pub fn create_role(
     form: Form<RoleForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -807,8 +805,8 @@ pub fn update_role_permissions(
     form: Form<RolePermissionsForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -841,8 +839,8 @@ pub fn delete_role(
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -875,8 +873,8 @@ pub fn assign_user_role(
     form: Form<UserRoleForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -909,8 +907,8 @@ pub async fn create_user(
     mut form: Form<CreateUserForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -965,8 +963,8 @@ pub async fn update_user(
     mut form: Form<UpdateUserForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,
@@ -1001,7 +999,8 @@ pub async fn update_user(
     };
     let photo_url = uploaded_photo.as_deref().or(existing_photo.as_deref());
 
-    match access_service::update_user(state, tournament.id, id, &form.name, &form.email, photo_url) {
+    match access_service::update_user(state, tournament.id, id, &form.name, &form.email, photo_url)
+    {
         Ok(_) => {
             if let Some(role_id) = form.role_id {
                 let _ = access_service::assign_user_role(state, tournament.id, id, role_id);
@@ -1022,7 +1021,9 @@ pub async fn update_user(
     }
 }
 
-async fn save_user_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<String>, std::io::Error> {
+async fn save_user_photo(
+    file: &mut Option<TempFile<'_>>,
+) -> Result<Option<String>, std::io::Error> {
     let Some(upload) = file else {
         return Ok(None);
     };
@@ -1067,10 +1068,12 @@ async fn save_user_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<Strin
 
     let reader = image::ImageReader::new(std::io::Cursor::new(data))
         .with_guessed_format()
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image format"))?;
-    let image = reader
-        .decode()
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Unable to decode image"))?;
+        .map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image format")
+        })?;
+    let image = reader.decode().map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "Unable to decode image")
+    })?;
     let (width, height) = image.dimensions();
     let crop_size = width.min(height);
     let x = (width - crop_size) / 2;
@@ -1084,7 +1087,10 @@ async fn save_user_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<Strin
         .save(&filepath)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Unable to save image"))?;
     let _ = std::fs::remove_file(&raw_path);
-    let public_path = format!("/static/uploads/{}", filepath.file_name().unwrap().to_string_lossy());
+    let public_path = format!(
+        "/static/uploads/{}",
+        filepath.file_name().unwrap().to_string_lossy()
+    );
     Ok(Some(public_path))
 }
 
@@ -1096,8 +1102,8 @@ pub fn delete_user(
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     if !access_service::is_owner(state, user.id, tournament.id) {
         return Ok(Redirect::to(uri!(settings_page(
             slug = slug,

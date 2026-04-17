@@ -1,5 +1,7 @@
 use crate::models::MatchRow;
-use crate::services::{access_service, auth_service, match_service, scheduled_events_service, tournament_service};
+use crate::services::{
+    access_service, auth_service, match_service, scheduled_events_service, tournament_service,
+};
 use crate::state::AppState;
 use rocket::http::Cookie;
 use rocket::response::Redirect;
@@ -7,7 +9,10 @@ use rocket::State;
 use rocket_dyn_templates::{context, Template};
 
 #[get("/dashboard")]
-pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> Result<Template, Redirect> {
+pub fn dashboard(
+    state: &State<AppState>,
+    jar: &rocket::http::CookieJar<'_>,
+) -> Result<Template, Redirect> {
     let user = match auth_service::current_user(state, jar) {
         Some(user) => user,
         None => {
@@ -37,7 +42,10 @@ pub fn dashboard(state: &State<AppState>, jar: &rocket::http::CookieJar<'_>) -> 
         )));
     }
 
-    if let Some(last_slug) = jar.get("last_tournament_slug").map(|cookie| cookie.value().to_string()) {
+    if let Some(last_slug) = jar
+        .get("last_tournament_slug")
+        .map(|cookie| cookie.value().to_string())
+    {
         if tournament_service::get_by_slug_for_user(state, &last_slug, user.id).is_some() {
             return Err(Redirect::to(uri!(
                 crate::controllers::dashboard_controller::tournament_dashboard(slug = last_slug)
@@ -85,7 +93,11 @@ pub fn tournament_dashboard(
 
     let tournament = match tournament_service::get_by_slug_for_user(state, &slug, user.id) {
         Some(tournament) => tournament,
-        None => return Err(Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard))),
+        None => {
+            return Err(Redirect::to(uri!(
+                crate::controllers::dashboard_controller::dashboard
+            )))
+        }
     };
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
@@ -103,7 +115,10 @@ pub fn tournament_dashboard(
 
     let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
     if !access_service::user_has_permission(state, user.id, tournament.id, "dashboard") {
-        if allowed_pages.iter().any(|item| item.eq_ignore_ascii_case("events")) {
+        if allowed_pages
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case("events"))
+        {
             return Err(Redirect::to(uri!(
                 crate::controllers::events_controller::events_page(
                     slug = tournament.slug,
@@ -112,7 +127,10 @@ pub fn tournament_dashboard(
                 )
             )));
         }
-        if allowed_pages.iter().any(|item| item.eq_ignore_ascii_case("teams")) {
+        if allowed_pages
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case("teams"))
+        {
             return Err(Redirect::to(uri!(
                 crate::controllers::teams_controller::teams_page(
                     slug = tournament.slug,
@@ -133,7 +151,8 @@ pub fn tournament_dashboard(
 
     let tournaments = tournament_service::list_by_user(state, user.id);
     let matches = match_service::list_featured_matches();
-    let outcomes = scheduled_events_service::list_outcomes(state, user.id, tournament.id).unwrap_or_default();
+    let outcomes =
+        scheduled_events_service::list_outcomes(state, user.id, tournament.id).unwrap_or_default();
     Ok(Template::render(
         "dashboard",
         context! {

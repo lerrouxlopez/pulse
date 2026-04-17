@@ -1,8 +1,8 @@
-pub mod auth_service;
 pub mod access_service;
+pub mod auth_service;
 pub mod match_service;
-pub mod tournament_service;
+pub mod matches_service;
+pub mod scheduled_events_service;
 pub mod settings_service;
 pub mod teams_service;
-pub mod scheduled_events_service;
-pub mod matches_service;
+pub mod tournament_service;

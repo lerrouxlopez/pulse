@@ -63,7 +63,9 @@ pub fn login(
         Ok(user_id) => {
             jar.add(Cookie::new("user_id", user_id.to_string()));
             jar.remove(Cookie::from("tournament_id"));
-            Ok(Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard)))
+            Ok(Redirect::to(uri!(
+                crate::controllers::dashboard_controller::dashboard
+            )))
         }
         Err(AuthError::InvalidCredentials) => Ok(Redirect::to(uri!(auth_page(
             error = Some("Invalid email or password.".to_string()),

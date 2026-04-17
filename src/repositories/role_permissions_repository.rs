@@ -14,10 +14,7 @@ pub fn replace_for_role(
     role_id: i64,
     permissions: &[String],
 ) -> mysql::Result<()> {
-    conn.exec_drop(
-        "DELETE FROM role_permissions WHERE role_id = ?",
-        (role_id,),
-    )?;
+    conn.exec_drop("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))?;
     for permission in permissions {
         conn.exec_drop(
             "INSERT INTO role_permissions (role_id, permission_key) VALUES (?, ?)",

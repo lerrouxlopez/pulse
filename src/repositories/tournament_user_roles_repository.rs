@@ -29,11 +29,7 @@ pub fn get_user_role(
     )
 }
 
-pub fn remove_user(
-    conn: &mut PooledConn,
-    tournament_id: i64,
-    user_id: i64,
-) -> mysql::Result<()> {
+pub fn remove_user(conn: &mut PooledConn, tournament_id: i64, user_id: i64) -> mysql::Result<()> {
     conn.exec_drop(
         "DELETE FROM tournament_user_roles WHERE tournament_id = ? AND user_id = ?",
         (tournament_id, user_id),

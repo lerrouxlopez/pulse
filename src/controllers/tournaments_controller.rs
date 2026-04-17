@@ -47,11 +47,9 @@ pub fn select_tournament(
     if !user.user_type.eq_ignore_ascii_case("system") {
         return Err(Status::Unauthorized);
     }
-    let tournament = tournament_service::get_by_id_for_user(state, id, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_id_for_user(state, id, user.id).ok_or(Status::NotFound)?;
     Ok(Redirect::to(uri!(
-        crate::controllers::dashboard_controller::tournament_dashboard(
-            slug = tournament.slug
-        )
+        crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
     )))
 }

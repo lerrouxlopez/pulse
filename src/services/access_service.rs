@@ -9,7 +9,7 @@ use crate::state::AppState;
 use mysql::prelude::*;
 use rocket::State;
 
-const PERMISSIONS: [&str; 4] = ["dashboard", "events", "teams", "settings"];
+const PERMISSIONS: [&str; 5] = ["dashboard", "events", "teams", "settings", "scores"];
 
 pub fn permissions() -> Vec<String> {
     PERMISSIONS.iter().map(|item| item.to_string()).collect()
@@ -115,7 +115,8 @@ pub fn ensure_owner_role(state: &State<AppState>, tournament_id: i64) -> Option<
     {
         return Some(role_id);
     }
-    let role_id = tournament_roles_repository::create(&mut conn, tournament_id, "Owner", true).ok()?;
+    let role_id =
+        tournament_roles_repository::create(&mut conn, tournament_id, "Owner", true).ok()?;
     let perms: Vec<String> = permissions();
     let _ = role_permissions_repository::replace_for_role(&mut conn, role_id, &perms);
     Some(role_id)
@@ -134,11 +135,7 @@ pub fn assign_owner(state: &State<AppState>, tournament_id: i64, user_id: i64) -
         .is_ok()
 }
 
-pub fn create_role(
-    state: &State<AppState>,
-    tournament_id: i64,
-    name: &str,
-) -> Result<(), String> {
+pub fn create_role(state: &State<AppState>, tournament_id: i64, name: &str) -> Result<(), String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err("Role name is required.".to_string());
@@ -155,8 +152,8 @@ pub fn delete_role(
     role_id: i64,
 ) -> Result<(), String> {
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
-    let changed =
-        tournament_roles_repository::delete(&mut conn, tournament_id, role_id).map_err(|_| "Storage error.".to_string())?;
+    let changed = tournament_roles_repository::delete(&mut conn, tournament_id, role_id)
+        .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {
         return Err("Role not found or cannot delete Owner.".to_string());
     }
@@ -183,7 +180,11 @@ pub fn update_role_permissions(
     }
     let filtered: Vec<String> = permissions
         .iter()
-        .filter(|item| PERMISSIONS.iter().any(|perm| perm.eq_ignore_ascii_case(item)))
+        .filter(|item| {
+            PERMISSIONS
+                .iter()
+                .any(|perm| perm.eq_ignore_ascii_case(item))
+        })
         .map(|item| item.to_string())
         .collect();
     role_permissions_repository::replace_for_role(&mut conn, role_id, &filtered)
@@ -205,9 +206,10 @@ pub fn assign_user_role(
     }
     if let Ok(Some(tournament)) = tournaments_repository::get_by_id(&mut conn, tournament_id) {
         if tournament.user_id == user_id {
-            let owner_role_id = tournament_roles_repository::get_owner_role_id(&mut conn, tournament_id)
-                .map_err(|_| "Storage error.".to_string())?
-                .ok_or_else(|| "Owner role missing.".to_string())?;
+            let owner_role_id =
+                tournament_roles_repository::get_owner_role_id(&mut conn, tournament_id)
+                    .map_err(|_| "Storage error.".to_string())?
+                    .ok_or_else(|| "Owner role missing.".to_string())?;
             if owner_role_id != role_id {
                 return Err("Tournament owner must keep the Owner role.".to_string());
             }
@@ -244,7 +246,9 @@ pub fn create_user(
         photo_url,
     )
     .map_err(|err| match err {
-        auth_service::AuthError::EmailTaken => "Email already used for this tournament.".to_string(),
+        auth_service::AuthError::EmailTaken => {
+            "Email already used for this tournament.".to_string()
+        }
         auth_service::AuthError::Validation(message) => message,
         _ => "Storage error.".to_string(),
     })?;
@@ -255,7 +259,12 @@ pub fn create_user(
     )
     .map_err(|_| "Storage error.".to_string())?;
     if let Some(role_id) = role_id {
-        let _ = tournament_user_roles_repository::set_user_role(&mut conn, tournament_id, user_id, role_id);
+        let _ = tournament_user_roles_repository::set_user_role(
+            &mut conn,
+            tournament_id,
+            user_id,
+            role_id,
+        );
     }
     Ok(())
 }
@@ -274,11 +283,12 @@ pub fn update_user(
         return Err("Name and email are required.".to_string());
     }
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
-    let matches: Option<i64> = conn.exec_first(
-        "SELECT id FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
-        (user_id, tournament_id),
-    )
-    .map_err(|_| "Storage error.".to_string())?;
+    let matches: Option<i64> = conn
+        .exec_first(
+            "SELECT id FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
+            (user_id, tournament_id),
+        )
+        .map_err(|_| "Storage error.".to_string())?;
     if matches.is_none() {
         return Err("User not found for this tournament.".to_string());
     }
@@ -318,11 +328,7 @@ pub fn remove_user_from_tournament(
     Ok(())
 }
 
-pub fn user_permissions(
-    state: &State<AppState>,
-    user_id: i64,
-    tournament_id: i64,
-) -> Vec<String> {
+pub fn user_permissions(state: &State<AppState>, user_id: i64, tournament_id: i64) -> Vec<String> {
     if is_owner(state, user_id, tournament_id) {
         return permissions();
     }
@@ -330,10 +336,11 @@ pub fn user_permissions(
         Ok(conn) => conn,
         Err(_) => return Vec::new(),
     };
-    let role_id = match tournament_user_roles_repository::get_user_role(&mut conn, tournament_id, user_id) {
-        Ok(Some(role_id)) => role_id,
-        _ => return Vec::new(),
-    };
+    let role_id =
+        match tournament_user_roles_repository::get_user_role(&mut conn, tournament_id, user_id) {
+            Ok(Some(role_id)) => role_id,
+            _ => return Vec::new(),
+        };
     role_permissions_repository::list_by_role(&mut conn, role_id).unwrap_or_default()
 }
 
@@ -344,5 +351,7 @@ pub fn user_has_permission(
     permission: &str,
 ) -> bool {
     let perms = user_permissions(state, user_id, tournament_id);
-    perms.iter().any(|item| item.eq_ignore_ascii_case(permission))
+    perms
+        .iter()
+        .any(|item| item.eq_ignore_ascii_case(permission))
 }

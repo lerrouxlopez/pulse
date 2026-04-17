@@ -1,13 +1,15 @@
-use crate::services::{access_service, auth_service, settings_service, teams_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
+use crate::services::{
+    access_service, auth_service, settings_service, teams_service, tournament_service,
+};
 use crate::state::AppState;
+use image::{imageops::FilterType, GenericImageView};
 use rocket::form::{Form, FromForm};
 use rocket::fs::TempFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
-use image::{imageops::FilterType, GenericImageView};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -173,9 +175,21 @@ pub fn team_profile(
     let divisions_count = team.divisions.len();
     let categories_count = team.categories.len();
     let events_count = team.events.len();
-    let members_with_division = team.members.iter().filter(|m| m.division_id.is_some()).count();
-    let members_with_category = team.members.iter().filter(|m| !m.category_ids.is_empty()).count();
-    let members_with_event = team.members.iter().filter(|m| !m.event_ids.is_empty()).count();
+    let members_with_division = team
+        .members
+        .iter()
+        .filter(|m| m.division_id.is_some())
+        .count();
+    let members_with_category = team
+        .members
+        .iter()
+        .filter(|m| !m.category_ids.is_empty())
+        .count();
+    let members_with_event = team
+        .members
+        .iter()
+        .filter(|m| !m.event_ids.is_empty())
+        .count();
     let coverage_division = if total_members == 0 {
         0
     } else {
@@ -212,10 +226,7 @@ pub fn team_profile(
             }
         }
 
-        let sort_by = sort
-            .as_deref()
-            .unwrap_or("name")
-            .to_lowercase();
+        let sort_by = sort.as_deref().unwrap_or("name").to_lowercase();
         let sort_dir = dir.as_deref().unwrap_or("asc").to_lowercase();
         filtered.members.sort_by(|a, b| {
             let key_a = match sort_by.as_str() {
@@ -273,9 +284,11 @@ pub async fn create_team(
     mut form: Form<TeamForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
-    let logo_url = save_logo(&mut form.logo_file).await.map_err(|_| Status::InternalServerError)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    let logo_url = save_logo(&mut form.logo_file)
+        .await
+        .map_err(|_| Status::InternalServerError)?;
     let division_ids = form.division_ids.clone().unwrap_or_default();
     let category_ids = form.category_ids.clone().unwrap_or_default();
     let event_ids = form.event_ids.clone().unwrap_or_default();
@@ -311,9 +324,11 @@ pub async fn update_team(
     mut form: Form<TeamForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
-    let uploaded_logo = save_logo(&mut form.logo_file).await.map_err(|_| Status::InternalServerError)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    let uploaded_logo = save_logo(&mut form.logo_file)
+        .await
+        .map_err(|_| Status::InternalServerError)?;
     let logo_url = if uploaded_logo.is_some() {
         uploaded_logo
     } else {
@@ -355,8 +370,8 @@ pub fn delete_team(
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     match teams_service::delete_team(state, user.id, tournament.id, id) {
         Ok(_) => Ok(Redirect::to(uri!(teams_page(
             slug = slug,
@@ -380,8 +395,8 @@ pub async fn add_member(
     mut form: Form<MemberForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let photo_url = match save_player_photo(&mut form.photo_file).await {
         Ok(value) => value,
         Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
@@ -440,8 +455,8 @@ pub fn delete_member(
     form: Form<ReturnToForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let team_id = teams_service::get_member_team_id(state, user.id, tournament.id, member_id);
     match teams_service::delete_member(state, user.id, tournament.id, member_id) {
         Ok(_) => {
@@ -485,8 +500,8 @@ pub async fn update_member(
     mut form: Form<UpdateMemberForm<'_>>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let team_id = teams_service::get_member_team_id(state, user.id, tournament.id, member_id);
     let photo_url = match save_player_photo(&mut form.photo_file).await {
         Ok(value) => value,
@@ -571,11 +586,16 @@ async fn save_logo(file: &mut Option<TempFile<'_>>) -> Result<Option<String>, st
     let filename = format!("team-logo-{}{}", timestamp, extension);
     let filepath = uploads_dir.join(filename);
     upload.persist_to(&filepath).await?;
-    let public_path = format!("/static/uploads/{}", filepath.file_name().unwrap().to_string_lossy());
+    let public_path = format!(
+        "/static/uploads/{}",
+        filepath.file_name().unwrap().to_string_lossy()
+    );
     Ok(Some(public_path))
 }
 
-async fn save_player_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<String>, std::io::Error> {
+async fn save_player_photo(
+    file: &mut Option<TempFile<'_>>,
+) -> Result<Option<String>, std::io::Error> {
     let Some(upload) = file else {
         return Ok(None);
     };
@@ -620,10 +640,12 @@ async fn save_player_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<Str
 
     let reader = image::ImageReader::new(std::io::Cursor::new(data))
         .with_guessed_format()
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image format"))?;
-    let image = reader
-        .decode()
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Unable to decode image"))?;
+        .map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image format")
+        })?;
+    let image = reader.decode().map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "Unable to decode image")
+    })?;
     let (width, height) = image.dimensions();
     let crop_size = width.min(height);
     let x = (width - crop_size) / 2;
@@ -637,6 +659,9 @@ async fn save_player_photo(file: &mut Option<TempFile<'_>>) -> Result<Option<Str
         .save(&filepath)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Unable to save image"))?;
     let _ = std::fs::remove_file(&raw_path);
-    let public_path = format!("/static/uploads/{}", filepath.file_name().unwrap().to_string_lossy());
+    let public_path = format!(
+        "/static/uploads/{}",
+        filepath.file_name().unwrap().to_string_lossy()
+    );
     Ok(Some(public_path))
 }
