@@ -139,6 +139,54 @@
             </div>
           </div>
         </section>
+
+        <section class="panel mt-4 text-ink">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Round Scores</h3>
+            <div class="text-muted small">Scores per round by assigned judges.</div>
+          </div>
+
+          {% if round_tables and round_tables | length > 0 %}
+            {% for rt in round_tables %}
+            <div class="{% if not loop.first %}mt-4{% endif %}">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <div class="fw-semibold">Round {{ rt.round }}</div>
+                <div class="text-muted small">
+                  Totals: <span class="fw-semibold">{{ rt.red_total }}</span> - <span class="fw-semibold">{{ rt.blue_total }}</span>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-striped align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col" style="width: 64px">#</th>
+                      <th scope="col">Judge</th>
+                      <th scope="col" class="text-end">Red</th>
+                      <th scope="col" class="text-end">Blue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for j in rt.judges %}
+                    <tr>
+                      <td class="text-muted">{{ j.judge_order }}</td>
+                      <td>{{ j.judge_name }}</td>
+                      <td class="text-end fw-semibold">{{ j.red_score }}</td>
+                      <td class="text-end fw-semibold">{{ j.blue_score }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                      <td colspan="4" class="text-muted">No judges assigned.</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted">Load a match to see round-by-round judge scores.</div>
+          {% endif %}
+        </section>
       </main>
     </div>
     <script src="/static/sidebar.js"></script>

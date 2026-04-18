@@ -4,6 +4,7 @@ use crate::repositories::{
     divisions_repository, events_repository, scheduled_events_repository, tournaments_repository,
     weight_classes_repository,
 };
+use crate::repositories::{match_judges_repository, matches_repository};
 use crate::state::AppState;
 use rocket::State;
 
@@ -11,6 +12,7 @@ const CONTACT_TYPES: [&str; 2] = ["Contact", "Non-Contact"];
 const STATUSES: [&str; 4] = ["Scheduled", "Ongoing", "Finished", "Cancelled"];
 const POINT_SYSTEMS: [&str; 2] = ["5-10 points", "Must 8/10 points"];
 const TIME_RULES: [&str; 2] = ["1 round | 2 minutes", "3 rounds | 1 minute"];
+const DRAW_SYSTEMS: [&str; 2] = ["Extension", "First point Advantage"];
 
 #[derive(Debug, Clone, Copy)]
 pub struct TimeRule {
@@ -103,6 +105,7 @@ pub fn create(
     event_time: Option<&str>,
     point_system: Option<&str>,
     time_rule: Option<&str>,
+    draw_system: Option<&str>,
     division_id: Option<i64>,
     weight_class_id: Option<i64>,
 ) -> Result<(), String> {
@@ -134,6 +137,10 @@ pub fn create(
         let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
         let weight_class_id =
             weight_class_id.ok_or_else(|| "Weight class is required.".to_string())?;
+        let draw_system = draw_system
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Draw system is required.".to_string())?;
         if !POINT_SYSTEMS
             .iter()
             .any(|value| point_system.unwrap_or("").eq_ignore_ascii_case(value))
@@ -145,6 +152,12 @@ pub fn create(
             .any(|value| time_rule.unwrap_or("").eq_ignore_ascii_case(value))
         {
             return Err("Invalid time rule.".to_string());
+        }
+        if !DRAW_SYSTEMS
+            .iter()
+            .any(|value| draw_system.eq_ignore_ascii_case(value))
+        {
+            return Err("Invalid draw system.".to_string());
         }
         if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
             .map_err(|_| "Storage error.".to_string())?
@@ -167,6 +180,8 @@ pub fn create(
     if !event_ids.contains(&event_id) {
         return Err("Event is not included in this tournament.".to_string());
     }
+    let is_contact = contact_type.eq_ignore_ascii_case("Contact");
+    let draw_system_value = if is_contact { draw_system } else { None };
     scheduled_events_repository::create(
         &mut conn,
         tournament_id,
@@ -177,6 +192,7 @@ pub fn create(
         event_time,
         if is_contact { point_system } else { None },
         if is_contact { time_rule } else { None },
+        draw_system_value,
         if is_contact { division_id } else { None },
         if is_contact { weight_class_id } else { None },
     )
@@ -196,6 +212,7 @@ pub fn update(
     event_time: Option<&str>,
     point_system: Option<&str>,
     time_rule: Option<&str>,
+    draw_system: Option<&str>,
     division_id: Option<i64>,
     weight_class_id: Option<i64>,
 ) -> Result<(), String> {
@@ -230,6 +247,10 @@ pub fn update(
         let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
         let weight_class_id =
             weight_class_id.ok_or_else(|| "Weight class is required.".to_string())?;
+        let draw_system = draw_system
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Draw system is required.".to_string())?;
         if !POINT_SYSTEMS
             .iter()
             .any(|value| point_system.unwrap_or("").eq_ignore_ascii_case(value))
@@ -241,6 +262,12 @@ pub fn update(
             .any(|value| time_rule.unwrap_or("").eq_ignore_ascii_case(value))
         {
             return Err("Invalid time rule.".to_string());
+        }
+        if !DRAW_SYSTEMS
+            .iter()
+            .any(|value| draw_system.eq_ignore_ascii_case(value))
+        {
+            return Err("Invalid draw system.".to_string());
         }
         if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
             .map_err(|_| "Storage error.".to_string())?
@@ -274,6 +301,7 @@ pub fn update(
         event_time,
         if is_contact { point_system } else { None },
         if is_contact { time_rule } else { None },
+        if is_contact { draw_system } else { None },
         if is_contact { division_id } else { None },
         if is_contact { weight_class_id } else { None },
     )
@@ -296,6 +324,9 @@ pub fn delete(
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
+    // Prevent orphan matches by removing match judge scores + matches before deleting the scheduled event.
+    let _ = match_judges_repository::delete_by_scheduled_event(&mut conn, tournament_id, id);
+    let _ = matches_repository::delete_by_scheduled_event(&mut conn, tournament_id, id);
     let changed = scheduled_events_repository::delete(&mut conn, tournament_id, id)
         .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {

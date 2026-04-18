@@ -339,3 +339,25 @@ pub fn set_totals(
     )?;
     Ok(conn.affected_rows() as usize)
 }
+
+pub fn set_status_and_fight_round(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    status: &str,
+    fight_round: i64,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE matches
+         SET status = :status,
+             fight_round = :fight_round
+         WHERE id = :id AND tournament_id = :tournament_id",
+        params! {
+            "status" => status,
+            "fight_round" => fight_round,
+            "id" => match_id,
+            "tournament_id" => tournament_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
+}

@@ -116,9 +116,7 @@ pub fn tournament_login(
             jar.add(Cookie::new("user_id", user_id.to_string()));
             jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
             Ok(Redirect::to(uri!(
-                crate::controllers::dashboard_controller::tournament_dashboard(
-                    slug = tournament.slug
-                )
+                crate::controllers::dashboard_controller::dashboard
             )))
         }
         Err(AuthError::InvalidCredentials) => Ok(Redirect::to(uri!(tournament_login_page(

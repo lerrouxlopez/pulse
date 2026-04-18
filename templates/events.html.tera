@@ -100,6 +100,13 @@
                   </select>
                 </div>
                 <div class="col-md-4">
+                  <label class="form-label text-cream-60">Draw System</label>
+                  <select class="form-select" name="draw_system">
+                    <option value="Extension">Extension</option>
+                    <option value="First point Advantage">First point Advantage</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
                   <label class="form-label text-cream-60">Division</label>
                   <select class="form-select" name="division_id">
                     <option value="">Select division</option>
@@ -235,6 +242,13 @@
                           <select class="form-select" name="time_rule">
                             <option value="1 round | 2 minutes" {% if item.time_rule == "1 round | 2 minutes" %}selected{% endif %}>1 round | 2 minutes</option>
                             <option value="3 rounds | 1 minute" {% if item.time_rule == "3 rounds | 1 minute" %}selected{% endif %}>3 rounds | 1 minute</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Draw System</label>
+                          <select class="form-select" name="draw_system">
+                            <option value="Extension" {% if item.draw_system == "Extension" %}selected{% endif %}>Extension</option>
+                            <option value="First point Advantage" {% if item.draw_system == "First point Advantage" %}selected{% endif %}>First point Advantage</option>
                           </select>
                         </div>
                         <div class="col-md-4">

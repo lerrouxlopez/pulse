@@ -209,6 +209,89 @@ pub fn sum_for_match_round(
     Ok(row.unwrap_or((0, 0)))
 }
 
+pub fn count_distinct_judges_for_match_round(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+) -> mysql::Result<i64> {
+    let row: Option<i64> = conn.exec_first(
+        "SELECT COALESCE(COUNT(DISTINCT mj.judge_user_id), 0)
+         FROM match_judges mj
+         WHERE mj.tournament_id = :tournament_id AND mj.match_id = :match_id AND mj.fight_round = :fight_round",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+            "fight_round" => fight_round,
+        },
+    )?;
+    Ok(row.unwrap_or(0))
+}
+
+pub fn count_distinct_judges_with_valid_scores_for_match_round(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+    min_allowed: i32,
+    max_allowed: i32,
+) -> mysql::Result<i64> {
+    // Judges can be "assigned" to a match with placeholder 0/0 rows; treat those as not-yet-scored.
+    // For known point systems (5-10, 8/10), min_allowed > 0 cleanly distinguishes scored vs placeholder.
+    let row: Option<i64> = conn.exec_first(
+        "SELECT COALESCE(COUNT(DISTINCT mj.judge_user_id), 0)
+         FROM match_judges mj
+         WHERE mj.tournament_id = :tournament_id
+           AND mj.match_id = :match_id
+           AND mj.fight_round = :fight_round
+           AND mj.red_score >= :min_allowed AND mj.red_score <= :max_allowed
+           AND mj.blue_score >= :min_allowed AND mj.blue_score <= :max_allowed",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+            "fight_round" => fight_round,
+            "min_allowed" => min_allowed,
+            "max_allowed" => max_allowed,
+        },
+    )?;
+    Ok(row.unwrap_or(0))
+}
+
+pub fn max_fight_round_for_match(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+) -> mysql::Result<i64> {
+    let value: Option<Option<i64>> = conn.exec_first(
+        "SELECT MAX(mj.fight_round)
+         FROM match_judges mj
+         WHERE mj.tournament_id = :tournament_id AND mj.match_id = :match_id",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+        },
+    )?;
+    Ok(value.flatten().unwrap_or(1))
+}
+
+pub fn delete_rounds_gt(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "DELETE FROM match_judges
+         WHERE tournament_id = :tournament_id AND match_id = :match_id AND fight_round > :fight_round",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+            "fight_round" => fight_round,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
 pub fn next_judge_order_for_match_round(
     conn: &mut PooledConn,
     tournament_id: i64,

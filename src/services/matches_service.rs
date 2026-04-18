@@ -827,7 +827,7 @@ pub fn update_contact_match(
     location: Option<&str>,
     match_time: Option<&str>,
     winner_side: Option<&str>,
-    judges: Vec<MatchJudgeInput>,
+    judge_user_ids: Vec<i64>,
 ) -> Result<(), String> {
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
@@ -848,9 +848,29 @@ pub fn update_contact_match(
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
             .map_err(|_| "Storage error.".to_string())?;
 
-    let judge_scores = prepare_judge_scores(state, tournament_id, &judges)?;
-    let red_total_score = judge_scores.iter().map(|judge| judge.red_score).sum();
-    let blue_total_score = judge_scores.iter().map(|judge| judge.blue_score).sum();
+    let fight_round = existing.fight_round.or(existing.round).unwrap_or(1);
+    let judge_scores = prepare_judge_scores_for_match_round(
+        &mut conn,
+        state,
+        tournament_id,
+        id,
+        fight_round,
+        &judge_user_ids,
+    )?;
+    let base_rounds = scheduled
+        .as_ref()
+        .and_then(|item| {
+            crate::services::scheduled_events_service::parse_time_rule(item.time_rule.as_deref())
+        })
+        .map(|rule| rule.rounds)
+        .unwrap_or(1)
+        .max(1);
+    let max_scored_round =
+        match_judges_repository::max_fight_round_for_match(&mut conn, tournament_id, id)
+            .map_err(|_| "Storage error.".to_string())?;
+    let rounds_total = base_rounds
+        .max(existing.fight_round.unwrap_or(1))
+        .max(max_scored_round);
 
     if !(status.eq_ignore_ascii_case("Finished") || status.eq_ignore_ascii_case("Forfeit")) {
         let changed = matches_repository::update(
@@ -871,14 +891,13 @@ pub fn update_contact_match(
             existing.blue_member_id,
             existing.is_bye,
             None,
-            red_total_score,
-            blue_total_score,
+            existing.red_total_score,
+            existing.blue_total_score,
         )
         .map_err(|_| "Storage error.".to_string())?;
         if changed == 0 {
             return Err("Match not found for this event.".to_string());
         }
-        let fight_round = existing.fight_round.or(existing.round).unwrap_or(1);
         match_judges_repository::replace_for_match(
             &mut conn,
             tournament_id,
@@ -887,6 +906,15 @@ pub fn update_contact_match(
             &judge_scores,
         )
         .map_err(|_| "Storage error.".to_string())?;
+        let (sum_red, sum_blue) =
+            total_scores_for_match(&mut conn, tournament_id, id, rounds_total)?;
+        let _ = matches_repository::set_totals(
+            &mut conn,
+            tournament_id,
+            id,
+            sum_red.min(i64::from(i32::MAX)) as i32,
+            sum_blue.min(i64::from(i32::MAX)) as i32,
+        );
         if !status.eq_ignore_ascii_case("Ongoing") {
             let _ = matches_repository::set_timer_state(
                 &mut conn,
@@ -951,14 +979,13 @@ pub fn update_contact_match(
         existing.blue_member_id,
         existing.is_bye,
         winner_side_value,
-        red_total_score,
-        blue_total_score,
+        existing.red_total_score,
+        existing.blue_total_score,
     )
     .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
-    let fight_round = existing.fight_round.or(existing.round).unwrap_or(1);
     match_judges_repository::replace_for_match(
         &mut conn,
         tournament_id,
@@ -967,6 +994,14 @@ pub fn update_contact_match(
         &judge_scores,
     )
     .map_err(|_| "Storage error.".to_string())?;
+    let (sum_red, sum_blue) = total_scores_for_match(&mut conn, tournament_id, id, rounds_total)?;
+    let _ = matches_repository::set_totals(
+        &mut conn,
+        tournament_id,
+        id,
+        sum_red.min(i64::from(i32::MAX)) as i32,
+        sum_blue.min(i64::from(i32::MAX)) as i32,
+    );
     if !status.eq_ignore_ascii_case("Ongoing") {
         let _ = matches_repository::set_timer_state(
             &mut conn,
@@ -1063,6 +1098,262 @@ pub fn update_contact_match(
     }
 
     Ok(())
+}
+
+fn total_scores_for_match(
+    conn: &mut mysql::PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    rounds_total: i64,
+) -> Result<(i64, i64), String> {
+    let mut sum_red: i64 = 0;
+    let mut sum_blue: i64 = 0;
+    for r in 1..=rounds_total {
+        let (red, blue) =
+            match_judges_repository::sum_for_match_round(conn, tournament_id, match_id, r)
+                .map_err(|_| "Storage error.".to_string())?;
+        sum_red = sum_red.saturating_add(red);
+        sum_blue = sum_blue.saturating_add(blue);
+    }
+    Ok((sum_red, sum_blue))
+}
+
+pub fn try_finalize_contact_match_from_scores(
+    state: &State<AppState>,
+    actor_user_id: i64,
+    tournament_id: i64,
+    match_id: i64,
+) -> Result<Option<i64>, String> {
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access =
+        tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+
+    let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Match not found.".to_string())?;
+
+    if match_row.status.eq_ignore_ascii_case("Finished")
+        || match_row.status.eq_ignore_ascii_case("Forfeit")
+    {
+        return Ok(None);
+    }
+
+    let scheduled = scheduled_events_repository::get_by_id(
+        &mut conn,
+        tournament_id,
+        match_row.scheduled_event_id,
+    )
+    .map_err(|_| "Storage error.".to_string())?
+    .ok_or_else(|| "Event not found.".to_string())?;
+
+    if !scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Ok(None);
+    }
+
+    let point_rule = crate::services::scheduled_events_service::parse_point_rule(
+        scheduled.point_system.as_deref(),
+    )
+    .unwrap_or(crate::services::scheduled_events_service::PointRule { min: 0, max: 10 });
+    let min_allowed = point_rule.min;
+    let max_allowed = point_rule.max;
+
+    let base_rounds =
+        crate::services::scheduled_events_service::parse_time_rule(scheduled.time_rule.as_deref())
+            .map(|rule| rule.rounds)
+            .unwrap_or(1)
+            .max(1);
+    let max_scored_round =
+        match_judges_repository::max_fight_round_for_match(&mut conn, tournament_id, match_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    let current_rounds = base_rounds
+        .max(match_row.fight_round.unwrap_or(1))
+        .max(max_scored_round);
+
+    let assigned =
+        match_judges_repository::list_assigned_judges(&mut conn, tournament_id, match_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    let judge_user_ids: Vec<i64> = assigned.into_iter().map(|(id, _)| id).collect();
+    if judge_user_ids.is_empty() {
+        return Ok(None);
+    }
+
+    let judge_count = judge_user_ids.len() as i64;
+    let round_complete = |conn: &mut mysql::PooledConn, round: i64| -> Result<bool, String> {
+        let count = match_judges_repository::count_distinct_judges_with_valid_scores_for_match_round(
+            conn,
+            tournament_id,
+            match_id,
+            round,
+            min_allowed,
+            max_allowed,
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+        Ok(count == judge_count)
+    };
+
+    let is_extension = scheduled
+        .draw_system
+        .as_deref()
+        .unwrap_or("")
+        .eq_ignore_ascii_case("Extension");
+
+    // For Extension draw-system, never add (or keep) extension rounds until all default rounds are fully scored.
+    let mut base_complete = true;
+    for r in 1..=base_rounds {
+        if !round_complete(&mut conn, r)? {
+            base_complete = false;
+            break;
+        }
+    }
+
+    // If extension rounds were previously added prematurely (before completing default rounds),
+    // remove them by rolling back the match fight_round and deleting any extension score rows.
+    if is_extension
+        && !base_complete
+        && (match_row.fight_round.unwrap_or(1) > base_rounds || max_scored_round > base_rounds)
+    {
+        let _ = matches_repository::set_status_and_fight_round(
+            &mut conn,
+            tournament_id,
+            match_id,
+            &match_row.status,
+            base_rounds,
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+        let _ = match_judges_repository::delete_rounds_gt(
+            &mut conn,
+            tournament_id,
+            match_id,
+            base_rounds,
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+        let (sum_red, sum_blue) =
+            total_scores_for_match(&mut conn, tournament_id, match_id, base_rounds)?;
+        let _ = matches_repository::set_totals(
+            &mut conn,
+            tournament_id,
+            match_id,
+            sum_red.min(i64::from(i32::MAX)) as i32,
+            sum_blue.min(i64::from(i32::MAX)) as i32,
+        );
+        return Ok(None);
+    }
+
+    // Do not finalize/extend until all currently-relevant rounds are fully scored by all assigned judges.
+    for r in 1..=current_rounds {
+        if !round_complete(&mut conn, r)? {
+            return Ok(None);
+        }
+    }
+
+    let (sum_red, sum_blue) =
+        total_scores_for_match(&mut conn, tournament_id, match_id, current_rounds)?;
+    let winner_side = if sum_red > sum_blue {
+        "red"
+    } else if sum_blue > sum_red {
+        "blue"
+    } else {
+        if is_extension {
+            if !base_complete {
+                return Ok(None);
+            }
+            let next_round = current_rounds + 1;
+            let status = if match_row.status.eq_ignore_ascii_case("Ongoing") {
+                match_row.status.as_str()
+            } else {
+                "Ongoing"
+            };
+            let _ = matches_repository::set_status_and_fight_round(
+                &mut conn,
+                tournament_id,
+                match_id,
+                status,
+                next_round,
+            )
+            .map_err(|_| "Storage error.".to_string())?;
+            return Ok(Some(next_round));
+        }
+        return Ok(None);
+    };
+
+    // Reuse the existing finalize logic (bracket progression + scheduled event winner).
+    let scheduled_event_id = match_row.scheduled_event_id;
+    let location = match_row.location.clone();
+    let match_time = match_row.match_time.clone();
+    drop(conn);
+
+    update_contact_match(
+        state,
+        actor_user_id,
+        tournament_id,
+        match_id,
+        scheduled_event_id,
+        "Finished",
+        location.as_deref(),
+        match_time.as_deref(),
+        Some(winner_side),
+        judge_user_ids,
+    )?;
+
+    Ok(None)
+}
+
+fn prepare_judge_scores_for_match_round(
+    conn: &mut mysql::PooledConn,
+    state: &State<AppState>,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+    judge_user_ids: &[i64],
+) -> Result<Vec<MatchJudgeScore>, String> {
+    if judge_user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    if judge_user_ids.len() < 3 || judge_user_ids.len() > 5 {
+        return Err("Add between 3 and 5 judges.".to_string());
+    }
+
+    let judge_users = list_judges(state, tournament_id);
+    let judge_map: HashMap<i64, AccessUser> = judge_users
+        .into_iter()
+        .map(|judge| (judge.id, judge))
+        .collect();
+
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+
+    for (index, judge_user_id) in judge_user_ids.iter().copied().enumerate() {
+        if !seen.insert(judge_user_id) {
+            return Err("Duplicate judges are not allowed.".to_string());
+        }
+        let judge_user = judge_map
+            .get(&judge_user_id)
+            .ok_or_else(|| "Selected judge is invalid.".to_string())?;
+        let (red_score, blue_score) = match_judges_repository::get_score(
+            conn,
+            tournament_id,
+            match_id,
+            judge_user_id,
+            fight_round,
+        )
+        .map_err(|_| "Storage error.".to_string())?
+        .unwrap_or((0, 0));
+
+        result.push(MatchJudgeScore {
+            judge_user_id,
+            judge_name: judge_user.name.clone(),
+            judge_photo_url: judge_user.photo_url.clone(),
+            red_score,
+            blue_score,
+            judge_order: (index as i32) + 1,
+        });
+    }
+
+    Ok(result)
 }
 
 pub fn ensure_bracket_for_contact_event(

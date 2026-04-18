@@ -32,6 +32,14 @@ pub struct ScoreAdjustForm {
     pub value: Option<i32>,
 }
 
+#[derive(Serialize)]
+struct ScoreRoundTable {
+    round: i64,
+    red_total: i64,
+    blue_total: i64,
+    judges: Vec<crate::models::MatchJudgeScore>,
+}
+
 #[get("/<slug>/scores?<match_id>&<round>&<judge_id>")]
 pub fn scores_page(
     state: &State<AppState>,
@@ -112,10 +120,10 @@ pub fn scores_page(
     };
 
     for row in &match_rows {
-        let event_name = event_map
-            .get(&row.scheduled_event_id)
-            .cloned()
-            .unwrap_or_else(|| "Event".to_string());
+        // Hide orphan matches (matches whose scheduled event was deleted).
+        let Some(event_name) = event_map.get(&row.scheduled_event_id).cloned() else {
+            continue;
+        };
         let label = format!(
             "{}: {} vs {}",
             event_name,
@@ -136,9 +144,10 @@ pub fn scores_page(
         selected_match = matches_service::get_match_row(state, user.id, tournament.id, selected_id)
             .ok()
             .flatten();
-        selected_match_detail = matches_service::get_detail(state, user.id, tournament.id, selected_id)
-            .ok()
-            .flatten();
+        selected_match_detail =
+            matches_service::get_detail(state, user.id, tournament.id, selected_id)
+                .ok()
+                .flatten();
     }
 
     let judges: Vec<ScoreJudgeOption> = if can_admin {
@@ -180,56 +189,190 @@ pub fn scores_page(
         selected_judge_id = judges[0].id;
     }
 
-    let (rounds, allowed_scores, red_score, blue_score) =
-        if let Some(ref match_row) = selected_match {
-            let scheduled = scheduled_events_service::get_by_id(
-                state,
-                user.id,
-                tournament.id,
-                match_row.scheduled_event_id,
-            )
-            .ok()
-            .flatten();
-            let time_rule = scheduled.as_ref().and_then(|item| {
-                scheduled_events_service::parse_time_rule(item.time_rule.as_deref())
-            });
-            let point_rule = scheduled.as_ref().and_then(|item| {
-                scheduled_events_service::parse_point_rule(item.point_system.as_deref())
-            });
-            let rounds_total = time_rule.map(|rule| rule.rounds).unwrap_or(1);
-            let min_score = point_rule.map(|rule| rule.min).unwrap_or(0);
-            let max_score = point_rule.map(|rule| rule.max).unwrap_or(10);
-            let selected_round = round.unwrap_or(1).clamp(1, rounds_total);
-            let allowed_scores: Vec<i32> = (min_score..=max_score).collect();
+    let (rounds, allowed_scores, red_score, blue_score) = if let Some(ref match_row) =
+        selected_match
+    {
+        let scheduled = scheduled_events_service::get_by_id(
+            state,
+            user.id,
+            tournament.id,
+            match_row.scheduled_event_id,
+        )
+        .ok()
+        .flatten();
+        let time_rule = scheduled
+            .as_ref()
+            .and_then(|item| scheduled_events_service::parse_time_rule(item.time_rule.as_deref()));
+        let point_rule = scheduled.as_ref().and_then(|item| {
+            scheduled_events_service::parse_point_rule(item.point_system.as_deref())
+        });
+        let min_score = point_rule.map(|rule| rule.min).unwrap_or(0);
+        let max_score = point_rule.map(|rule| rule.max).unwrap_or(10);
+        let base_rounds = time_rule.map(|rule| rule.rounds).unwrap_or(1).max(1);
+        let is_extension = scheduled
+            .as_ref()
+            .and_then(|s| s.draw_system.as_deref())
+            .unwrap_or("")
+            .eq_ignore_ascii_case("Extension");
+        let (max_scored_round, base_complete) = if let Ok(mut conn) =
+            crate::db::open_conn(&state.pool)
+        {
+            let max_scored_round =
+                crate::repositories::match_judges_repository::max_fight_round_for_match(
+                    &mut conn,
+                    tournament.id,
+                    match_row.id,
+                )
+                .unwrap_or(1);
+            let assigned_judges =
+                crate::repositories::match_judges_repository::list_assigned_judges(
+                    &mut conn,
+                    tournament.id,
+                    match_row.id,
+                )
+                .unwrap_or_default();
+            let judge_count = assigned_judges.len() as i64;
+            let mut base_complete = judge_count > 0;
+            if base_complete {
+                for r in 1..=base_rounds {
+                    let count = crate::repositories::match_judges_repository::count_distinct_judges_with_valid_scores_for_match_round(
+                        &mut conn,
+                        tournament.id,
+                        match_row.id,
+                        r,
+                        min_score,
+                        max_score,
+                    )
+                    .unwrap_or(0);
+                    if count != judge_count {
+                        base_complete = false;
+                        break;
+                    }
+                }
+            }
 
-            let (red_score, blue_score) = {
-                let mut conn = crate::db::open_conn(&state.pool).ok();
-                let score = conn
-                    .as_mut()
-                    .and_then(|conn| {
-                        crate::repositories::match_judges_repository::get_score(
-                            conn,
+            // If extension rounds were previously added prematurely, roll them back when loading the match.
+            if is_extension
+                && !base_complete
+                && (match_row.fight_round.unwrap_or(1) > base_rounds || max_scored_round > base_rounds)
+            {
+                let _ = crate::repositories::matches_repository::set_status_and_fight_round(
+                    &mut conn,
+                    tournament.id,
+                    match_row.id,
+                    &match_row.status,
+                    base_rounds,
+                );
+                let _ = crate::repositories::match_judges_repository::delete_rounds_gt(
+                    &mut conn,
+                    tournament.id,
+                    match_row.id,
+                    base_rounds,
+                );
+                let mut sum_red: i64 = 0;
+                let mut sum_blue: i64 = 0;
+                for r in 1..=base_rounds {
+                    if let Ok((red, blue)) =
+                        crate::repositories::match_judges_repository::sum_for_match_round(
+                            &mut conn,
                             tournament.id,
                             match_row.id,
-                            selected_judge_id,
-                            selected_round,
+                            r,
                         )
-                        .ok()
-                        .flatten()
-                    })
-                    .unwrap_or((min_score, min_score));
-                score
-            };
-
-            (
-                (1..=rounds_total).collect::<Vec<i64>>(),
-                allowed_scores,
-                red_score,
-                blue_score,
-            )
+                    {
+                        sum_red = sum_red.saturating_add(red);
+                        sum_blue = sum_blue.saturating_add(blue);
+                    }
+                }
+                let _ = crate::repositories::matches_repository::set_totals(
+                    &mut conn,
+                    tournament.id,
+                    match_row.id,
+                    sum_red.min(i64::from(i32::MAX)) as i32,
+                    sum_blue.min(i64::from(i32::MAX)) as i32,
+                );
+                (base_rounds, base_complete)
+            } else {
+                (max_scored_round, base_complete)
+            }
         } else {
-            (Vec::new(), Vec::new(), 0, 0)
+            (1, false)
         };
+        let rounds_total = if is_extension && !base_complete {
+            // Hide extension rounds until all default rounds are fully scored.
+            base_rounds
+        } else {
+            base_rounds
+                .max(match_row.fight_round.unwrap_or(1))
+                .max(max_scored_round)
+        };
+        let selected_round = round.unwrap_or(1).clamp(1, rounds_total);
+        let allowed_scores: Vec<i32> = (min_score..=max_score).collect();
+
+        let (red_score, blue_score) = {
+            let mut conn = crate::db::open_conn(&state.pool).ok();
+            let score = conn
+                .as_mut()
+                .and_then(|conn| {
+                    crate::repositories::match_judges_repository::get_score(
+                        conn,
+                        tournament.id,
+                        match_row.id,
+                        selected_judge_id,
+                        selected_round,
+                    )
+                    .ok()
+                    .flatten()
+                })
+                .unwrap_or((min_score, min_score));
+            score
+        };
+
+        (
+            (1..=rounds_total).collect::<Vec<i64>>(),
+            allowed_scores,
+            red_score,
+            blue_score,
+        )
+    } else {
+        (Vec::new(), Vec::new(), 0, 0)
+    };
+
+    let round_tables: Vec<ScoreRoundTable> = if let Some(selected_id) = selected_match_id {
+        if rounds.is_empty() {
+            Vec::new()
+        } else if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+            let mut out = Vec::new();
+            for r in &rounds {
+                let judges = crate::repositories::match_judges_repository::list_by_match(
+                    &mut conn,
+                    tournament.id,
+                    selected_id,
+                    *r,
+                )
+                .unwrap_or_default();
+                let (red_total, blue_total) =
+                    crate::repositories::match_judges_repository::sum_for_match_round(
+                        &mut conn,
+                        tournament.id,
+                        selected_id,
+                        *r,
+                    )
+                    .unwrap_or((0, 0));
+                out.push(ScoreRoundTable {
+                    round: *r,
+                    red_total,
+                    blue_total,
+                    judges,
+                });
+            }
+            out
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
 
     Ok(Template::render(
         "scores",
@@ -248,6 +391,7 @@ pub fn scores_page(
             allowed_scores: allowed_scores,
             red_score: red_score,
             blue_score: blue_score,
+            round_tables: round_tables,
             active: "scores",
             is_setup: tournament.is_setup,
             allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
@@ -289,10 +433,23 @@ pub fn adjust_score(
         can_admin,
     );
 
+    // For contact matches: if all rounds have scores from all assigned judges, auto-finish the match
+    // and persist the winner.
+    let next_round = matches_service::try_finalize_contact_match_from_scores(
+        state,
+        user.id,
+        tournament.id,
+        form.match_id,
+    );
+    let redirect_round = match next_round {
+        Ok(Some(value)) => Some(value),
+        _ => Some(form.fight_round),
+    };
+
     Ok(Redirect::to(uri!(scores_page(
         slug = slug,
         match_id = Some(form.match_id),
-        round = Some(form.fight_round),
+        round = redirect_round,
         judge_id = Some(judge_user_id),
     ))))
 }

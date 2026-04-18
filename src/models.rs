@@ -100,6 +100,7 @@ pub struct ScheduledEvent {
     pub event_time: Option<String>,
     pub point_system: Option<String>,
     pub time_rule: Option<String>,
+    pub draw_system: Option<String>,
     pub division_id: Option<i64>,
     pub weight_class_id: Option<i64>,
     pub winner_member_id: Option<i64>,

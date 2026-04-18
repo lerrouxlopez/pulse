@@ -332,7 +332,7 @@
                       <div class="d-flex flex-column gap-2">
                         {% for slot in match.judge_slots %}
                         <div class="row g-2 align-items-end">
-                          <div class="col-12 col-md-6">
+                          <div class="col-12">
                             <label class="form-label text-muted mb-1">Judge {{ loop.index }}</label>
                             <select class="form-select" name="judge_{{ loop.index }}_id">
                               <option value="">Select judge</option>
@@ -344,18 +344,10 @@
                               {% endfor %}
                             </select>
                           </div>
-                          <div class="col-6 col-md-3">
-                            <label class="form-label text-muted mb-1">Red</label>
-                            <input class="form-control" type="number" min="0" name="judge_{{ loop.index }}_red_score" value="{{ slot.red_score }}" />
-                          </div>
-                          <div class="col-6 col-md-3">
-                            <label class="form-label text-muted mb-1">Blue</label>
-                            <input class="form-control" type="number" min="0" name="judge_{{ loop.index }}_blue_score" value="{{ slot.blue_score }}" />
-                          </div>
                         </div>
                         {% endfor %}
                       </div>
-                      <p class="text-muted mb-0 mt-2">Totals are the sum of all judge scores.</p>
+                      <p class="text-muted mb-0 mt-2">Judge scores are entered on the Scores page.</p>
                     </div>
 
                     <div class="col-md-6">

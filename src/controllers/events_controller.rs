@@ -22,6 +22,7 @@ pub struct EventForm {
     pub event_time: Option<String>,
     pub point_system: Option<String>,
     pub time_rule: Option<String>,
+    pub draw_system: Option<String>,
     pub division_id: Option<i64>,
     pub weight_class_id: Option<i64>,
 }
@@ -37,20 +38,10 @@ pub struct MatchForm {
     pub location: Option<String>,
     pub match_time: Option<String>,
     pub judge_1_id: Option<i64>,
-    pub judge_1_red_score: Option<i32>,
-    pub judge_1_blue_score: Option<i32>,
     pub judge_2_id: Option<i64>,
-    pub judge_2_red_score: Option<i32>,
-    pub judge_2_blue_score: Option<i32>,
     pub judge_3_id: Option<i64>,
-    pub judge_3_red_score: Option<i32>,
-    pub judge_3_blue_score: Option<i32>,
     pub judge_4_id: Option<i64>,
-    pub judge_4_red_score: Option<i32>,
-    pub judge_4_blue_score: Option<i32>,
     pub judge_5_id: Option<i64>,
-    pub judge_5_red_score: Option<i32>,
-    pub judge_5_blue_score: Option<i32>,
 }
 
 #[derive(FromForm)]
@@ -628,6 +619,11 @@ pub fn create_event(
         .as_deref()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty());
+    let draw_system = form
+        .draw_system
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     match scheduled_events_service::create(
         state,
         user.id,
@@ -639,6 +635,7 @@ pub fn create_event(
         event_time,
         point_system,
         time_rule,
+        draw_system,
         form.division_id,
         form.weight_class_id,
     ) {
@@ -686,6 +683,11 @@ pub fn update_event(
         .as_deref()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty());
+    let draw_system = form
+        .draw_system
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     match scheduled_events_service::update(
         state,
         user.id,
@@ -698,6 +700,7 @@ pub fn update_event(
         event_time,
         point_system,
         time_rule,
+        draw_system,
         form.division_id,
         form.weight_class_id,
     ) {
@@ -892,7 +895,7 @@ pub fn update_match(
                 .as_deref()
                 .map(|value| value.trim())
                 .filter(|value| !value.is_empty()),
-            build_judge_inputs(&form),
+            build_judge_assignments(&form),
         )
     } else {
         let status = match form.status.as_deref() {
@@ -1016,43 +1019,15 @@ pub fn reset_matchmaking(
     }
 }
 
-fn build_judge_inputs(form: &MatchForm) -> Vec<matches_service::MatchJudgeInput> {
-    let slots = [
-        (
-            form.judge_1_id,
-            form.judge_1_red_score,
-            form.judge_1_blue_score,
-        ),
-        (
-            form.judge_2_id,
-            form.judge_2_red_score,
-            form.judge_2_blue_score,
-        ),
-        (
-            form.judge_3_id,
-            form.judge_3_red_score,
-            form.judge_3_blue_score,
-        ),
-        (
-            form.judge_4_id,
-            form.judge_4_red_score,
-            form.judge_4_blue_score,
-        ),
-        (
-            form.judge_5_id,
-            form.judge_5_red_score,
-            form.judge_5_blue_score,
-        ),
-    ];
-
-    slots
-        .into_iter()
-        .filter_map(|(judge_user_id, red_score, blue_score)| {
-            judge_user_id.map(|judge_user_id| matches_service::MatchJudgeInput {
-                judge_user_id,
-                red_score: red_score.unwrap_or(0),
-                blue_score: blue_score.unwrap_or(0),
-            })
-        })
-        .collect()
+fn build_judge_assignments(form: &MatchForm) -> Vec<i64> {
+    [
+        form.judge_1_id,
+        form.judge_2_id,
+        form.judge_3_id,
+        form.judge_4_id,
+        form.judge_5_id,
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }

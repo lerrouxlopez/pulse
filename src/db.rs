@@ -167,6 +167,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             event_time TEXT,
             point_system TEXT,
             time_rule TEXT,
+            draw_system TEXT,
             division_id BIGINT,
             weight_class_id BIGINT,
             winner_member_id BIGINT,
@@ -243,6 +244,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     apply_match_timer_round_lock_migration(&mut conn)?;
     apply_match_judge_round_scores_migration(&mut conn)?;
     apply_scores_permission_migration(&mut conn)?;
+    apply_draw_system_migration(&mut conn)?;
 
     Ok(())
 }
@@ -501,6 +503,23 @@ fn apply_match_timer_round_lock_migration(conn: &mut PooledConn) -> mysql::Resul
 
     if !column_exists(conn, "matches", "timer_last_completed_round")? {
         conn.query_drop("ALTER TABLE matches ADD COLUMN timer_last_completed_round BIGINT")?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_draw_system_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260418_draw_system";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "scheduled_events", "draw_system")? {
+        conn.query_drop("ALTER TABLE scheduled_events ADD COLUMN draw_system TEXT")?;
     }
 
     conn.exec_drop(

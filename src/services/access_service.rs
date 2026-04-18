@@ -339,9 +339,20 @@ pub fn user_permissions(state: &State<AppState>, user_id: i64, tournament_id: i6
     let role_id =
         match tournament_user_roles_repository::get_user_role(&mut conn, tournament_id, user_id) {
             Ok(Some(role_id)) => role_id,
-            _ => return Vec::new(),
+            _ => {
+                // Dashboard is always accessible, even if no explicit role is assigned.
+                return vec!["dashboard".to_string()];
+            }
         };
-    role_permissions_repository::list_by_role(&mut conn, role_id).unwrap_or_default()
+    let mut perms =
+        role_permissions_repository::list_by_role(&mut conn, role_id).unwrap_or_default();
+
+    // Ensure dashboard is always accessible for all users.
+    if !perms.iter().any(|p| p.eq_ignore_ascii_case("dashboard")) {
+        perms.push("dashboard".to_string());
+    }
+
+    perms
 }
 
 pub fn user_has_permission(
