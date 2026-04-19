@@ -1183,15 +1183,16 @@ pub fn try_finalize_contact_match_from_scores(
 
     let judge_count = judge_user_ids.len() as i64;
     let round_complete = |conn: &mut mysql::PooledConn, round: i64| -> Result<bool, String> {
-        let count = match_judges_repository::count_distinct_judges_with_valid_scores_for_match_round(
-            conn,
-            tournament_id,
-            match_id,
-            round,
-            min_allowed,
-            max_allowed,
-        )
-        .map_err(|_| "Storage error.".to_string())?;
+        let count =
+            match_judges_repository::count_distinct_judges_with_valid_scores_for_match_round(
+                conn,
+                tournament_id,
+                match_id,
+                round,
+                min_allowed,
+                max_allowed,
+            )
+            .map_err(|_| "Storage error.".to_string())?;
         Ok(count == judge_count)
     };
 

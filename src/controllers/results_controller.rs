@@ -431,12 +431,14 @@ pub fn match_result_detail(
         let mut sum_red: i64 = 0;
         let mut sum_blue: i64 = 0;
         for r in 1..=base_rounds {
-            if let Ok((red, blue)) = crate::repositories::match_judges_repository::sum_for_match_round(
-                &mut conn,
-                tournament.id,
-                match_id,
-                r,
-            ) {
+            if let Ok((red, blue)) =
+                crate::repositories::match_judges_repository::sum_for_match_round(
+                    &mut conn,
+                    tournament.id,
+                    match_id,
+                    r,
+                )
+            {
                 sum_red = sum_red.saturating_add(red);
                 sum_blue = sum_blue.saturating_add(blue);
             }
@@ -455,9 +457,7 @@ pub fn match_result_detail(
     let rounds_total = if is_extension && !base_complete {
         base_rounds
     } else {
-        base_rounds
-            .max(match_fight_round)
-            .max(max_scored_round)
+        base_rounds.max(match_fight_round).max(max_scored_round)
     };
 
     let winner_side = match_row

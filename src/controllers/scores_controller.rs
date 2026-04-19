@@ -254,7 +254,8 @@ pub fn scores_page(
             // If extension rounds were previously added prematurely, roll them back when loading the match.
             if is_extension
                 && !base_complete
-                && (match_row.fight_round.unwrap_or(1) > base_rounds || max_scored_round > base_rounds)
+                && (match_row.fight_round.unwrap_or(1) > base_rounds
+                    || max_scored_round > base_rounds)
             {
                 let _ = crate::repositories::matches_repository::set_status_and_fight_round(
                     &mut conn,
