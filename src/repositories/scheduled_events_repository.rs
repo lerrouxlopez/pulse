@@ -22,23 +22,27 @@ fn row_to_event(row: Row) -> ScheduledEvent {
         event_time: row.get::<Option<String>, _>(6).unwrap_or(None),
         point_system: row.get::<Option<String>, _>(7).unwrap_or(None),
         time_rule: row.get::<Option<String>, _>(8).unwrap_or(None),
-        division_id: row.get::<Option<i64>, _>(9).unwrap_or(None),
-        weight_class_id: row.get::<Option<i64>, _>(10).unwrap_or(None),
-        division_name: row.get::<Option<String>, _>(11).unwrap_or(None),
-        weight_class_name: row.get::<Option<String>, _>(12).unwrap_or(None),
+        draw_system: row.get::<Option<String>, _>(9).unwrap_or(None),
+        division_id: row.get::<Option<i64>, _>(10).unwrap_or(None),
+        weight_class_id: row.get::<Option<i64>, _>(11).unwrap_or(None),
+        winner_member_id: row.get::<Option<i64>, _>(12).unwrap_or(None),
+        division_name: row.get::<Option<String>, _>(13).unwrap_or(None),
+        weight_class_name: row.get::<Option<String>, _>(14).unwrap_or(None),
         weight_class_label: None,
+        winner_name: row.get::<Option<String>, _>(15).unwrap_or(None),
     }
 }
 
 pub fn list(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Vec<ScheduledEvent>> {
     conn.exec_map(
         "SELECT se.id, se.event_id, e.name, se.contact_type, se.status, se.location, se.event_time,
-                se.point_system, se.time_rule, se.division_id, se.weight_class_id,
-                d.name, w.name
+                se.point_system, se.time_rule, se.draw_system, se.division_id, se.weight_class_id, se.winner_member_id,
+                d.name, w.name, tm.name
          FROM scheduled_events se
          JOIN events e ON e.id = se.event_id
          LEFT JOIN divisions d ON d.id = se.division_id
          LEFT JOIN weight_classes w ON w.id = se.weight_class_id
+         LEFT JOIN team_members tm ON tm.id = se.winner_member_id
          WHERE se.tournament_id = :tournament_id
          ORDER BY se.id DESC",
         params! {
@@ -55,12 +59,13 @@ pub fn get_by_id(
 ) -> mysql::Result<Option<ScheduledEvent>> {
     let row: Option<Row> = conn.exec_first(
         "SELECT se.id, se.event_id, e.name, se.contact_type, se.status, se.location, se.event_time,
-                se.point_system, se.time_rule, se.division_id, se.weight_class_id,
-                d.name, w.name
+                se.point_system, se.time_rule, se.draw_system, se.division_id, se.weight_class_id, se.winner_member_id,
+                d.name, w.name, tm.name
          FROM scheduled_events se
          JOIN events e ON e.id = se.event_id
          LEFT JOIN divisions d ON d.id = se.division_id
          LEFT JOIN weight_classes w ON w.id = se.weight_class_id
+         LEFT JOIN team_members tm ON tm.id = se.winner_member_id
          WHERE se.tournament_id = :tournament_id AND se.id = :id",
         params! {
             "tournament_id" => tournament_id,
@@ -80,12 +85,13 @@ pub fn create(
     event_time: Option<&str>,
     point_system: Option<&str>,
     time_rule: Option<&str>,
+    draw_system: Option<&str>,
     division_id: Option<i64>,
     weight_class_id: Option<i64>,
 ) -> mysql::Result<i64> {
     conn.exec_drop(
-        "INSERT INTO scheduled_events (tournament_id, event_id, contact_type, status, location, event_time, point_system, time_rule, division_id, weight_class_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO scheduled_events (tournament_id, event_id, contact_type, status, location, event_time, point_system, time_rule, draw_system, division_id, weight_class_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             tournament_id,
             event_id,
@@ -95,6 +101,7 @@ pub fn create(
             event_time,
             point_system,
             time_rule,
+            draw_system,
             division_id,
             weight_class_id,
         ),
@@ -113,13 +120,14 @@ pub fn update(
     event_time: Option<&str>,
     point_system: Option<&str>,
     time_rule: Option<&str>,
+    draw_system: Option<&str>,
     division_id: Option<i64>,
     weight_class_id: Option<i64>,
 ) -> mysql::Result<usize> {
     conn.exec_drop(
         "UPDATE scheduled_events
          SET event_id = ?, contact_type = ?, status = ?, location = ?, event_time = ?,
-             point_system = ?, time_rule = ?, division_id = ?, weight_class_id = ?
+             point_system = ?, time_rule = ?, draw_system = ?, division_id = ?, weight_class_id = ?
          WHERE id = ? AND tournament_id = ?",
         (
             event_id,
@@ -129,6 +137,7 @@ pub fn update(
             event_time,
             point_system,
             time_rule,
+            draw_system,
             division_id,
             weight_class_id,
             id,
@@ -142,6 +151,20 @@ pub fn delete(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Resu
     conn.exec_drop(
         "DELETE FROM scheduled_events WHERE id = ? AND tournament_id = ?",
         (id, tournament_id),
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
+pub fn update_status_and_winner(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    status: &str,
+    winner_member_id: Option<i64>,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE scheduled_events SET status = ?, winner_member_id = ? WHERE id = ? AND tournament_id = ?",
+        (status, winner_member_id, scheduled_event_id, tournament_id),
     )?;
     Ok(conn.affected_rows() as usize)
 }

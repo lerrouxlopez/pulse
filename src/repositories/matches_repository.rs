@@ -3,7 +3,10 @@ use mysql::prelude::*;
 use mysql::{params, PooledConn, Row};
 
 fn row_to_match(row: Row) -> ScheduledMatch {
-    let id: i64 = row.get::<Option<i64>, _>(0).unwrap_or(None).unwrap_or_default();
+    let id: i64 = row
+        .get::<Option<i64>, _>(0)
+        .unwrap_or(None)
+        .unwrap_or_default();
     let scheduled_event_id: i64 = row
         .get::<Option<i64>, _>(1)
         .unwrap_or(None)
@@ -20,10 +23,32 @@ fn row_to_match(row: Row) -> ScheduledMatch {
     let match_time: Option<String> = row.get::<Option<String>, _>(8).unwrap_or(None);
     let round: Option<i64> = row.get::<Option<i64>, _>(9).unwrap_or(None);
     let slot: Option<i64> = row.get::<Option<i64>, _>(10).unwrap_or(None);
-    let red_member_id: Option<i64> = row.get::<Option<i64>, _>(11).unwrap_or(None);
-    let blue_member_id: Option<i64> = row.get::<Option<i64>, _>(12).unwrap_or(None);
-    let is_bye: i64 = row.get::<Option<i64>, _>(13).unwrap_or(None).unwrap_or_default();
-    let winner_side: Option<String> = row.get::<Option<String>, _>(14).unwrap_or(None);
+    let fight_round: Option<i64> = row.get::<Option<i64>, _>(11).unwrap_or(None);
+    let timer_started_at: Option<i64> = row.get::<Option<i64>, _>(12).unwrap_or(None);
+    let timer_duration_seconds: Option<i64> = row
+        .get::<Option<i32>, _>(13)
+        .unwrap_or(None)
+        .map(|value| value as i64);
+    let timer_is_running: i64 = row
+        .get::<Option<i64>, _>(14)
+        .unwrap_or(None)
+        .unwrap_or_default();
+    let timer_last_completed_round: Option<i64> = row.get::<Option<i64>, _>(15).unwrap_or(None);
+    let red_member_id: Option<i64> = row.get::<Option<i64>, _>(16).unwrap_or(None);
+    let blue_member_id: Option<i64> = row.get::<Option<i64>, _>(17).unwrap_or(None);
+    let is_bye: i64 = row
+        .get::<Option<i64>, _>(18)
+        .unwrap_or(None)
+        .unwrap_or_default();
+    let winner_side: Option<String> = row.get::<Option<String>, _>(19).unwrap_or(None);
+    let red_total_score: i32 = row
+        .get::<Option<i32>, _>(20)
+        .unwrap_or(None)
+        .unwrap_or_default();
+    let blue_total_score: i32 = row
+        .get::<Option<i32>, _>(21)
+        .unwrap_or(None)
+        .unwrap_or_default();
 
     ScheduledMatch {
         id,
@@ -37,10 +62,18 @@ fn row_to_match(row: Row) -> ScheduledMatch {
         match_time,
         round,
         slot,
+        fight_round,
+        timer_started_at,
+        timer_duration_seconds,
+        timer_is_running: timer_is_running != 0,
+        timer_last_completed_round,
         red_member_id,
         blue_member_id,
         is_bye: is_bye != 0,
         winner_side,
+        red_total_score,
+        blue_total_score,
+        judge_scores: Vec::new(),
     }
 }
 
@@ -50,13 +83,35 @@ pub fn list(
     scheduled_event_id: i64,
 ) -> mysql::Result<Vec<ScheduledMatch>> {
     conn.exec_map(
-        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time,
+                round, slot, fight_round, timer_started_at, timer_duration_seconds, COALESCE(timer_is_running, 0),
+                timer_last_completed_round,
+                red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
          FROM matches
          WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id
          ORDER BY id DESC",
         params! {
             "tournament_id" => tournament_id,
             "scheduled_event_id" => scheduled_event_id,
+        },
+        row_to_match,
+    )
+}
+
+pub fn list_by_tournament(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+) -> mysql::Result<Vec<ScheduledMatch>> {
+    conn.exec_map(
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time,
+                round, slot, fight_round, timer_started_at, timer_duration_seconds, COALESCE(timer_is_running, 0),
+                timer_last_completed_round,
+                red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
+         FROM matches
+         WHERE tournament_id = :tournament_id
+         ORDER BY id DESC",
+        params! {
+            "tournament_id" => tournament_id,
         },
         row_to_match,
     )
@@ -78,10 +133,12 @@ pub fn create(
     red_member_id: Option<i64>,
     blue_member_id: Option<i64>,
     is_bye: bool,
+    red_total_score: i32,
+    blue_total_score: i32,
 ) -> mysql::Result<i64> {
     conn.exec_drop(
-        "INSERT INTO matches (tournament_id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side)
-         VALUES (:tournament_id, :scheduled_event_id, :mat, :category, :red, :blue, :status, :location, :match_time, :round, :slot, :red_member_id, :blue_member_id, :is_bye, NULL)",
+        "INSERT INTO matches (tournament_id, scheduled_event_id, mat, category, red, blue, status, location, match_time, round, slot, red_member_id, blue_member_id, is_bye, winner_side, red_total_score, blue_total_score)
+         VALUES (:tournament_id, :scheduled_event_id, :mat, :category, :red, :blue, :status, :location, :match_time, :round, :slot, :red_member_id, :blue_member_id, :is_bye, NULL, :red_total_score, :blue_total_score)",
         params! {
             "tournament_id" => tournament_id,
             "scheduled_event_id" => scheduled_event_id,
@@ -97,6 +154,8 @@ pub fn create(
             "red_member_id" => red_member_id,
             "blue_member_id" => blue_member_id,
             "is_bye" => if is_bye { 1 } else { 0 },
+            "red_total_score" => red_total_score,
+            "blue_total_score" => blue_total_score,
         },
     )?;
     Ok(conn.last_insert_id() as i64)
@@ -120,11 +179,14 @@ pub fn update(
     blue_member_id: Option<i64>,
     is_bye: bool,
     winner_side: Option<&str>,
+    red_total_score: i32,
+    blue_total_score: i32,
 ) -> mysql::Result<usize> {
     conn.exec_drop(
         "UPDATE matches
          SET mat = :mat, category = :category, red = :red, blue = :blue, status = :status, location = :location, match_time = :match_time,
-             round = :round, slot = :slot, red_member_id = :red_member_id, blue_member_id = :blue_member_id, is_bye = :is_bye, winner_side = :winner_side
+             round = :round, slot = :slot, red_member_id = :red_member_id, blue_member_id = :blue_member_id, is_bye = :is_bye, winner_side = :winner_side,
+             red_total_score = :red_total_score, blue_total_score = :blue_total_score
          WHERE id = :id AND tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id",
         params! {
             "mat" => mat,
@@ -140,6 +202,8 @@ pub fn update(
             "blue_member_id" => blue_member_id,
             "is_bye" => if is_bye { 1 } else { 0 },
             "winner_side" => winner_side,
+            "red_total_score" => red_total_score,
+            "blue_total_score" => blue_total_score,
             "id" => id,
             "tournament_id" => tournament_id,
             "scheduled_event_id" => scheduled_event_id,
@@ -180,7 +244,10 @@ pub fn get_by_id(
     id: i64,
 ) -> mysql::Result<Option<ScheduledMatch>> {
     let row: Option<Row> = conn.exec_first(
-        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time,
+                round, slot, fight_round, timer_started_at, timer_duration_seconds, COALESCE(timer_is_running, 0),
+                timer_last_completed_round,
+                red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
          FROM matches
          WHERE id = :id AND tournament_id = :tournament_id",
         params! {
@@ -199,7 +266,10 @@ pub fn get_by_round_slot(
     slot: i64,
 ) -> mysql::Result<Option<ScheduledMatch>> {
     let row: Option<Row> = conn.exec_first(
-        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time, round, slot, red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time,
+                round, slot, fight_round, timer_started_at, timer_duration_seconds, COALESCE(timer_is_running, 0),
+                timer_last_completed_round,
+                red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
          FROM matches
          WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id AND round = :round AND slot = :slot",
         params! {
@@ -210,4 +280,84 @@ pub fn get_by_round_slot(
         },
     )?;
     Ok(row.map(row_to_match))
+}
+
+pub fn set_timer_state(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    id: i64,
+    status: &str,
+    fight_round: Option<i64>,
+    timer_started_at: Option<i64>,
+    timer_duration_seconds: Option<i64>,
+    timer_is_running: bool,
+    timer_last_completed_round: Option<i64>,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE matches
+         SET status = :status,
+             fight_round = :fight_round,
+             timer_started_at = :timer_started_at,
+             timer_duration_seconds = :timer_duration_seconds,
+             timer_is_running = :timer_is_running,
+             timer_last_completed_round = :timer_last_completed_round
+         WHERE id = :id AND tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id",
+        params! {
+            "status" => status,
+            "fight_round" => fight_round,
+            "timer_started_at" => timer_started_at,
+            "timer_duration_seconds" => timer_duration_seconds,
+            "timer_is_running" => if timer_is_running { 1 } else { 0 },
+            "timer_last_completed_round" => timer_last_completed_round,
+            "id" => id,
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
+pub fn set_totals(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    red_total_score: i32,
+    blue_total_score: i32,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE matches
+         SET red_total_score = :red_total_score,
+             blue_total_score = :blue_total_score
+         WHERE id = :id AND tournament_id = :tournament_id",
+        params! {
+            "red_total_score" => red_total_score,
+            "blue_total_score" => blue_total_score,
+            "id" => match_id,
+            "tournament_id" => tournament_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
+pub fn set_status_and_fight_round(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    status: &str,
+    fight_round: i64,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE matches
+         SET status = :status,
+             fight_round = :fight_round
+         WHERE id = :id AND tournament_id = :tournament_id",
+        params! {
+            "status" => status,
+            "fight_round" => fight_round,
+            "id" => match_id,
+            "tournament_id" => tournament_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
 }

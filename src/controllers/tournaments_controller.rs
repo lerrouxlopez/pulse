@@ -17,6 +17,9 @@ pub fn create_tournament(
     form: Form<TournamentForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    if !user.user_type.eq_ignore_ascii_case("system") {
+        return Err(Status::Unauthorized);
+    }
     let name = if form.name.trim().is_empty() {
         "New Tournament"
     } else {
@@ -41,11 +44,12 @@ pub fn select_tournament(
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_id_for_user(state, id, user.id)
-        .ok_or(Status::NotFound)?;
+    if !user.user_type.eq_ignore_ascii_case("system") {
+        return Err(Status::Unauthorized);
+    }
+    let tournament =
+        tournament_service::get_by_id_for_user(state, id, user.id).ok_or(Status::NotFound)?;
     Ok(Redirect::to(uri!(
-        crate::controllers::dashboard_controller::tournament_dashboard(
-            slug = tournament.slug
-        )
+        crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
     )))
 }

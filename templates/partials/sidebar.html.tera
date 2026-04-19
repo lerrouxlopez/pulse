@@ -4,13 +4,35 @@
   <span class="fw-bold">Pulse</span>
 </div>
 <nav class="nav flex-column mt-4">
+  {% set nav_perms = allowed_pages | default(value=[]) %}
+  {% set can_dashboard = "dashboard" in nav_perms %}
+  {% set can_events = "events" in nav_perms %}
+  {% set can_teams = "teams" in nav_perms %}
+  {% set can_settings = "settings" in nav_perms %}
+  {# Scores access is granted to roles with "scores" OR "events" permission (see controller checks). #}
+  {% set can_scores = ("scores" in nav_perms) or can_events %}
   {% if is_setup %}
+    {% if can_dashboard %}
     <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/dashboard{% else %}/dashboard{% endif %}">Dashboard</a>
+    <a class="nav-link {% if active == 'results' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/results{% else %}/dashboard{% endif %}">Results</a>
+    {% endif %}
+    {% if can_events %}
     <a class="nav-link {% if active == 'events' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/events{% else %}/dashboard{% endif %}">Events</a>
+    <a class="nav-link {% if active == 'matches' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/matches{% else %}/dashboard{% endif %}">Matches</a>
+    {% endif %}
+    {% if can_scores %}
+    <a class="nav-link {% if active == 'scores' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/scores{% else %}/dashboard{% endif %}">Scores</a>
+    {% endif %}
+    {% if can_teams %}
     <a class="nav-link {% if active == 'teams' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/teams{% else %}/dashboard{% endif %}">Teams</a>
+    {% endif %}
+    {% if can_settings %}
     <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/settings{% else %}/dashboard{% endif %}">Settings</a>
+    {% endif %}
   {% else %}
+    {% if can_settings %}
     <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/settings{% else %}/dashboard{% endif %}">Settings</a>
+    {% endif %}
   {% endif %}
 </nav>
 <form action="/logout" method="post" class="mt-auto w-100">

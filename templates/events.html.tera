@@ -24,6 +24,15 @@
         {% include "partials/sidebar" %}
       </aside>
 
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
       <main class="content">
         <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
           <div>
@@ -46,9 +55,7 @@
               <label class="form-label text-cream-60">Event</label>
               <select class="form-select" name="event_id">
                 {% for option in event_options %}
-                  {% if option.id not in scheduled_ids %}
                   <option value="{{ option.id }}">{{ option.name }}</option>
-                  {% endif %}
                 {% endfor %}
               </select>
             </div>
@@ -90,6 +97,13 @@
                   <select class="form-select" name="time_rule">
                     <option value="1 round | 2 minutes">1 round | 2 minutes</option>
                     <option value="3 rounds | 1 minute">3 rounds | 1 minute</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-cream-60">Draw System</label>
+                  <select class="form-select" name="draw_system">
+                    <option value="Extension">Extension</option>
+                    <option value="First point Advantage">First point Advantage</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -231,6 +245,13 @@
                           </select>
                         </div>
                         <div class="col-md-4">
+                          <label class="form-label text-muted">Draw System</label>
+                          <select class="form-select" name="draw_system">
+                            <option value="Extension" {% if item.draw_system == "Extension" %}selected{% endif %}>Extension</option>
+                            <option value="First point Advantage" {% if item.draw_system == "First point Advantage" %}selected{% endif %}>First point Advantage</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4">
                           <label class="form-label text-muted">Division</label>
                           <select class="form-select" name="division_id">
                             <option value="">Select division</option>
@@ -269,6 +290,7 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script src="/static/sidebar.js"></script>
     <script>
       const contactSelectors = document.querySelectorAll(".js-contact-type");
       const toggleContactBlock = (select, block) => {

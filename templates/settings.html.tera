@@ -24,6 +24,15 @@
         {% include "partials/sidebar" %}
       </aside>
 
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
       <main class="content">
         <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
           <div>
@@ -31,10 +40,12 @@
             <p class="text-cream-75 mb-0">Configure {{ tournament_name }}.</p>
           </div>
           <div class="d-flex flex-column align-items-end gap-2">
+            {% if is_owner %}
             <form action="/tournaments/new" method="post">
               <input type="hidden" name="name" value="New Tournament" />
               <button class="btn btn-outline-light" type="submit">Create New Tournament</button>
             </form>
+            {% endif %}
             {% if not is_setup %}
             <form action="/{{ tournament_slug }}/settings/setup/complete" method="post" class="d-flex flex-column align-items-end">
               <button class="btn btn-primary shadow-glow" type="submit" {% if not can_complete_setup %}disabled{% endif %}>
@@ -78,8 +89,8 @@
               </button>
             </li>
             <li class="nav-item" role="presentation">
-              <button class="nav-link {% if active_tab == 'access' %}active{% endif %}" id="access-tab" data-bs-toggle="tab" data-bs-target="#access-pane" type="button" role="tab">
-                Access
+              <button class="nav-link {% if active_tab == 'roles' %}active{% endif %}" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles-pane" type="button" role="tab">
+                Roles
               </button>
             </li>
           </ul>
@@ -414,33 +425,141 @@
               </div>
             </div>
 
-            <div class="tab-pane fade {% if active_tab == 'access' %}show active{% endif %}" id="access-pane" role="tabpanel">
+            <div class="tab-pane fade {% if active_tab == 'roles' %}show active{% endif %}" id="roles-pane" role="tabpanel">
               <div class="row g-4">
                 <div class="col-lg-6">
-                  <h5 class="fw-semibold mb-2">Invite User</h5>
-                  <p class="text-cream-60">Add another user by email to access this tournament.</p>
-                  <form action="/{{ tournament_slug }}/settings/invite" method="post" class="d-flex flex-wrap gap-2">
-                    <input class="form-control flex-grow-1" name="email" placeholder="user@email.com" />
-                    <button class="btn btn-outline-light" type="submit">Send Invite</button>
+                  <h5 class="fw-semibold mb-2">Create Role</h5>
+                  <p class="text-cream-60">Define a role and then assign permissions below.</p>
+                  {% if not is_owner %}
+                  <p class="text-cream-60 mb-3">Only the owner can manage roles and permissions.</p>
+                  {% endif %}
+                  <form action="/{{ tournament_slug }}/settings/roles" method="post" class="d-flex flex-wrap gap-2 mb-4">
+                    <input class="form-control flex-grow-1" name="name" placeholder="Role name" {% if not is_owner %}disabled{% endif %} />
+                    <button class="btn btn-outline-light" type="submit" {% if not is_owner %}disabled{% endif %}>Add Role</button>
                   </form>
-                </div>
-                <div class="col-lg-6">
-                  <h5 class="fw-semibold mb-2">People With Access</h5>
+
+                  <h5 class="fw-semibold mb-2">Roles & Permissions</h5>
                   <div class="table-responsive">
                     <table class="table table-dark table-hover align-middle mb-0">
                       <thead>
                         <tr>
-                          <th>Name</th>
+                          <th>Role</th>
+                          <th>Permissions</th>
+                          <th class="text-end">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for role in roles %}
+                        <tr>
+                          <td class="fw-semibold">
+                            {{ role.name }}{% if role.is_owner %} <span class="text-cream-60">(Owner)</span>{% endif %}
+                          </td>
+                          <td>
+                            <form action="/{{ tournament_slug }}/settings/roles/{{ role.id }}/permissions" method="post" class="d-flex flex-wrap gap-2">
+                              {% for perm in permissions %}
+                              <label class="form-check form-check-inline text-cream-60 mb-0">
+                                <input class="form-check-input" type="checkbox" name="permissions" value="{{ perm }}"
+                                  {% if perm in role.permissions %}checked{% endif %}
+                                  {% if role.is_owner %}disabled{% endif %} />
+                                <span class="form-check-label text-cream-75">{{ perm | title }}</span>
+                              </label>
+                              {% endfor %}
+                              <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-light" type="submit" {% if role.is_owner or not is_owner %}disabled{% endif %}>Save</button>
+                              </div>
+                            </form>
+                          </td>
+                          <td class="text-end">
+                            <form action="/{{ tournament_slug }}/settings/roles/{{ role.id }}/delete" method="post">
+                              <button class="btn btn-sm btn-outline-danger" type="submit" {% if role.is_owner or not is_owner %}disabled{% endif %}>Delete</button>
+                            </form>
+                          </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                          <td colspan="3" class="text-cream-60">No roles yet.</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="col-lg-6">
+                  <h5 class="fw-semibold mb-2">Create Tournament User</h5>
+                  <p class="text-cream-60">Create a tournament-only account and assign a role immediately.</p>
+                  <p class="text-cream-60">Tournament users sign in at /t/{{ tournament_slug }}/login.</p>
+                  <form action="/{{ tournament_slug }}/settings/roles/users/create" method="post" enctype="multipart/form-data" class="d-flex flex-column gap-2 mb-4">
+                    <input class="form-control" name="name" placeholder="Full name" {% if not is_owner %}disabled{% endif %} />
+                    <input class="form-control" name="email" placeholder="Email" {% if not is_owner %}disabled{% endif %} />
+                    <input class="form-control" type="password" name="password" placeholder="Temporary password" {% if not is_owner %}disabled{% endif %} />
+                    <select class="form-select" name="role_id" {% if not is_owner %}disabled{% endif %}>
+                      <option value="">Select role</option>
+                      {% for role in roles %}
+                      <option value="{{ role.id }}">{{ role.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <input class="form-control" type="file" name="photo_file" accept="image/png,image/jpeg" {% if not is_owner %}disabled{% endif %} />
+                    <button class="btn btn-outline-light align-self-start" type="submit" {% if not is_owner %}disabled{% endif %}>Create Tournament User</button>
+                  </form>
+
+                  <h5 class="fw-semibold mb-2">Tournament Users</h5>
+                  <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>User</th>
+                          <th>Photo</th>
+                          <th>Email</th>
+                          <th>Role</th>
+                          <th class="text-end">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {% for user in access_users %}
                         <tr>
-                          <td>{{ user.name }}</td>
+                          <td>
+                            <input class="form-control" name="name" value="{{ user.name }}" form="user-update-{{ user.id }}" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %} />
+                          </td>
+                          <td>
+                            <div class="d-flex align-items-center gap-2">
+                              <img src="{{ user.photo_url | default(value="/static/placeholders/player-3.svg") }}" alt="User photo" class="match-avatar" />
+                              <input class="form-control form-control-sm" type="file" name="photo_file" accept="image/png,image/jpeg" form="user-update-{{ user.id }}" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %} />
+                            </div>
+                          </td>
+                          <td>
+                            <input class="form-control" name="email" value="{{ user.email }}" form="user-update-{{ user.id }}" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %} />
+                          </td>
+                          <td>
+                            <select class="form-select" name="role_id" form="user-update-{{ user.id }}" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %}>
+                              {% for role in roles %}
+                              <option value="{{ role.id }}" {% if user.role_id == role.id %}selected{% endif %}>{{ role.name }}</option>
+                              {% endfor %}
+                            </select>
+                          </td>
+                          <td class="text-end">
+                              <div class="d-flex justify-content-end gap-2">
+                                <form id="user-update-{{ user.id }}" action="/{{ tournament_slug }}/settings/roles/users/{{ user.id }}/update" method="post" enctype="multipart/form-data">
+                                  <button class="btn btn-sm btn-outline-light" type="submit" aria-label="Edit user" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                      <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l9.5-9.5zM11.207 2 3 10.207V13h2.793L14 4.793 11.207 2z"/>
+                                    </svg>
+                                  </button>
+                                </form>
+                              </div>
+                            <form action="/{{ tournament_slug }}/settings/roles/users/{{ user.id }}/delete" method="post" class="d-inline">
+                              <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete user" {% if not is_owner or user.id == tournament_owner_id %}disabled{% endif %}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6zm2 .5a.5.5 0 0 1 .5-.5h.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6z"/>
+                                  <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2H5.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1H14a1 1 0 0 1 .5 2zm-3.5 1H5v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V4z"/>
+                                </svg>
+                              </button>
+                            </form>
+                          </td>
                         </tr>
                         {% else %}
                         <tr>
-                          <td class="text-cream-60">No users added yet.</td>
+                          <td colspan="5" class="text-cream-60">No users added yet.</td>
                         </tr>
                         {% endfor %}
                       </tbody>
@@ -459,6 +578,7 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script src="/static/sidebar.js"></script>
     <script>
       const selectAllBoxes = document.querySelectorAll(".js-select-all");
       const updateSelectAllState = (group) => {

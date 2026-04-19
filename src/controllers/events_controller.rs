@@ -1,6 +1,9 @@
 use crate::models::ScheduledMatch;
-use crate::services::{auth_service, matches_service, scheduled_events_service, settings_service, tournament_service};
 use crate::services::settings_service::SettingsEntity;
+use crate::services::{
+    access_service, auth_service, matches_service, scheduled_events_service, settings_service,
+    tournament_service,
+};
 use crate::state::AppState;
 use rocket::form::{Form, FromForm};
 use rocket::http::{Cookie, CookieJar, Status};
@@ -19,6 +22,7 @@ pub struct EventForm {
     pub event_time: Option<String>,
     pub point_system: Option<String>,
     pub time_rule: Option<String>,
+    pub draw_system: Option<String>,
     pub division_id: Option<i64>,
     pub weight_class_id: Option<i64>,
 }
@@ -33,6 +37,17 @@ pub struct MatchForm {
     pub winner: Option<String>,
     pub location: Option<String>,
     pub match_time: Option<String>,
+    pub judge_1_id: Option<i64>,
+    pub judge_2_id: Option<i64>,
+    pub judge_3_id: Option<i64>,
+    pub judge_4_id: Option<i64>,
+    pub judge_5_id: Option<i64>,
+}
+
+#[derive(FromForm)]
+pub struct MatchTimerForm {
+    pub fight_round: Option<i64>,
+    pub auto_complete: Option<i32>,
 }
 
 #[get("/<slug>/events?<error>&<success>")]
@@ -63,6 +78,11 @@ pub fn events_page(
             )))
         }
     };
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
@@ -70,7 +90,6 @@ pub fn events_page(
     let event_options = settings_service::list(state, tournament.id, SettingsEntity::Event);
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
-    let scheduled_ids: Vec<i64> = events.iter().map(|item| item.event_id).collect();
     let contact_types = scheduled_events_service::contact_types();
     let statuses = scheduled_events_service::statuses();
 
@@ -84,13 +103,13 @@ pub fn events_page(
             event_options: event_options,
             divisions: divisions,
             weight_classes: weight_classes,
-            scheduled_ids: scheduled_ids,
             contact_types: contact_types,
             statuses: statuses,
             error: error,
             success: success,
             active: "events",
             is_setup: tournament.is_setup,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
         },
     ))
 }
@@ -122,6 +141,11 @@ pub fn event_profile(
             )))
         }
     };
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Err(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
 
     let event = match scheduled_events_service::get_by_id(state, user.id, tournament.id, id) {
         Ok(Some(event)) => event,
@@ -145,6 +169,39 @@ pub fn event_profile(
     }
 
     let mut matches = matches_service::list(state, user.id, tournament.id, id).unwrap_or_default();
+    let now_seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs() as i64)
+        .unwrap_or(0);
+    let mut did_auto_complete = false;
+    for item in matches.iter() {
+        if !item.timer_is_running {
+            continue;
+        }
+        let started_at = match item.timer_started_at {
+            Some(value) => value,
+            None => continue,
+        };
+        let duration = match item.timer_duration_seconds {
+            Some(value) if value > 0 => value,
+            _ => continue,
+        };
+        if now_seconds.saturating_sub(started_at) >= duration {
+            let _ = matches_service::toggle_match_timer(
+                state,
+                user.id,
+                tournament.id,
+                id,
+                item.id,
+                None,
+                true,
+            );
+            did_auto_complete = true;
+        }
+    }
+    if did_auto_complete {
+        matches = matches_service::list(state, user.id, tournament.id, id).unwrap_or_default();
+    }
     if event.contact_type.eq_ignore_ascii_case("Contact") {
         matches.sort_by(|a, b| {
             let ra = a.round.unwrap_or(1);
@@ -155,9 +212,9 @@ pub fn event_profile(
         });
     }
     let match_statuses = matches_service::statuses();
-    let competitors =
-        matches_service::list_competitors(state, user.id, tournament.id, event.id)
-            .unwrap_or_default();
+    let competitors = matches_service::list_competitors(state, user.id, tournament.id, event.id)
+        .unwrap_or_default();
+    let judge_users = matches_service::list_judges(state, tournament.id);
     let is_contact = event.contact_type.eq_ignore_ascii_case("Contact");
     let max_round = matches
         .iter()
@@ -165,6 +222,9 @@ pub fn event_profile(
         .max()
         .unwrap_or(1);
     let rounds: Vec<i64> = (1..=max_round).collect();
+    let time_rule = scheduled_events_service::parse_time_rule(event.time_rule.as_deref());
+    let max_fight_round = time_rule.map(|rule| rule.rounds).unwrap_or(1);
+    let fight_round_options: Vec<i64> = (1..=max_fight_round).collect();
 
     #[derive(Serialize, Clone)]
     struct BracketMatchView {
@@ -197,13 +257,30 @@ pub fn event_profile(
     }
 
     #[derive(Serialize)]
+    struct JudgeSlotView {
+        judge_user_id: Option<i64>,
+        red_score: i32,
+        blue_score: i32,
+    }
+
+    #[derive(Serialize)]
     struct ContactMatchRow {
         id: i64,
-        round: Option<i64>,
+        fight_round: Option<i64>,
         matchup_label: String,
         match_time: Option<String>,
         location: Option<String>,
         status: String,
+        timer_is_running: bool,
+        timer_started_at: Option<i64>,
+        timer_duration_seconds: Option<i64>,
+        timer_last_completed_round: Option<i64>,
+        winner_side: Option<String>,
+        red_label: Option<String>,
+        blue_label: Option<String>,
+        red_total_score: i32,
+        blue_total_score: i32,
+        judge_slots: Vec<JudgeSlotView>,
     }
 
     let mut competitor_map: HashMap<i64, (String, String)> = HashMap::new();
@@ -281,12 +358,7 @@ pub fn event_profile(
         }
         Some(format!(
             "{}/{}/{} {:02}:{:02}{}",
-            month,
-            day,
-            year,
-            display_hour,
-            minute,
-            suffix
+            month, day, year, display_hour, minute, suffix
         ))
     }
 
@@ -318,8 +390,12 @@ pub fn event_profile(
         let items = rounds_map.get(round).cloned().unwrap_or_default();
         for (i, item) in items.iter().enumerate() {
             let slot = item.slot.unwrap_or(0);
-            let red = item.red_member_id.and_then(|id| competitor_map.get(&id).cloned());
-            let blue = item.blue_member_id.and_then(|id| competitor_map.get(&id).cloned());
+            let red = item
+                .red_member_id
+                .and_then(|id| competitor_map.get(&id).cloned());
+            let blue = item
+                .blue_member_id
+                .and_then(|id| competitor_map.get(&id).cloned());
             let red_name = red.clone().map(|(name, _)| name).unwrap_or_default();
             let blue_name = blue.clone().map(|(name, _)| name).unwrap_or_default();
             let top_label = if *round == 1 {
@@ -359,10 +435,7 @@ pub fn event_profile(
                 String::new()
             };
             let match_number = match_number_by_id.get(&item.id).copied();
-            let formatted_time = item
-                .match_time
-                .as_deref()
-                .and_then(format_match_time);
+            let formatted_time = item.match_time.as_deref().and_then(format_match_time);
             let header_label = if item.is_bye {
                 "BYE".to_string()
             } else if *round == max_round {
@@ -409,13 +482,36 @@ pub fn event_profile(
                 y: center_y - box_total_height / 2.0,
             });
 
+            let mut judge_slots: Vec<JudgeSlotView> = Vec::new();
+            for order in 1..=5 {
+                let existing_judge = item
+                    .judge_scores
+                    .iter()
+                    .find(|judge| judge.judge_order == order);
+                judge_slots.push(JudgeSlotView {
+                    judge_user_id: existing_judge.map(|judge| judge.judge_user_id),
+                    red_score: existing_judge.map(|judge| judge.red_score).unwrap_or(0),
+                    blue_score: existing_judge.map(|judge| judge.blue_score).unwrap_or(0),
+                });
+            }
+
             contact_match_rows.push(ContactMatchRow {
                 id: item.id,
-                round: item.round,
+                fight_round: item.fight_round,
                 matchup_label,
                 match_time: item.match_time.clone(),
                 location: item.location.clone(),
                 status: item.status.clone(),
+                timer_is_running: item.timer_is_running,
+                timer_started_at: item.timer_started_at,
+                timer_duration_seconds: item.timer_duration_seconds,
+                timer_last_completed_round: item.timer_last_completed_round,
+                winner_side: item.winner_side.clone(),
+                red_label: item.red.clone(),
+                blue_label: item.blue.clone(),
+                red_total_score: item.red_total_score,
+                blue_total_score: item.blue_total_score,
+                judge_slots,
             });
         }
     }
@@ -468,6 +564,7 @@ pub fn event_profile(
             matches: matches,
             match_statuses: match_statuses,
             competitors: competitors,
+            judge_users: judge_users,
             is_contact: is_contact,
             rounds: rounds,
             bracket_rounds: bracket_rounds,
@@ -484,8 +581,10 @@ pub fn event_profile(
             champion_width: champion_width,
             champion_height: champion_height,
             contact_match_rows: contact_match_rows,
+            fight_round_options: fight_round_options,
             active: "events",
             is_setup: tournament.is_setup,
+            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
         },
     ))
 }
@@ -498,10 +597,18 @@ pub fn create_event(
     form: Form<EventForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
-    let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let event_time = form.event_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    let location = form
+        .location
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let event_time = form
+        .event_time
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     let point_system = form
         .point_system
         .as_deref()
@@ -509,6 +616,11 @@ pub fn create_event(
         .filter(|value| !value.is_empty());
     let time_rule = form
         .time_rule
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let draw_system = form
+        .draw_system
         .as_deref()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty());
@@ -523,6 +635,7 @@ pub fn create_event(
         event_time,
         point_system,
         time_rule,
+        draw_system,
         form.division_id,
         form.weight_class_id,
     ) {
@@ -548,10 +661,18 @@ pub fn update_event(
     form: Form<EventForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
-    let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let event_time = form.event_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    let location = form
+        .location
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let event_time = form
+        .event_time
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     let point_system = form
         .point_system
         .as_deref()
@@ -559,6 +680,11 @@ pub fn update_event(
         .filter(|value| !value.is_empty());
     let time_rule = form
         .time_rule
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let draw_system = form
+        .draw_system
         .as_deref()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty());
@@ -574,6 +700,7 @@ pub fn update_event(
         event_time,
         point_system,
         time_rule,
+        draw_system,
         form.division_id,
         form.weight_class_id,
     ) {
@@ -598,8 +725,8 @@ pub fn delete_event(
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     match scheduled_events_service::delete(state, user.id, tournament.id, id) {
         Ok(_) => Ok(Redirect::to(uri!(events_page(
             slug = slug,
@@ -623,8 +750,8 @@ pub fn create_match(
     form: Form<MatchForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let event = scheduled_events_service::get_by_id(state, user.id, tournament.id, event_id)
         .map_err(|_| Status::InternalServerError)?
         .ok_or(Status::NotFound)?;
@@ -634,12 +761,36 @@ pub fn create_match(
             id = event_id
         ))));
     }
-    let mat = form.mat.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let category = form.category.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let red = form.red.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let blue = form.blue.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let match_time = form.match_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
+    let mat = form
+        .mat
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let category = form
+        .category
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let red = form
+        .red
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let blue = form
+        .blue
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let location = form
+        .location
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let match_time = form
+        .match_time
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     let status = match form.status.as_deref() {
         Some(value) if !value.trim().is_empty() => value.trim(),
         _ => {
@@ -666,6 +817,8 @@ pub fn create_match(
         None,
         None,
         false,
+        0,
+        0,
     ) {
         Ok(_) => Ok(Redirect::to(uri!(event_profile(
             slug = slug,
@@ -689,33 +842,61 @@ pub fn update_match(
     form: Form<MatchForm>,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let event = scheduled_events_service::get_by_id(state, user.id, tournament.id, event_id)
         .map_err(|_| Status::InternalServerError)?
         .ok_or(Status::NotFound)?;
-    let mat = form.mat.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let category = form.category.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let red = form.red.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let blue = form.blue.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let location = form.location.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
-    let match_time = form.match_time.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty());
+    let mat = form
+        .mat
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let category = form
+        .category
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let red = form
+        .red
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let blue = form
+        .blue
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let location = form
+        .location
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let match_time = form
+        .match_time
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
     let result = if event.contact_type.eq_ignore_ascii_case("Contact") {
-            let status = match form.status.as_deref() {
-                Some(value) if !value.trim().is_empty() => value.trim(),
-                _ => "Scheduled",
-            };
-            matches_service::update_contact_match(
-                state,
-                user.id,
-                tournament.id,
-                id,
-                event_id,
-                status,
-                location,
-                match_time,
-                form.winner.as_deref().map(|value| value.trim()).filter(|value| !value.is_empty()),
-            )
+        let status = match form.status.as_deref() {
+            Some(value) if !value.trim().is_empty() => value.trim(),
+            _ => "Scheduled",
+        };
+        matches_service::update_contact_match(
+            state,
+            user.id,
+            tournament.id,
+            id,
+            event_id,
+            status,
+            location,
+            match_time,
+            form.winner
+                .as_deref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty()),
+            build_judge_assignments(&form),
+        )
     } else {
         let status = match form.status.as_deref() {
             Some(value) if !value.trim().is_empty() => value.trim(),
@@ -754,6 +935,40 @@ pub fn update_match(
     }
 }
 
+#[post("/<slug>/events/<event_id>/matches/<id>/toggle-timer", data = "<form>")]
+pub fn toggle_match_timer(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    event_id: i64,
+    id: i64,
+    form: Form<MatchTimerForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Ok(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
+
+    let _ = matches_service::toggle_match_timer(
+        state,
+        user.id,
+        tournament.id,
+        event_id,
+        id,
+        form.fight_round,
+        form.auto_complete.unwrap_or(0) != 0,
+    );
+
+    Ok(Redirect::to(uri!(event_profile(
+        slug = slug,
+        id = event_id
+    ))))
+}
+
 #[post("/<slug>/events/<event_id>/matches/<id>/delete")]
 pub fn delete_match(
     state: &State<AppState>,
@@ -763,8 +978,8 @@ pub fn delete_match(
     id: i64,
 ) -> Result<Redirect, Status> {
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
-    let tournament = tournament_service::get_by_slug_for_user(state, &slug, user.id)
-        .ok_or(Status::NotFound)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     match matches_service::delete(state, user.id, tournament.id, id) {
         Ok(_) => Ok(Redirect::to(uri!(event_profile(
             slug = slug,
@@ -776,4 +991,43 @@ pub fn delete_match(
             success = Option::<String>::None
         )))),
     }
+}
+
+#[post("/<slug>/events/<id>/reset-matchmaking")]
+pub fn reset_matchmaking(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Ok(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
+
+    match matches_service::reset_automatic_matchmaking(state, user.id, tournament.id, id) {
+        Ok(_) => Ok(Redirect::to(uri!(event_profile(slug = slug, id = id)))),
+        Err(message) => Ok(Redirect::to(uri!(events_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None
+        )))),
+    }
+}
+
+fn build_judge_assignments(form: &MatchForm) -> Vec<i64> {
+    [
+        form.judge_1_id,
+        form.judge_2_id,
+        form.judge_3_id,
+        form.judge_4_id,
+        form.judge_5_id,
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }

@@ -24,6 +24,15 @@
         {% include "partials/sidebar" %}
       </aside>
 
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
       <main class="content">
         <header class="d-flex align-items-center justify-content-between mb-4">
           <div>
@@ -34,10 +43,12 @@
           </div>
           <div class="d-flex align-items-center gap-2">
             <span class="badge text-bg-light text-ink">Day 1 • 6 Mats • Live</span>
+            {% if is_system_user %}
             <form action="/tournaments/new" method="post">
               <input type="hidden" name="name" value="New Tournament" />
               <button class="btn btn-outline-light btn-sm" type="submit">Create New Tournament</button>
             </form>
+            {% endif %}
           </div>
         </header>
 
@@ -73,30 +84,73 @@
 
         <section class="panel mb-4">
           <div class="d-flex align-items-center justify-content-between mb-3">
-            <h3 class="fw-semibold mb-0">Live & Upcoming Matches</h3>
+            <h3 class="fw-semibold mb-0">Leaderboard</h3>
             <button class="btn btn-outline-light btn-sm">View all</button>
           </div>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0">
               <thead>
                 <tr>
-                  <th scope="col">Mat</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Red</th>
-                  <th scope="col">Blue</th>
+                  <th scope="col">Rank</th>
+                  <th scope="col">Wins</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Division</th>
+                  <th scope="col">Class</th>
+                </tr>
+              </thead>
+              <tbody>
+
+                <tr>
+                  <td>1</td>
+                  <td>20</td>
+                  <td>Ping Lacson</td>
+                  <td>Manila Gays</td>
+                  <td>Male Division</td>
+                  <td>Bantam Weight</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>17</td>
+                  <td>Alex Rivera</td>
+                  <td>Dragon Dojo</td>
+                  <td>Male Division</td>
+                  <td>Bantam Weight</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="fw-semibold mb-0">Event Results</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">Event</th>
+                  <th scope="col">Division</th>
+                  <th scope="col">Weight Class</th>
+                  <th scope="col">Winner</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {% for row in matches %}
+                {% for item in outcomes %}
                 <tr>
-                  <td>{{ row.mat }}</td>
-                  <td>{{ row.category }}</td>
-                  <td>{{ row.red }}</td>
-                  <td>{{ row.blue }}</td>
+                  <td>{{ item.event_name }}</td>
+                  <td>{{ item.division_name | default(value="") }}</td>
+                  <td>{{ item.weight_class_label | default(value="") }}</td>
+                  <td>{{ item.winner_name | default(value="") }}</td>
                   <td>
-                    <span class="pill {{ row.status_class }}">{{ row.status }}</span>
+                    <span class="pill status-ok">{{ item.status }}</span>
                   </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="text-cream-60">No outcomes yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -159,10 +213,12 @@
               </table>
             </div>
 
+            {% if is_system_user %}
             <form action="/tournaments/new" method="post" class="d-flex flex-wrap gap-2">
               <input class="form-control flex-grow-1" name="name" placeholder="New tournament name" />
               <button class="btn btn-primary" type="submit">Create Tournament</button>
             </form>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -175,5 +231,6 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script src="/static/sidebar.js"></script>
   </body>
 </html>

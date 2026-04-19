@@ -1,6 +1,6 @@
-use rocket_dyn_templates::{context, Template};
+use rocket::response::Redirect;
 
 #[get("/")]
-pub fn index() -> Template {
-    Template::render("index", context! {})
+pub fn index() -> Redirect {
+    Redirect::to(uri!(crate::controllers::dashboard_controller::dashboard))
 }

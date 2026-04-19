@@ -39,8 +39,14 @@ pub fn delete(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Resu
     Ok(conn.affected_rows() as usize)
 }
 
-pub fn get_by_id(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Result<Option<NamedItem>> {
-    let row: Option<(i64, String)> =
-        conn.exec_first("SELECT id, name FROM divisions WHERE id = ? AND tournament_id = ?", (id, tournament_id))?;
+pub fn get_by_id(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    id: i64,
+) -> mysql::Result<Option<NamedItem>> {
+    let row: Option<(i64, String)> = conn.exec_first(
+        "SELECT id, name FROM divisions WHERE id = ? AND tournament_id = ?",
+        (id, tournament_id),
+    )?;
     Ok(row.map(|(id, name)| NamedItem { id, name }))
 }

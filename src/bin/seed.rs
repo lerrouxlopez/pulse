@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let db_url =
-        env::var("DATABASE_URL").unwrap_or_else(|_| "mysql://root@127.0.0.1:3306/pulse-db".to_string());
+    let db_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "mysql://root@127.0.0.1:3306/pulse-db".to_string());
     let pool = Pool::new(db_url.as_str())?;
     let mut conn = pool.get_conn()?;
 
@@ -83,10 +83,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let team_division_set: HashSet<i64> = conn
             .exec_map(
-            "SELECT division_id FROM team_divisions WHERE tournament_id = ? AND team_id = ?",
-            (tournament_id, team_id),
-            |division_id| division_id,
-        )?
+                "SELECT division_id FROM team_divisions WHERE tournament_id = ? AND team_id = ?",
+                (tournament_id, team_id),
+                |division_id| division_id,
+            )?
             .into_iter()
             .collect();
         for (division_id, _) in &divisions {
@@ -100,10 +100,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let team_category_set: HashSet<i64> = conn
             .exec_map(
-            "SELECT category_id FROM team_categories WHERE tournament_id = ? AND team_id = ?",
-            (tournament_id, team_id),
-            |category_id| category_id,
-        )?
+                "SELECT category_id FROM team_categories WHERE tournament_id = ? AND team_id = ?",
+                (tournament_id, team_id),
+                |category_id| category_id,
+            )?
             .into_iter()
             .collect();
         for (cat_id, _) in &categories {
@@ -117,10 +117,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let team_event_set: HashSet<i64> = conn
             .exec_map(
-            "SELECT event_id FROM team_events WHERE tournament_id = ? AND team_id = ?",
-            (tournament_id, team_id),
-            |event_id| event_id,
-        )?
+                "SELECT event_id FROM team_events WHERE tournament_id = ? AND team_id = ?",
+                (tournament_id, team_id),
+                |event_id| event_id,
+            )?
             .into_iter()
             .collect();
         for (event_id, _) in &events {
@@ -135,14 +135,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut player_index: usize = 0;
     let first_names = vec![
-        "Aiden", "Bella", "Carlos", "Diana", "Eli", "Farah", "Gabe", "Hana", "Ivan", "Jade",
-        "Kai", "Luna", "Milo", "Nina", "Owen", "Pia", "Quinn", "Ravi", "Sora", "Tara", "Uma",
-        "Vince", "Wren", "Xavi", "Yara", "Zane", "Maya", "Jules", "Rina", "Theo",
+        "Aiden", "Bella", "Carlos", "Diana", "Eli", "Farah", "Gabe", "Hana", "Ivan", "Jade", "Kai",
+        "Luna", "Milo", "Nina", "Owen", "Pia", "Quinn", "Ravi", "Sora", "Tara", "Uma", "Vince",
+        "Wren", "Xavi", "Yara", "Zane", "Maya", "Jules", "Rina", "Theo",
     ];
     let last_names = vec![
-        "Lopez", "Santos", "Cruz", "Reyes", "Garcia", "Nguyen", "Kim", "Patel", "Torres", "Diaz",
-        "Lee", "Wong", "Khan", "Tan", "Lim", "Singh", "Park", "Choi", "Ahmed", "Ali", "Bautista",
-        "Castro", "Delos Reyes", "Flores", "Hernandez", "Ibrahim", "Jensen", "King",
+        "Lopez",
+        "Santos",
+        "Cruz",
+        "Reyes",
+        "Garcia",
+        "Nguyen",
+        "Kim",
+        "Patel",
+        "Torres",
+        "Diaz",
+        "Lee",
+        "Wong",
+        "Khan",
+        "Tan",
+        "Lim",
+        "Singh",
+        "Park",
+        "Choi",
+        "Ahmed",
+        "Ali",
+        "Bautista",
+        "Castro",
+        "Delos Reyes",
+        "Flores",
+        "Hernandez",
+        "Ibrahim",
+        "Jensen",
+        "King",
     ];
 
     for (team_idx, team_id) in team_ids.iter().enumerate() {
@@ -174,7 +199,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let first = &first_names[(player_index - 1) % first_names.len()];
             let last = &last_names[(player_index - 1 + team_idx) % last_names.len()];
             let name = format!("{} {}", first, last);
-            let (weight_id, weight_name) = &weight_classes[(player_index - 1) % weight_classes.len()];
+            let (weight_id, weight_name) =
+                &weight_classes[(player_index - 1) % weight_classes.len()];
             let division_id = divisions[(player_index - 1) % divisions.len()].0;
             conn.exec_drop(
                 "UPDATE team_members SET name = ?, weight_class = ?, weight_class_id = ?, division_id = ? WHERE id = ? AND tournament_id = ?",
@@ -219,6 +245,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    println!("Seeded tournament {} with realistic team and player names.", tournament_id);
+    println!(
+        "Seeded tournament {} with realistic team and player names.",
+        tournament_id
+    );
     Ok(())
 }
