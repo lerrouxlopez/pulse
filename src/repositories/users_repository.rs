@@ -1,4 +1,4 @@
-use crate::models::{CurrentUser, UserAuth, UserSummary};
+use crate::models::{CurrentUser, UserAuth};
 use mysql::prelude::*;
 use mysql::PooledConn;
 
@@ -54,12 +54,6 @@ pub fn find_tournament_user_by_email(
         (email, tournament_id),
     )?;
     Ok(row.map(|(id, password_hash)| UserAuth { id, password_hash }))
-}
-
-pub fn find_user_by_id(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Option<UserSummary>> {
-    let row: Option<(i64, String)> =
-        conn.exec_first("SELECT id, name FROM users WHERE id = ?", (user_id,))?;
-    Ok(row.map(|(id, name)| UserSummary { id, name }))
 }
 
 pub fn find_user_profile_by_id(

@@ -209,25 +209,6 @@ pub fn sum_for_match_round(
     Ok(row.unwrap_or((0, 0)))
 }
 
-pub fn count_distinct_judges_for_match_round(
-    conn: &mut PooledConn,
-    tournament_id: i64,
-    match_id: i64,
-    fight_round: i64,
-) -> mysql::Result<i64> {
-    let row: Option<i64> = conn.exec_first(
-        "SELECT COALESCE(COUNT(DISTINCT mj.judge_user_id), 0)
-         FROM match_judges mj
-         WHERE mj.tournament_id = :tournament_id AND mj.match_id = :match_id AND mj.fight_round = :fight_round",
-        params! {
-            "tournament_id" => tournament_id,
-            "match_id" => match_id,
-            "fight_round" => fight_round,
-        },
-    )?;
-    Ok(row.unwrap_or(0))
-}
-
 pub fn count_distinct_judges_with_valid_scores_for_match_round(
     conn: &mut PooledConn,
     tournament_id: i64,

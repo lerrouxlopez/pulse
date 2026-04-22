@@ -30,13 +30,6 @@ fn is_contact_first_point_advantage(scheduled: &crate::models::ScheduledEvent) -
 }
 
 #[derive(Clone)]
-pub struct MatchJudgeInput {
-    pub judge_user_id: i64,
-    pub red_score: i32,
-    pub blue_score: i32,
-}
-
-#[derive(Clone)]
 pub struct PendingPauseVoteStatus {
     pub fight_round: i64,
     pub pause_seq: i64,
@@ -1436,52 +1429,6 @@ pub fn set_or_adjust_judge_score(
         let _ = try_finalize_non_contact_event_from_scores(state, actor_user_id, tournament_id, match_id);
     }
 
-    Ok(())
-}
-
-pub fn update_schedule(
-    state: &State<AppState>,
-    user_id: i64,
-    tournament_id: i64,
-    id: i64,
-    scheduled_event_id: i64,
-    location: Option<&str>,
-    match_time: Option<&str>,
-) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
-    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|err| format!("Storage error: {err}"))?;
-    if !has_access {
-        return Err("Tournament not found.".to_string());
-    }
-    let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
-        .map_err(|err| format!("Storage error: {err}"))?
-        .ok_or_else(|| "Match not found for this event.".to_string())?;
-    let changed = matches_repository::update(
-        &mut conn,
-        tournament_id,
-        id,
-        scheduled_event_id,
-        existing.mat.as_deref(),
-        existing.category.as_deref(),
-        existing.red.as_deref(),
-        existing.blue.as_deref(),
-        &existing.status,
-        location,
-        match_time,
-        existing.round,
-        existing.slot,
-        existing.red_member_id,
-        existing.blue_member_id,
-        existing.is_bye,
-        existing.winner_side.as_deref(),
-        existing.red_total_score,
-        existing.blue_total_score,
-    )
-    .map_err(|err| format!("Storage error: {err}"))?;
-    if changed == 0 {
-        return Err("Match not found for this event.".to_string());
-    }
     Ok(())
 }
 
@@ -2940,45 +2887,3 @@ fn populate_judge_scores(
     Ok(())
 }
 
-fn prepare_judge_scores(
-    state: &State<AppState>,
-    tournament_id: i64,
-    judges: &[MatchJudgeInput],
-) -> Result<Vec<MatchJudgeScore>, String> {
-    if judges.is_empty() {
-        return Ok(Vec::new());
-    }
-    if judges.len() < 3 || judges.len() > 5 {
-        return Err("Add between 3 and 5 judges.".to_string());
-    }
-
-    let judge_users = list_judges(state, tournament_id);
-    let judge_map: HashMap<i64, AccessUser> = judge_users
-        .into_iter()
-        .map(|judge| (judge.id, judge))
-        .collect();
-    let mut seen = std::collections::HashSet::new();
-    let mut result = Vec::new();
-
-    for (index, judge) in judges.iter().enumerate() {
-        if !seen.insert(judge.judge_user_id) {
-            return Err("Duplicate judges are not allowed.".to_string());
-        }
-        let judge_user = judge_map
-            .get(&judge.judge_user_id)
-            .ok_or_else(|| "Selected judge is invalid.".to_string())?;
-        if judge.red_score < 0 || judge.blue_score < 0 {
-            return Err("Judge scores must be zero or higher.".to_string());
-        }
-        result.push(MatchJudgeScore {
-            judge_user_id: judge.judge_user_id,
-            judge_name: judge_user.name.clone(),
-            judge_photo_url: judge_user.photo_url.clone(),
-            red_score: judge.red_score,
-            blue_score: judge.blue_score,
-            judge_order: (index as i32) + 1,
-        });
-    }
-
-    Ok(result)
-}

@@ -25,12 +25,6 @@ pub struct MatchRow {
 }
 
 #[derive(Serialize)]
-pub struct UserSummary {
-    pub id: i64,
-    pub name: String,
-}
-
-#[derive(Serialize)]
 pub struct CurrentUser {
     pub id: i64,
     pub name: String,
