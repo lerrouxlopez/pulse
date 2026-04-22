@@ -1,12 +1,14 @@
 use crate::models::MatchRow;
+use crate::repositories::dashboard_repository;
 use crate::services::{
-    access_service, auth_service, match_service, scheduled_events_service, tournament_service,
+    access_service, auth_service, scheduled_events_service, tournament_service,
 };
 use crate::state::AppState;
 use rocket::http::Cookie;
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
+use serde::Serialize;
 
 #[get("/dashboard")]
 pub fn dashboard(
@@ -153,24 +155,167 @@ pub fn tournament_dashboard(
     }
 
     let tournaments = tournament_service::list_by_user(state, user.id);
-    let matches = match_service::list_featured_matches();
     let outcomes =
         scheduled_events_service::list_outcomes(state, user.id, tournament.id).unwrap_or_default();
+    let outcomes_count = outcomes.len();
+
+    #[derive(Serialize)]
+    struct Series {
+        labels: Vec<String>,
+        values: Vec<u64>,
+    }
+
+    #[derive(Serialize)]
+    struct Activity {
+        labels: Vec<String>,
+        events: Vec<u64>,
+        matches: Vec<u64>,
+    }
+
+    #[derive(Serialize)]
+    struct DashboardJson {
+        events_by_status: Series,
+        events_by_type: Series,
+        matches_by_status: Series,
+        matches_series: Series,
+        activity: Activity,
+    }
+
+    let mut conn = match crate::db::open_conn(&state.pool) {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Ok(Template::render(
+                "dashboard_tournament",
+                context! {
+                    name: user.name,
+                    tournament_name: tournament.name,
+                    tournament_slug: tournament.slug,
+                    active: "dashboard",
+                    allowed_pages: allowed_pages,
+                    sidebar_nav_items: sidebar_nav_items,
+                    counts: dashboard_repository::DashboardCounts { teams: 0, members: 0, scheduled_events: 0, matches: 0 },
+                    counts_events_finished: 0,
+                    counts_matches_finished: 0,
+                    outcomes: outcomes,
+                    outcomes_count: outcomes_count,
+                    upcoming: Vec::<dashboard_repository::UpcomingScheduledEventRow>::new(),
+                    recent_matches: Vec::<dashboard_repository::RecentMatchRow>::new(),
+                    dashboard_json: serde_json::to_string(&DashboardJson {
+                        events_by_status: Series { labels: vec![], values: vec![] },
+                        events_by_type: Series { labels: vec![], values: vec![] },
+                        matches_by_status: Series { labels: vec![], values: vec![] },
+                        matches_series: Series { labels: vec![], values: vec![] },
+                        activity: Activity { labels: vec![], events: vec![], matches: vec![] },
+                    }).unwrap_or_else(|_| "{}".to_string()),
+                    error: format!("Storage error: {err}"),
+                },
+            ));
+        }
+    };
+
+    let counts = dashboard_repository::counts(&mut conn, tournament.id).unwrap_or(
+        dashboard_repository::DashboardCounts {
+            teams: 0,
+            members: 0,
+            scheduled_events: 0,
+            matches: 0,
+        },
+    );
+
+    let events_by_status = dashboard_repository::scheduled_events_by_status(&mut conn, tournament.id)
+        .unwrap_or_default();
+    let events_by_type =
+        dashboard_repository::scheduled_events_by_contact_type(&mut conn, tournament.id)
+            .unwrap_or_default();
+    let matches_by_status = dashboard_repository::matches_by_status(&mut conn, tournament.id)
+        .unwrap_or_default();
+
+    let events_series = dashboard_repository::scheduled_events_timeseries(&mut conn, tournament.id, 30)
+        .unwrap_or_default();
+    let matches_series = dashboard_repository::matches_timeseries(&mut conn, tournament.id, 30)
+        .unwrap_or_default();
+
+    let upcoming = dashboard_repository::upcoming_scheduled_events(&mut conn, tournament.id, 8)
+        .unwrap_or_default();
+    let recent_matches = dashboard_repository::recent_matches(&mut conn, tournament.id, 10)
+        .unwrap_or_default();
+
+    let counts_events_finished = events_by_status
+        .iter()
+        .find(|(status, _)| status.eq_ignore_ascii_case("Finished"))
+        .map(|(_, count)| *count)
+        .unwrap_or(0) as i64;
+    let counts_matches_finished = matches_by_status
+        .iter()
+        .find(|(status, _)| status.eq_ignore_ascii_case("Finished"))
+        .map(|(_, count)| *count)
+        .unwrap_or(0) as i64;
+
+    let split = |rows: Vec<(String, u64)>| -> Series {
+        let mut labels = Vec::new();
+        let mut values = Vec::new();
+        for (k, v) in rows {
+            labels.push(k);
+            values.push(v);
+        }
+        Series { labels, values }
+    };
+
+    let events_series_split = split(events_series.clone());
+    let matches_series_split = split(matches_series.clone());
+
+    let activity_labels = if events_series_split.labels.len() >= matches_series_split.labels.len() {
+        events_series_split.labels.clone()
+    } else {
+        matches_series_split.labels.clone()
+    };
+    let mut events_map = std::collections::HashMap::<String, u64>::new();
+    for (day, count) in events_series {
+        events_map.insert(day, count);
+    }
+    let mut matches_map = std::collections::HashMap::<String, u64>::new();
+    for (day, count) in matches_series {
+        matches_map.insert(day, count);
+    }
+    let mut activity_events = Vec::new();
+    let mut activity_matches = Vec::new();
+    for day in &activity_labels {
+        activity_events.push(*events_map.get(day).unwrap_or(&0));
+        activity_matches.push(*matches_map.get(day).unwrap_or(&0));
+    }
+
+    let dashboard_json = serde_json::to_string(&DashboardJson {
+        events_by_status: split(events_by_status),
+        events_by_type: split(events_by_type),
+        matches_by_status: split(matches_by_status),
+        matches_series: matches_series_split,
+        activity: Activity {
+            labels: activity_labels,
+            events: activity_events,
+            matches: activity_matches,
+        },
+    })
+    .unwrap_or_else(|_| "{}".to_string());
+
     Ok(Template::render(
-        "dashboard",
+        "dashboard_tournament",
         context! {
             name: user.name,
-            matches: matches,
+            tournament_name: tournament.name,
+            tournament_slug: tournament.slug,
             outcomes: outcomes,
-            is_setup: tournament.is_setup,
+            outcomes_count: outcomes_count,
+            counts: counts,
+            counts_events_finished: counts_events_finished,
+            counts_matches_finished: counts_matches_finished,
+            upcoming: upcoming,
+            recent_matches: recent_matches,
             active: "dashboard",
             tournaments: tournaments,
-            show_tournament_modal: false,
-            current_tournament_name: tournament.name,
-            tournament_slug: tournament.slug,
             allowed_pages: allowed_pages,
             sidebar_nav_items: sidebar_nav_items,
-            is_system_user: user.user_type.eq_ignore_ascii_case("system"),
+            dashboard_json: dashboard_json,
+            error: Option::<String>::None,
         },
     ))
 }
