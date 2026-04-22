@@ -67,14 +67,19 @@ fn rocket() -> _ {
                 controllers::events_controller::update_event,
                 controllers::events_controller::delete_event,
                 controllers::events_controller::create_match,
+                controllers::events_controller::set_non_contact_event_judges,
                 controllers::events_controller::update_match,
                 controllers::events_controller::toggle_match_timer,
+                controllers::events_controller::toggle_match_timer_pause,
                 controllers::events_controller::delete_match,
                 controllers::events_controller::reset_matchmaking,
                 controllers::matches_controller::matches_page,
                 controllers::matches_controller::match_page,
                 controllers::matches_controller::match_live,
+                controllers::matches_controller::toggle_match_timer,
+                controllers::matches_controller::toggle_match_timer_pause,
                 controllers::scores_controller::scores_page,
+                controllers::scores_controller::submit_pause_vote,
                 controllers::scores_controller::adjust_score,
                 controllers::results_controller::results_page,
                 controllers::results_controller::match_result_detail,
@@ -85,9 +90,12 @@ fn rocket() -> _ {
                 controllers::teams_controller::create_team,
                 controllers::teams_controller::update_team,
                 controllers::teams_controller::delete_team,
+                controllers::teams_controller::download_import_template,
+                controllers::teams_controller::import_teams_data,
                 controllers::teams_controller::add_member,
                 controllers::teams_controller::delete_member,
-                controllers::teams_controller::update_member
+                controllers::teams_controller::update_member,
+                controllers::teams_controller::bulk_assign_members
             ],
         )
         .mount("/static", FileServer::from(relative!("static")))

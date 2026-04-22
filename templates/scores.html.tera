@@ -88,7 +88,85 @@
           {% set blue_photo_url = selected_match_detail.blue_photo_url %}
         {% endif %}
 
+        {% if is_pause_vote_scoring %}
+        <section class="panel mb-4 text-ink">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h3 class="fw-semibold mb-0">Pause Vote</h3>
+            {% if pending_pause_vote %}
+            <div class="text-muted small">
+              Round {{ pending_pause_vote.fight_round }} · Vote #{{ pending_pause_vote.pause_seq }} ·
+              {{ pending_pause_vote.votes_cast }}/{{ pending_pause_vote.judge_count }} votes
+            </div>
+            {% endif %}
+          </div>
+
+          {% if pending_pause_vote %}
+            <div class="mt-3">
+              {% if pending_pause_vote.my_vote %}
+              <div class="text-muted small mb-2">Your vote: <span class="fw-semibold">{{ pending_pause_vote.my_vote | upper }}</span></div>
+              {% else %}
+              <div class="text-muted small mb-2">Select which side earns 1 point for this pause.</div>
+              {% endif %}
+
+              <div class="d-flex flex-wrap gap-2">
+                <form action="/{{ tournament_slug }}/scores/pause-vote" method="post">
+                  <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
+                  <input type="hidden" name="side" value="red" />
+                  {% if can_admin %}
+                  <input type="hidden" name="judge_user_id" value="{{ selected_judge_id }}" />
+                  {% endif %}
+                  <button class="btn btn-outline-danger" type="submit">Vote Red</button>
+                </form>
+
+                <form action="/{{ tournament_slug }}/scores/pause-vote" method="post">
+                  <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
+                  <input type="hidden" name="side" value="blue" />
+                  {% if can_admin %}
+                  <input type="hidden" name="judge_user_id" value="{{ selected_judge_id }}" />
+                  {% endif %}
+                  <button class="btn btn-outline-primary" type="submit">Vote Blue</button>
+                </form>
+              </div>
+
+              {% if pending_pause_vote.is_complete %}
+              <div class="text-muted small mt-2">All votes are in. The match can be resumed.</div>
+              {% else %}
+              <div class="text-muted small mt-2">Match cannot resume until all assigned judges vote.</div>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="text-muted mt-2">No pending vote. Voting opens when the match timer is paused.</div>
+          {% endif %}
+        </section>
+        {% endif %}
+
+        {% if not is_pause_vote_scoring %}
         <section class="panel text-ink">
+          {% if is_non_contact_performance %}
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+              <img src="{{ red_photo_url }}" alt="{{ red_name }}" class="match-fighter-photo score-corner-photo" />
+              <div class="min-w-0">
+                <h3 class="fw-semibold mb-0">Performance</h3>
+                <div class="text-secondary text-truncate">{{ red_name }}</div>
+              </div>
+            </div>
+            <form action="/{{ tournament_slug }}/scores/adjust" method="post" class="d-flex align-items-center gap-2 flex-wrap">
+              <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
+              <input type="hidden" name="fight_round" value="{{ selected_round }}" />
+              <input type="hidden" name="side" value="red" />
+              {% if can_admin %}
+              <input type="hidden" name="judge_user_id" value="{{ selected_judge_id }}" />
+              {% endif %}
+              <select class="form-select w-auto" name="value" aria-label="Performance score">
+                {% for value in allowed_scores %}
+                <option value="{{ value }}" {% if value == red_score %}selected{% endif %}>{{ value }}</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-outline-light" type="submit">Set</button>
+            </form>
+          </div>
+          {% else %}
           <div class="row g-4">
             <div class="col-12 col-lg-6">
               <div class="d-flex align-items-center gap-3 mb-3">
@@ -138,8 +216,11 @@
               </form>
             </div>
           </div>
+          {% endif %}
         </section>
+        {% endif %}
 
+        {% if not is_pause_vote_scoring %}
         <section class="panel mt-4 text-ink">
           <div class="d-flex align-items-center justify-content-between mb-3">
             <h3 class="fw-semibold mb-0">Round Scores</h3>
@@ -152,7 +233,11 @@
               <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                 <div class="fw-semibold">Round {{ rt.round }}</div>
                 <div class="text-muted small">
+                  {% if is_non_contact_performance %}
+                  Total: <span class="fw-semibold">{{ rt.red_total }}</span>
+                  {% else %}
                   Totals: <span class="fw-semibold">{{ rt.red_total }}</span> - <span class="fw-semibold">{{ rt.blue_total }}</span>
+                  {% endif %}
                 </div>
               </div>
               <div class="table-responsive">
@@ -161,8 +246,12 @@
                     <tr>
                       <th scope="col" style="width: 64px">#</th>
                       <th scope="col">Judge</th>
+                      {% if is_non_contact_performance %}
+                      <th scope="col" class="text-end">Score</th>
+                      {% else %}
                       <th scope="col" class="text-end">Red</th>
                       <th scope="col" class="text-end">Blue</th>
+                      {% endif %}
                     </tr>
                   </thead>
                   <tbody>
@@ -170,12 +259,16 @@
                     <tr>
                       <td class="text-muted">{{ j.judge_order }}</td>
                       <td>{{ j.judge_name }}</td>
+                      {% if is_non_contact_performance %}
+                      <td class="text-end fw-semibold">{{ j.red_score }}</td>
+                      {% else %}
                       <td class="text-end fw-semibold">{{ j.red_score }}</td>
                       <td class="text-end fw-semibold">{{ j.blue_score }}</td>
+                      {% endif %}
                     </tr>
                     {% else %}
                     <tr>
-                      <td colspan="4" class="text-muted">No judges assigned.</td>
+                      <td colspan="{% if is_non_contact_performance %}3{% else %}4{% endif %}" class="text-muted">No judges assigned.</td>
                     </tr>
                     {% endfor %}
                   </tbody>
@@ -187,6 +280,7 @@
             <div class="text-muted">Load a match to see round-by-round judge scores.</div>
           {% endif %}
         </section>
+        {% endif %}
       </main>
     </div>
     <script src="/static/sidebar.js"></script>

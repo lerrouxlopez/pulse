@@ -1,11 +1,19 @@
-use crate::services::{access_service, auth_service, matches_service, tournament_service};
+use crate::services::{
+    access_service, auth_service, matches_service, scheduled_events_service, tournament_service,
+};
 use crate::state::AppState;
+use rocket::form::{Form, FromForm};
 use rocket::http::Status;
 use rocket::http::{Cookie, CookieJar};
 use rocket::response::Redirect;
 use rocket::serde::json::Json;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
+
+#[derive(FromForm)]
+pub struct MatchTimerForm {
+    pub fight_round: Option<i64>,
+}
 
 #[get("/<slug>/matches")]
 pub fn matches_page(
@@ -33,7 +41,9 @@ pub fn matches_page(
             )))
         }
     };
-    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+    if !(access_service::user_has_permission(state, user.id, tournament.id, "events")
+        || access_service::user_has_permission(state, user.id, tournament.id, "match_timer"))
+    {
         return Err(Redirect::to(uri!(
             crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
         )));
@@ -57,12 +67,13 @@ pub fn matches_page(
     ))
 }
 
-#[get("/<slug>/matches/<id>")]
+#[get("/<slug>/matches/<id>?<error>")]
 pub fn match_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
     id: i64,
+    error: Option<String>,
 ) -> Result<Template, Redirect> {
     let user = match auth_service::current_user(state, jar) {
         Some(user) => user,
@@ -84,7 +95,9 @@ pub fn match_page(
             )))
         }
     };
-    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+    let can_view = access_service::user_has_permission(state, user.id, tournament.id, "events")
+        || access_service::user_has_permission(state, user.id, tournament.id, "match_timer");
+    if !can_view {
         return Err(Redirect::to(uri!(
             crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
         )));
@@ -101,6 +114,23 @@ pub fn match_page(
         }
     };
 
+    let scheduled = scheduled_events_service::get_by_id(
+        state,
+        user.id,
+        tournament.id,
+        match_detail.event_id,
+    )
+    .ok()
+    .flatten();
+    let time_rule = scheduled
+        .as_ref()
+        .and_then(|item| scheduled_events_service::parse_time_rule(item.time_rule.as_deref()));
+    let rounds_total = time_rule.map(|rule| rule.rounds).unwrap_or(1).max(1);
+    let fight_round_options: Vec<i64> = (1..=rounds_total).collect();
+
+    let can_control_timer = access_service::is_owner(state, user.id, tournament.id)
+        || access_service::user_has_permission(state, user.id, tournament.id, "match_timer");
+
     Ok(Template::render(
         "match",
         context! {
@@ -108,6 +138,10 @@ pub fn match_page(
             tournament_name: tournament.name,
             tournament_slug: tournament.slug,
             match_item: match_detail,
+            fight_round_options: fight_round_options,
+            rounds_total: rounds_total,
+            can_control_timer: can_control_timer,
+            error: error,
             active: "matches",
             is_setup: tournament.is_setup,
             allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
@@ -125,7 +159,9 @@ pub fn match_live(
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament =
         tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
-    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+    if !(access_service::user_has_permission(state, user.id, tournament.id, "events")
+        || access_service::user_has_permission(state, user.id, tournament.id, "match_timer"))
+    {
         return Err(Status::Forbidden);
     }
 
@@ -159,4 +195,92 @@ pub fn match_live(
         .map_err(|_| Status::InternalServerError)?
         .ok_or(Status::NotFound)?;
     Ok(Json(detail))
+}
+
+#[post("/<slug>/matches/<id>/toggle-timer", data = "<form>")]
+pub fn toggle_match_timer(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+    form: Form<MatchTimerForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    let can_control = access_service::is_owner(state, user.id, tournament.id)
+        || access_service::user_has_permission(state, user.id, tournament.id, "match_timer");
+    if !can_control {
+        return Err(Status::Forbidden);
+    }
+
+    let row = matches_service::get_match_row(state, user.id, tournament.id, id)
+        .map_err(|_| Status::InternalServerError)?
+        .ok_or(Status::NotFound)?;
+
+    let result = matches_service::toggle_match_timer(
+        state,
+        user.id,
+        tournament.id,
+        row.scheduled_event_id,
+        row.id,
+        form.fight_round,
+        false,
+    );
+
+    if let Err(message) = result {
+        return Ok(Redirect::to(uri!(match_page(
+            slug = slug,
+            id = id,
+            error = Some(message)
+        ))));
+    }
+
+    Ok(Redirect::to(uri!(match_page(
+        slug = slug,
+        id = id,
+        error = Option::<String>::None
+    ))))
+}
+
+#[post("/<slug>/matches/<id>/toggle-pause")]
+pub fn toggle_match_timer_pause(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    let can_control = access_service::is_owner(state, user.id, tournament.id)
+        || access_service::user_has_permission(state, user.id, tournament.id, "match_timer");
+    if !can_control {
+        return Err(Status::Forbidden);
+    }
+
+    let row = matches_service::get_match_row(state, user.id, tournament.id, id)
+        .map_err(|_| Status::InternalServerError)?
+        .ok_or(Status::NotFound)?;
+
+    let result = matches_service::toggle_match_timer_pause(
+        state,
+        user.id,
+        tournament.id,
+        row.scheduled_event_id,
+        row.id,
+    );
+    if let Err(message) = result {
+        return Ok(Redirect::to(uri!(match_page(
+            slug = slug,
+            id = id,
+            error = Some(message)
+        ))));
+    }
+
+    Ok(Redirect::to(uri!(match_page(
+        slug = slug,
+        id = id,
+        error = Option::<String>::None
+    ))))
 }

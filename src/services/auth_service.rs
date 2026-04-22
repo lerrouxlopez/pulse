@@ -18,7 +18,7 @@ pub enum AuthError {
     Storage,
 }
 
-fn hash_password(password: &str) -> Result<String, AuthError> {
+pub(crate) fn hash_password(password: &str) -> Result<String, AuthError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
     argon2

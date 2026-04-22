@@ -42,7 +42,11 @@
           <a class="btn btn-outline-light" href="/{{ tournament_slug }}/matches">Back to Matches</a>
         </header>
 
-        <section class="match-live-shell">
+        {% if error %}
+        <div class="alert alert-danger" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <section class="match-live-shell{% if match_item.event_type != "Contact" %} is-non-contact{% endif %}">
           <div class="match-live-head">
             <span id="js-live-status" class="pill {{ match_item.status_class }}">{{ match_item.status }}</span>
             <h2 class="match-live-title">{{ match_item.event_name }}</h2>
@@ -63,7 +67,9 @@
             </div>
 
             <div class="match-live-center">
+              {% if match_item.event_type == "Contact" %}
               <div class="match-live-vs">VS</div>
+              {% endif %}
               <div id="js-live-round" class="match-live-round">{{ match_item.round_label }}</div>
               <div
                 id="js-live-timer"
@@ -75,8 +81,50 @@
               >
                 --:--
               </div>
+
+              {% if can_control_timer %}
+              {% set is_running = match_item.timer_is_running or match_item.status == "Ongoing" %}
+              {% set last_completed = match_item.timer_last_completed_round | default(value=0) %}
+              {% set selected_round = match_item.fight_round | default(value=1) %}
+              <div class="match-live-controls" aria-label="Match timer controls">
+                {% if match_item.status == "Ongoing" %}
+                <form action="/{{ tournament_slug }}/matches/{{ match_item.id }}/toggle-pause" method="post" class="match-live-controls-form">
+                  <button class="btn btn-sm btn-outline-light" type="submit" aria-label="{% if match_item.timer_is_running %}Pause timer{% else %}Resume timer{% endif %}">
+                    {% if match_item.timer_is_running %}
+                    <span class="match-live-controls-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16">
+                        <path d="M8 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                        <path d="M16 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                      </svg>
+                    </span>
+                    Pause
+                    {% else %}
+                    <span class="match-live-controls-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16">
+                        <path d="M8 5l11 7-11 7z" fill="currentColor"></path>
+                      </svg>
+                    </span>
+                    Resume
+                    {% endif %}
+                  </button>
+                </form>
+                {% endif %}
+
+                <form action="/{{ tournament_slug }}/matches/{{ match_item.id }}/toggle-timer" method="post" class="match-live-controls-form match-live-timer-form">
+                  <button class="btn btn-sm {% if is_running %}btn-outline-warning{% else %}btn-outline-success{% endif %}" type="submit" {% if not is_running and selected_round <= last_completed %}disabled{% endif %}>
+                    {% if is_running %}Stop{% else %}Start{% endif %}
+                  </button>
+                  <select class="form-select form-select-sm" name="fight_round" {% if is_running %}disabled{% endif %} aria-label="Select round">
+                    {% for option in fight_round_options %}
+                    <option value="{{ option }}" title="Round {{ option }}" {% if option == selected_round %}selected{% endif %}>R{{ option }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+              </div>
+              {% endif %}
             </div>
 
+            {% if match_item.event_type == "Contact" %}
             <div class="match-live-fighter is-blue">
               <div class="match-live-photo-frame">
                 <img src="{{ match_item.blue_photo_url }}" alt="{{ match_item.blue_name }}" class="match-live-photo" />
@@ -84,6 +132,7 @@
               <div class="match-live-name">{{ match_item.blue_name }}</div>
               <div class="pill match-card-pill">Total: <span id="js-live-blue-total">{{ match_item.blue_total_score }}</span></div>
             </div>
+            {% endif %}
           </div>
 
           <div id="js-live-judges" class="match-live-judges"></div>
@@ -98,6 +147,7 @@
       const blueTotalEl = document.getElementById("js-live-blue-total");
       const timerEl = document.getElementById("js-live-timer");
       const judgesEl = document.getElementById("js-live-judges");
+      const isNonContactEvent = `{{ match_item.event_type }}`.toLowerCase() !== "contact";
 
       const pad2 = (value) => String(Math.max(0, value)).padStart(2, "0");
       const formatTimer = (seconds) => {
@@ -116,24 +166,20 @@
         const startedAt = Number(timerEl.dataset.timerStartedAt || "0");
         const duration = Number(timerEl.dataset.timerDuration || "0");
         const isRunning = timerEl.dataset.timerRunning === "1";
-        if (!duration) {
-          timerEl.textContent = "--:--";
+        if (!startedAt || !duration) {
+          timerEl.textContent = "00:00";
           timerEl.classList.remove("is-expired");
           return;
         }
-        if (!isRunning || !startedAt) {
-          timerEl.textContent = formatTimer(duration);
-          timerEl.classList.remove("is-expired");
-          return;
-        }
+
         const now = Math.floor(Date.now() / 1000);
         const elapsed = Math.max(0, now - startedAt);
-        const remaining = Math.max(0, duration - elapsed);
-        timerEl.textContent = formatTimer(remaining);
-        timerEl.classList.toggle("is-expired", remaining === 0);
+        const shown = Math.max(0, Math.min(duration, elapsed));
+        timerEl.textContent = formatTimer(shown);
+        timerEl.classList.toggle("is-expired", elapsed >= duration);
       };
 
-      const renderJudges = (judges) => {
+      const renderJudges = (judges, isVoteMode, fightRound, isNonContact) => {
         if (!judgesEl) return;
         judgesEl.innerHTML = (judges || [])
           .map((judge) => {
@@ -141,6 +187,12 @@
             const safePhoto = String(judge.photo_url || "");
             const red = Number(judge.red_score || 0);
             const blue = Number(judge.blue_score || 0);
+            const roundValue = Number(fightRound || 1);
+            const voteRaw = String(judge.vote_side || "").toLowerCase();
+            const voteLabel =
+              voteRaw === "red" ? "RED" : voteRaw === "blue" ? "BLUE" : "—";
+            const voteClass =
+              voteRaw === "red" ? "is-red" : voteRaw === "blue" ? "is-blue" : "is-none";
             return `
               <article class="judge-card">
                 <div class="judge-left">
@@ -152,8 +204,14 @@
                   </div>
                 </div>
                 <div class="judge-right">
-                  <div class="judge-score-label">Score</div>
-                  <div class="judge-score">Red: ${red} | Blue: ${blue}</div>
+                  <div class="judge-score-label">${isVoteMode ? "Vote" : "Score"}</div>
+                  ${
+                    isVoteMode
+                      ? `<div class="judge-score"><span class="judge-vote-pill ${voteClass}">${voteLabel}</span></div>`
+                      : isNonContact
+                        ? `<div class="judge-score">Round ${roundValue}: ${red}</div>`
+                        : `<div class="judge-score">Red: ${red} | Blue: ${blue}</div>`
+                  }
                 </div>
               </article>
             `;
@@ -186,7 +244,12 @@
             timerEl.dataset.timerRunning = data.timer_is_running ? "1" : "0";
             renderTimer();
           }
-          renderJudges(data.judges);
+          renderJudges(
+            data.judges,
+            !!data.is_pause_vote_scoring,
+            Number(data.fight_round || 1),
+            isNonContactEvent
+          );
         } catch (_) {
           // ignore
         } finally {
@@ -194,7 +257,7 @@
         }
       };
 
-      renderJudges([]);
+      renderJudges([], false, Number(`{{ match_item.fight_round }}` || 1), isNonContactEvent);
       renderTimer();
       poll();
       setInterval(poll, 1000);

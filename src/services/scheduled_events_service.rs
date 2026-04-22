@@ -11,7 +11,7 @@ use rocket::State;
 const CONTACT_TYPES: [&str; 2] = ["Contact", "Non-Contact"];
 const STATUSES: [&str; 4] = ["Scheduled", "Ongoing", "Finished", "Cancelled"];
 const POINT_SYSTEMS: [&str; 2] = ["5-10 points", "Must 8/10 points"];
-const TIME_RULES: [&str; 2] = ["1 round | 2 minutes", "3 rounds | 1 minute"];
+const TIME_RULES: [&str; 3] = ["1 round | 1 minute", "1 round | 2 minutes", "3 rounds | 1 minute"];
 const DRAW_SYSTEMS: [&str; 2] = ["Extension", "First point Advantage"];
 
 #[derive(Debug, Clone, Copy)]
@@ -84,7 +84,6 @@ pub fn list_outcomes(
     let mut events = list(state, user_id, tournament_id)?;
     events.retain(|item| {
         item.status.eq_ignore_ascii_case("Finished")
-            && item.winner_member_id.is_some()
             && item
                 .winner_name
                 .as_ref()
@@ -181,7 +180,18 @@ pub fn create(
         return Err("Event is not included in this tournament.".to_string());
     }
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
-    let draw_system_value = if is_contact { draw_system } else { None };
+    let (point_system_value, time_rule_value, draw_system_value) = if is_contact {
+        (point_system, time_rule, draw_system)
+    } else {
+        // Non-contact performances always use the simple 5-10 scale, with a configurable 1-2 minute timer.
+        let parsed = parse_time_rule(time_rule);
+        let canonical_time = match parsed {
+            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 60 => "1 round | 1 minute",
+            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 120 => "1 round | 2 minutes",
+            _ => "1 round | 2 minutes",
+        };
+        (Some("5-10 points"), Some(canonical_time), None)
+    };
     scheduled_events_repository::create(
         &mut conn,
         tournament_id,
@@ -190,8 +200,8 @@ pub fn create(
         status,
         location,
         event_time,
-        if is_contact { point_system } else { None },
-        if is_contact { time_rule } else { None },
+        point_system_value,
+        time_rule_value,
         draw_system_value,
         if is_contact { division_id } else { None },
         if is_contact { weight_class_id } else { None },
@@ -290,6 +300,19 @@ pub fn update(
     if !event_ids.contains(&event_id) {
         return Err("Event is not included in this tournament.".to_string());
     }
+    let (point_system_value, time_rule_value, draw_system_value) = if is_contact {
+        (point_system, time_rule, draw_system)
+    } else {
+        // Non-contact performances always use the simple 5-10 scale, with a configurable 1-2 minute timer.
+        let parsed = parse_time_rule(time_rule);
+        let canonical_time = match parsed {
+            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 60 => "1 round | 1 minute",
+            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 120 => "1 round | 2 minutes",
+            _ => "1 round | 2 minutes",
+        };
+        (Some("5-10 points"), Some(canonical_time), None)
+    };
+
     let changed = scheduled_events_repository::update(
         &mut conn,
         tournament_id,
@@ -299,9 +322,9 @@ pub fn update(
         status,
         location,
         event_time,
-        if is_contact { point_system } else { None },
-        if is_contact { time_rule } else { None },
-        if is_contact { draw_system } else { None },
+        point_system_value,
+        time_rule_value,
+        draw_system_value,
         if is_contact { division_id } else { None },
         if is_contact { weight_class_id } else { None },
     )

@@ -191,10 +191,12 @@ pub struct MatchCard {
 
 #[derive(Serialize)]
 pub struct JudgeScoreCard {
+    pub judge_user_id: i64,
     pub name: String,
     pub photo_url: String,
     pub red_score: i32,
     pub blue_score: i32,
+    pub vote_side: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -208,9 +210,11 @@ pub struct MatchDetail {
     pub status: String,
     pub status_class: String,
     pub round_label: String,
+    pub fight_round: i64,
     pub timer_started_at: Option<i64>,
     pub timer_duration_seconds: Option<i64>,
     pub timer_is_running: bool,
+    pub timer_last_completed_round: i64,
     pub red_name: String,
     pub blue_name: String,
     pub red_photo_url: String,
@@ -220,4 +224,5 @@ pub struct MatchDetail {
     pub location: Option<String>,
     pub match_time: Option<String>,
     pub judges: Vec<JudgeScoreCard>,
+    pub is_pause_vote_scoring: bool,
 }

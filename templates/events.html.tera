@@ -75,6 +75,14 @@
                 {% endfor %}
               </select>
             </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Time</label>
+              <select class="form-select" name="time_rule">
+                <option value="1 round | 2 minutes" selected>1 round | 2 minutes</option>
+                <option value="1 round | 1 minute">1 round | 1 minute</option>
+                <option value="3 rounds | 1 minute">3 rounds | 1 minute</option>
+              </select>
+            </div>
             <div class="col-md-6">
               <label class="form-label text-cream-60">Location</label>
               <input class="form-control" name="location" placeholder="e.g. Court A" />
@@ -90,13 +98,6 @@
                   <select class="form-select" name="point_system">
                     <option value="5-10 points">5-10 points</option>
                     <option value="Must 8/10 points">Must 8/10 points</option>
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label text-cream-60">Time</label>
-                  <select class="form-select" name="time_rule">
-                    <option value="1 round | 2 minutes">1 round | 2 minutes</option>
-                    <option value="3 rounds | 1 minute">3 rounds | 1 minute</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -134,54 +135,107 @@
 
         <section class="panel">
           <h3 class="fw-semibold mb-3">Scheduled Events</h3>
-          <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Contact</th>
-                  <th>Status</th>
-                  <th>Location</th>
-                  <th>Date & Time</th>
-                  <th>Point System</th>
-                  <th>Time</th>
-                  <th>Division</th>
-                  <th>Weight Class</th>
-                  <th class="text-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in events %}
-                <tr>
-                  <td>
-                    <a class="fw-semibold text-decoration-none" href="/{{ tournament_slug }}/events/{{ item.id }}">{{ item.event_name }}</a>
-                  </td>
-                  <td>{{ item.contact_type }}</td>
-                  <td>{{ item.status }}</td>
-                  <td>{{ item.location | default(value="") }}</td>
-                  <td>{{ item.event_time | default(value="") }}</td>
-                  <td>{{ item.point_system | default(value="") }}</td>
-                  <td>{{ item.time_rule | default(value="") }}</td>
-                  <td>{{ item.division_name | default(value="") }}</td>
-                  <td>{{ item.weight_class_label | default(value="") }}</td>
-                  <td class="text-end">
-                    <div class="d-flex justify-content-end gap-2">
-                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editEventModal-{{ item.id }}">
-                        Edit
-                      </button>
-                      <form action="/{{ tournament_slug }}/events/{{ item.id }}/delete" method="post">
-                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-                {% else %}
-                <tr>
-                  <td colspan="10" class="text-cream-60">No events scheduled yet.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+
+          <div class="mb-4">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div class="fw-semibold">Contact</div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-dark table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Event</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Date & Time</th>
+                    <th>Point System</th>
+                    <th>Time</th>
+                    <th>Division</th>
+                    <th>Weight Class</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in contact_events %}
+                  <tr>
+                    <td>
+                      <a class="fw-semibold text-decoration-none" href="/{{ tournament_slug }}/events/{{ item.id }}">{{ item.event_name }}</a>
+                    </td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.location | default(value="") }}</td>
+                    <td>{{ item.event_time | default(value="") }}</td>
+                    <td>{{ item.point_system | default(value="") }}</td>
+                    <td>{{ item.time_rule | default(value="") }}</td>
+                    <td>{{ item.division_name | default(value="") }}</td>
+                    <td>{{ item.weight_class_label | default(value="") }}</td>
+                    <td class="text-end">
+                      <div class="d-flex justify-content-end gap-2">
+                        <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editEventModal-{{ item.id }}">
+                          Edit
+                        </button>
+                        <form action="/{{ tournament_slug }}/events/{{ item.id }}/delete" method="post">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="9" class="text-cream-60">No contact events scheduled yet.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div class="fw-semibold">Non-Contact</div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-dark table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Event</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Date & Time</th>
+                    <th>Point System</th>
+                    <th>Time</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in non_contact_events %}
+                  <tr>
+                    <td>
+                      <a class="fw-semibold text-decoration-none" href="/{{ tournament_slug }}/events/{{ item.id }}">{{ item.event_name }}</a>
+                    </td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.location | default(value="") }}</td>
+                    <td>{{ item.event_time | default(value="") }}</td>
+                    <td>{{ item.point_system | default(value="") }}</td>
+                    <td>{{ item.time_rule | default(value="") }}</td>
+                    <td class="text-end">
+                      <div class="d-flex justify-content-end gap-2">
+                        <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editEventModal-{{ item.id }}">
+                          Edit
+                        </button>
+                        <form action="/{{ tournament_slug }}/events/{{ item.id }}/delete" method="post">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="7" class="text-cream-60">No non-contact events scheduled yet.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -220,6 +274,14 @@
                         {% endfor %}
                       </select>
                     </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Time</label>
+                      <select class="form-select" name="time_rule">
+                        <option value="1 round | 2 minutes" {% if item.time_rule == "1 round | 2 minutes" %}selected{% endif %}>1 round | 2 minutes</option>
+                        <option value="1 round | 1 minute" {% if item.time_rule == "1 round | 1 minute" %}selected{% endif %}>1 round | 1 minute</option>
+                        <option value="3 rounds | 1 minute" {% if item.time_rule == "3 rounds | 1 minute" %}selected{% endif %}>3 rounds | 1 minute</option>
+                      </select>
+                    </div>
                     <div class="col-12">
                       <label class="form-label text-muted">Location</label>
                       <input class="form-control" name="location" value="{{ item.location | default(value="") }}" />
@@ -235,13 +297,6 @@
                           <select class="form-select" name="point_system">
                             <option value="5-10 points" {% if item.point_system == "5-10 points" %}selected{% endif %}>5-10 points</option>
                             <option value="Must 8/10 points" {% if item.point_system == "Must 8/10 points" %}selected{% endif %}>Must 8/10 points</option>
-                          </select>
-                        </div>
-                        <div class="col-md-4">
-                          <label class="form-label text-muted">Time</label>
-                          <select class="form-select" name="time_rule">
-                            <option value="1 round | 2 minutes" {% if item.time_rule == "1 round | 2 minutes" %}selected{% endif %}>1 round | 2 minutes</option>
-                            <option value="3 rounds | 1 minute" {% if item.time_rule == "3 rounds | 1 minute" %}selected{% endif %}>3 rounds | 1 minute</option>
                           </select>
                         </div>
                         <div class="col-md-4">

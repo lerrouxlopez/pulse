@@ -94,3 +94,15 @@ pub fn update_user(
     )?;
     Ok(conn.affected_rows() as usize)
 }
+
+pub fn update_password_hash(
+    conn: &mut PooledConn,
+    user_id: i64,
+    password_hash: &str,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (password_hash, user_id),
+    )?;
+    Ok(conn.affected_rows() as usize)
+}

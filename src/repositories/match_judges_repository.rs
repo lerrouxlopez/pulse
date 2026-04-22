@@ -257,6 +257,33 @@ pub fn count_distinct_judges_with_valid_scores_for_match_round(
     Ok(row.unwrap_or(0))
 }
 
+pub fn count_distinct_judges_with_valid_red_score_for_match_round(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+    min_allowed: i32,
+    max_allowed: i32,
+) -> mysql::Result<i64> {
+    // Non-contact performances only have a single score column (stored in `red_score`).
+    let row: Option<i64> = conn.exec_first(
+        "SELECT COALESCE(COUNT(DISTINCT mj.judge_user_id), 0)
+         FROM match_judges mj
+         WHERE mj.tournament_id = :tournament_id
+           AND mj.match_id = :match_id
+           AND mj.fight_round = :fight_round
+           AND mj.red_score >= :min_allowed AND mj.red_score <= :max_allowed",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+            "fight_round" => fight_round,
+            "min_allowed" => min_allowed,
+            "max_allowed" => max_allowed,
+        },
+    )?;
+    Ok(row.unwrap_or(0))
+}
+
 pub fn max_fight_round_for_match(
     conn: &mut PooledConn,
     tournament_id: i64,
