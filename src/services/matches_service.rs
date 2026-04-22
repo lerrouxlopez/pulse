@@ -63,16 +63,16 @@ pub fn set_non_contact_event_judges(
         return Err("Judges must be unique.".to_string());
     }
 
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Event not found for this tournament.".to_string())?;
     if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
         return Err("Judge assignments for contact events are set per match.".to_string());
@@ -80,7 +80,7 @@ pub fn set_non_contact_event_judges(
 
     // If performances already have scored values, do not allow changing judges.
     let performances = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for perf in &performances {
         let scored = match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
             &mut conn,
@@ -102,7 +102,7 @@ pub fn set_non_contact_event_judges(
         scheduled_event_id,
         judge_user_ids,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
 
     Ok(())
 }
@@ -113,23 +113,23 @@ pub fn ensure_performances_for_non_contact_event(
     tournament_id: i64,
     scheduled_event_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Event not found for this tournament.".to_string())?;
     if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
         return Ok(());
     }
 
     let mut existing = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if existing.is_empty() {
         let mut competitors =
             list_competitors(state, actor_user_id, tournament_id, scheduled_event_id)?;
@@ -155,10 +155,10 @@ pub fn ensure_performances_for_non_contact_event(
                 0,
                 0,
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
         }
         existing = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
 
     // Ensure judge assignments exist on each performance based on the event assignments.
@@ -167,7 +167,7 @@ pub fn ensure_performances_for_non_contact_event(
         tournament_id,
         scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if judge_user_ids.is_empty() {
         return Ok(());
     }
@@ -206,7 +206,7 @@ pub fn ensure_performances_for_non_contact_event(
             1,
             &judge_scores,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     }
 
     Ok(())
@@ -218,14 +218,14 @@ pub fn list(
     tournament_id: i64,
     scheduled_event_id: i64,
 ) -> Result<Vec<ScheduledMatch>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let mut matches = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     populate_judge_scores(&mut conn, tournament_id, &mut matches)?;
     Ok(matches)
 }
@@ -251,15 +251,15 @@ pub fn list_cards(
         );
     }
 
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let mut matches = matches_repository::list_by_tournament(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     matches.sort_by_key(|item| {
         let priority = if item.status.eq_ignore_ascii_case("Ongoing") {
             0
@@ -345,15 +345,15 @@ pub fn get_detail(
     tournament_id: i64,
     match_id: i64,
 ) -> Result<Option<MatchDetail>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let mut item = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let mut item = match item.take() {
         Some(item) => item,
         None => return Ok(None),
@@ -511,14 +511,14 @@ pub fn get_match_row(
     tournament_id: i64,
     match_id: i64,
 ) -> Result<Option<ScheduledMatch>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let item = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     Ok(item)
 }
 
@@ -540,15 +540,15 @@ pub fn list_competitors(
     tournament_id: i64,
     scheduled_event_id: i64,
 ) -> Result<Vec<EventCompetitor>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     let (division_filter, weight_class_filter, is_contact) = scheduled
         .as_ref()
         .map(|event| {
@@ -564,7 +564,7 @@ pub fn list_competitors(
         .map(|event| event.event_id)
         .unwrap_or(scheduled_event_id);
     let rows = teams_repository::list_event_competitors(&mut conn, tournament_id, event_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     Ok(rows
         .into_iter()
         .filter(|(_, _, _, _, division_id, weight_class_id, _)| {
@@ -612,9 +612,9 @@ pub fn create(
     red_total_score: i32,
     blue_total_score: i32,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -626,7 +626,7 @@ pub fn create(
     }
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if scheduled.is_none() {
         return Err("Event not found for this tournament.".to_string());
     }
@@ -649,7 +649,7 @@ pub fn create(
         red_total_score,
         blue_total_score,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
 }
 
@@ -672,9 +672,9 @@ pub fn update(
     blue_member_id: Option<i64>,
     is_bye: bool,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -685,7 +685,7 @@ pub fn update(
         return Err("Invalid match status.".to_string());
     }
     let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
     let changed = matches_repository::update(
         &mut conn,
@@ -708,7 +708,7 @@ pub fn update(
         0,
         0,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -736,14 +736,14 @@ pub fn delete(
     tournament_id: i64,
     id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let changed = matches_repository::delete(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -763,20 +763,20 @@ pub fn toggle_match_timer(
     fight_round: Option<i64>,
     auto_complete: bool,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .ok_or_else(|| "Event not found for this tournament.".to_string())?;
 
     let existing = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
     if existing.scheduled_event_id != scheduled_event_id {
         return Err("Match not found for this event.".to_string());
@@ -803,7 +803,7 @@ pub fn toggle_match_timer(
                 false,
                 Some(completed_round),
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
             if changed == 0 {
                 return Err("Match not found for this event.".to_string());
             }
@@ -812,7 +812,7 @@ pub fn toggle_match_timer(
             // finalize by highest score; if tied, use the first point winner as tie-breaker.
             if is_contact_first_point_advantage(&scheduled) && completed_round >= max_fight_rounds {
                 let updated = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-                    .map_err(|_| "Storage error.".to_string())?
+                    .map_err(|err| format!("Storage error: {err}"))?
                     .ok_or_else(|| "Match not found for this event.".to_string())?;
                 let winner_side = if updated.red_total_score > updated.blue_total_score {
                     Some("red".to_string())
@@ -824,7 +824,7 @@ pub fn toggle_match_timer(
                         tournament_id,
                         match_id,
                     )
-                    .map_err(|_| "Storage error.".to_string())?
+                    .map_err(|err| format!("Storage error: {err}"))?
                 };
                 if let Some(winner_side) = winner_side {
                     let _ = finalize_first_point_advantage_match(
@@ -862,7 +862,7 @@ pub fn toggle_match_timer(
             false,
             existing.timer_last_completed_round,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         if changed == 0 {
             return Err("Match not found for this event.".to_string());
         }
@@ -909,7 +909,7 @@ pub fn toggle_match_timer(
         true,
         existing.timer_last_completed_round,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -923,20 +923,20 @@ pub fn toggle_match_timer_pause(
     scheduled_event_id: i64,
     match_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .ok_or_else(|| "Event not found for this tournament.".to_string())?;
 
     let existing = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
     if existing.scheduled_event_id != scheduled_event_id {
         return Err("Match not found for this event.".to_string());
@@ -957,7 +957,7 @@ pub fn toggle_match_timer_pause(
     if is_pause_vote_scoring {
         let assigned =
             match_judges_repository::list_assigned_judges(&mut conn, tournament_id, match_id)
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
         let judge_count = assigned.len() as i64;
         if judge_count < 3 || judge_count > 5 {
             return Err("Add between 3 and 5 judges.".to_string());
@@ -974,7 +974,7 @@ pub fn toggle_match_timer_pause(
                 match_id,
                 current_fight_round,
             )
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .is_some()
             {
                 return Err("Previous pause vote is still pending.".to_string());
@@ -985,7 +985,7 @@ pub fn toggle_match_timer_pause(
                 match_id,
                 current_fight_round,
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
             match_pause_votes_repository::create_vote_event(
                 &mut conn,
                 tournament_id,
@@ -993,7 +993,7 @@ pub fn toggle_match_timer_pause(
                 current_fight_round,
                 next_seq,
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
         } else {
             // Resuming: require the pending vote to be complete, then apply exactly 1 point.
             if let Some(pending) = match_pause_votes_repository::latest_pending_vote_event(
@@ -1002,7 +1002,7 @@ pub fn toggle_match_timer_pause(
                 match_id,
                 current_fight_round,
             )
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             {
                 let votes_cast = match_pause_votes_repository::count_votes(
                     &mut conn,
@@ -1011,7 +1011,7 @@ pub fn toggle_match_timer_pause(
                     pending.fight_round,
                     pending.pause_seq,
                 )
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
                 if votes_cast != judge_count {
                     return Err("Cannot resume: judge vote is incomplete.".to_string());
                 }
@@ -1022,7 +1022,7 @@ pub fn toggle_match_timer_pause(
                     pending.fight_round,
                     pending.pause_seq,
                 )
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
 
                 let winner_side = if red_votes > blue_votes {
                     "red"
@@ -1040,7 +1040,7 @@ pub fn toggle_match_timer_pause(
                     pending.pause_seq,
                     winner_side,
                 )
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
                 if applied > 0 {
                     let _ = matches_repository::increment_total(
                         &mut conn,
@@ -1052,7 +1052,7 @@ pub fn toggle_match_timer_pause(
 
                 // If someone reached 5 points, finish the match and do not resume the timer.
                 let updated = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-                    .map_err(|_| "Storage error.".to_string())?
+                    .map_err(|err| format!("Storage error: {err}"))?
                     .ok_or_else(|| "Match not found for this event.".to_string())?;
                 if updated.red_total_score >= 5 || updated.blue_total_score >= 5 {
                     let final_winner = if updated.red_total_score >= 5 {
@@ -1119,7 +1119,7 @@ pub fn toggle_match_timer_pause(
         timer_is_running,
         existing.timer_last_completed_round,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -1133,23 +1133,23 @@ pub fn get_pending_pause_vote(
     match_id: i64,
     judge_user_id: i64,
 ) -> Result<Option<PendingPauseVoteStatus>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found.".to_string())?;
     let scheduled = scheduled_events_repository::get_by_id(
         &mut conn,
         tournament_id,
         match_row.scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .ok_or_else(|| "Event not found.".to_string())?;
 
     if !is_contact_first_point_advantage(&scheduled) {
@@ -1166,14 +1166,14 @@ pub fn get_pending_pause_vote(
         match_id,
         fight_round,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     else {
         return Ok(None);
     };
 
     let assigned =
         match_judges_repository::list_assigned_judges(&mut conn, tournament_id, match_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     let judge_count = assigned.len() as i64;
     let votes_cast = match_pause_votes_repository::count_votes(
         &mut conn,
@@ -1182,7 +1182,7 @@ pub fn get_pending_pause_vote(
         pending.fight_round,
         pending.pause_seq,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     let my_vote = match_pause_votes_repository::get_vote_for_judge(
         &mut conn,
         tournament_id,
@@ -1191,7 +1191,7 @@ pub fn get_pending_pause_vote(
         pending.pause_seq,
         judge_user_id,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
 
     Ok(Some(PendingPauseVoteStatus {
         fight_round: pending.fight_round,
@@ -1215,23 +1215,23 @@ pub fn submit_pause_vote(
         return Err("Invalid vote selection.".to_string());
     }
 
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found.".to_string())?;
     let scheduled = scheduled_events_repository::get_by_id(
         &mut conn,
         tournament_id,
         match_row.scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .ok_or_else(|| "Event not found.".to_string())?;
 
     if !is_contact_first_point_advantage(&scheduled) {
@@ -1248,12 +1248,12 @@ pub fn submit_pause_vote(
         match_id,
         fight_round,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .ok_or_else(|| "No pending vote for this match.".to_string())?;
 
     let assigned =
         match_judges_repository::list_assigned_judges(&mut conn, tournament_id, match_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !assigned.iter().any(|(id, _)| *id == judge_user_id) {
         return Err("Judge is not assigned to this match.".to_string());
     }
@@ -1271,7 +1271,7 @@ pub fn submit_pause_vote(
             "blue"
         },
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
 
     Ok(())
 }
@@ -1288,29 +1288,29 @@ pub fn set_or_adjust_judge_score(
     value: Option<i32>,
     allow_unassigned: bool,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let judge_has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, judge_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !judge_has_access {
         return Err("Selected judge is invalid.".to_string());
     }
 
     let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found.".to_string())?;
     let scheduled = scheduled_events_repository::get_by_id(
         &mut conn,
         tournament_id,
         match_row.scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .ok_or_else(|| "Event not found.".to_string())?;
 
     if is_contact_first_point_advantage(&scheduled) {
@@ -1335,7 +1335,7 @@ pub fn set_or_adjust_judge_score(
         match_id,
         judge_user_id,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .or_else(|| {
         if allow_unassigned {
             match_judges_repository::next_judge_order_for_match_round(
@@ -1358,7 +1358,7 @@ pub fn set_or_adjust_judge_score(
         judge_user_id,
         fight_round,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .unwrap_or((min_allowed, min_allowed));
 
     let normalize = |score: i32| {
@@ -1411,7 +1411,7 @@ pub fn set_or_adjust_judge_score(
         next_red,
         next_blue,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
 
     let (sum_red, sum_blue) = match_judges_repository::sum_for_match_round(
         &mut conn,
@@ -1419,7 +1419,7 @@ pub fn set_or_adjust_judge_score(
         match_id,
         fight_round,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     let _ = matches_repository::set_totals(
         &mut conn,
         tournament_id,
@@ -1448,14 +1448,14 @@ pub fn update_schedule(
     location: Option<&str>,
     match_time: Option<&str>,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
     let changed = matches_repository::update(
         &mut conn,
@@ -1478,7 +1478,7 @@ pub fn update_schedule(
         existing.red_total_score,
         existing.blue_total_score,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -1497,9 +1497,9 @@ pub fn update_contact_match(
     winner_side: Option<&str>,
     judge_user_ids: Vec<i64>,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -1510,11 +1510,11 @@ pub fn update_contact_match(
         return Err("Invalid match status.".to_string());
     }
     let existing = matches_repository::get_by_id(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found for this event.".to_string())?;
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     let is_pause_vote_scoring = scheduled
         .as_ref()
         .map(is_contact_first_point_advantage)
@@ -1539,7 +1539,7 @@ pub fn update_contact_match(
         .max(1);
     let max_scored_round =
         match_judges_repository::max_fight_round_for_match(&mut conn, tournament_id, id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     let rounds_total = base_rounds
         .max(existing.fight_round.unwrap_or(1))
         .max(max_scored_round);
@@ -1566,7 +1566,7 @@ pub fn update_contact_match(
             existing.red_total_score,
             existing.blue_total_score,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         if changed == 0 {
             return Err("Match not found for this event.".to_string());
         }
@@ -1577,7 +1577,7 @@ pub fn update_contact_match(
             fight_round,
             &judge_scores,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         if !is_pause_vote_scoring {
             let (sum_red, sum_blue) =
                 total_scores_for_match(&mut conn, tournament_id, id, rounds_total)?;
@@ -1656,7 +1656,7 @@ pub fn update_contact_match(
         existing.red_total_score,
         existing.blue_total_score,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -1667,7 +1667,7 @@ pub fn update_contact_match(
         fight_round,
         &judge_scores,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if !is_pause_vote_scoring {
         let (sum_red, sum_blue) =
             total_scores_for_match(&mut conn, tournament_id, id, rounds_total)?;
@@ -1712,7 +1712,7 @@ pub fn update_contact_match(
         next_round,
         next_slot,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if let Some(ref mut target_match) = target {
         if slot % 2 == 1 {
             target_match.red = Some(winner_label.clone());
@@ -1742,7 +1742,7 @@ pub fn update_contact_match(
             target_match.red_total_score,
             target_match.blue_total_score,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         if changed == 0 {
             return Err("Next round match not found.".to_string());
         }
@@ -1755,7 +1755,7 @@ pub fn update_contact_match(
                     "SELECT id FROM matches WHERE tournament_id = ? AND scheduled_event_id = ? AND round > ? LIMIT 1",
                     (tournament_id, scheduled_event_id, round),
                 )
-                .map_err(|_| "Storage error.".to_string())?
+                .map_err(|err| format!("Storage error: {err}"))?
                 .is_none();
             if is_final {
                 let winner_member_id = match winner_side {
@@ -1788,7 +1788,7 @@ fn total_scores_for_match(
     for r in 1..=rounds_total {
         let (red, blue) =
             match_judges_repository::sum_for_match_round(conn, tournament_id, match_id, r)
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
         sum_red = sum_red.saturating_add(red);
         sum_blue = sum_blue.saturating_add(blue);
     }
@@ -1802,21 +1802,21 @@ pub fn try_finalize_non_contact_event_from_scores(
     match_id: i64,
 ) -> Result<(), String> {
     // Best-effort finalization: return Ok(()) if the event is not ready, error only on storage/access issues.
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found.".to_string())?;
 
     let scheduled_event_id = match_row.scheduled_event_id;
     let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Event not found.".to_string())?;
     if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
         return Ok(());
@@ -1825,14 +1825,14 @@ pub fn try_finalize_non_contact_event_from_scores(
     // Ensure performances exist and event judges have been propagated into per-performance assignments.
     drop(conn);
     let _ = ensure_performances_for_non_contact_event(state, actor_user_id, tournament_id, scheduled_event_id);
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
 
     let judge_user_ids = scheduled_event_judges_repository::list_assigned_judges(
         &mut conn,
         tournament_id,
         scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if judge_user_ids.is_empty() {
         return Ok(());
     }
@@ -1841,7 +1841,7 @@ pub fn try_finalize_non_contact_event_from_scores(
     }
 
     let performances = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if performances.is_empty() {
         return Ok(());
     }
@@ -1865,7 +1865,7 @@ pub fn try_finalize_non_contact_event_from_scores(
                 5,
                 10,
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
         if scored != judge_count {
             return Ok(());
         }
@@ -1877,7 +1877,7 @@ pub fn try_finalize_non_contact_event_from_scores(
     for perf in &performances {
         let (sum_red, _sum_blue) =
             match_judges_repository::sum_for_match_round(&mut conn, tournament_id, perf.id, 1)
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
         let _ = matches_repository::set_totals(
             &mut conn,
             tournament_id,
@@ -1918,7 +1918,7 @@ pub fn try_finalize_non_contact_event_from_scores(
         scheduled_event_id,
         &winners,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     let _ = scheduled_events_repository::update_status_and_winner(
         &mut conn,
         tournament_id,
@@ -1936,16 +1936,16 @@ pub fn try_finalize_contact_match_from_scores(
     tournament_id: i64,
     match_id: i64,
 ) -> Result<Option<i64>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access =
         tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Match not found.".to_string())?;
 
     if match_row.status.eq_ignore_ascii_case("Finished")
@@ -1959,7 +1959,7 @@ pub fn try_finalize_contact_match_from_scores(
         tournament_id,
         match_row.scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?
+    .map_err(|err| format!("Storage error: {err}"))?
     .ok_or_else(|| "Event not found.".to_string())?;
 
     if !scheduled.contact_type.eq_ignore_ascii_case("Contact") {
@@ -1985,14 +1985,14 @@ pub fn try_finalize_contact_match_from_scores(
             .max(1);
     let max_scored_round =
         match_judges_repository::max_fight_round_for_match(&mut conn, tournament_id, match_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     let current_rounds = base_rounds
         .max(match_row.fight_round.unwrap_or(1))
         .max(max_scored_round);
 
     let assigned =
         match_judges_repository::list_assigned_judges(&mut conn, tournament_id, match_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     let judge_user_ids: Vec<i64> = assigned.into_iter().map(|(id, _)| id).collect();
     if judge_user_ids.is_empty() {
         return Ok(None);
@@ -2009,7 +2009,7 @@ pub fn try_finalize_contact_match_from_scores(
                 min_allowed,
                 max_allowed,
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
         Ok(count == judge_count)
     };
 
@@ -2041,14 +2041,14 @@ pub fn try_finalize_contact_match_from_scores(
             &match_row.status,
             base_rounds,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         let _ = match_judges_repository::delete_rounds_gt(
             &mut conn,
             tournament_id,
             match_id,
             base_rounds,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         let (sum_red, sum_blue) =
             total_scores_for_match(&mut conn, tournament_id, match_id, base_rounds)?;
         let _ = matches_repository::set_totals(
@@ -2092,7 +2092,7 @@ pub fn try_finalize_contact_match_from_scores(
                 status,
                 next_round,
             )
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
             return Ok(Some(next_round));
         }
         return Ok(None);
@@ -2173,7 +2173,7 @@ fn finalize_first_point_advantage_match(
         match_row.red_total_score,
         match_row.blue_total_score,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Match not found for this event.".to_string());
     }
@@ -2211,7 +2211,7 @@ fn finalize_first_point_advantage_match(
         next_round,
         next_slot,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if let Some(ref mut target_match) = target {
         if slot % 2 == 1 {
             target_match.red = Some(winner_label.clone());
@@ -2241,7 +2241,7 @@ fn finalize_first_point_advantage_match(
             target_match.red_total_score,
             target_match.blue_total_score,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         if changed == 0 {
             return Err("Next round match not found.".to_string());
         }
@@ -2253,7 +2253,7 @@ fn finalize_first_point_advantage_match(
             "SELECT id FROM matches WHERE tournament_id = ? AND scheduled_event_id = ? AND round > ? LIMIT 1",
             (tournament_id, scheduled_event_id, round),
         )
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .is_none();
     if is_final {
         let winner_member_id = match winner_side {
@@ -2311,7 +2311,7 @@ fn prepare_judge_scores_for_match_round(
             judge_user_id,
             fight_round,
         )
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .unwrap_or((0, 0));
 
         result.push(MatchJudgeScore {
@@ -2363,15 +2363,15 @@ pub fn ensure_bracket_for_contact_event(
         if has_locked_matches {
             return Ok(());
         }
-        let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+        let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
         match_judges_repository::delete_by_scheduled_event(
             &mut conn,
             tournament_id,
             scheduled_event_id,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
         matches_repository::delete_by_scheduled_event(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
 
     let mut current_round: Vec<BracketParticipant> = randomize_competitors(competitors)
@@ -2848,16 +2848,16 @@ pub fn reset_automatic_matchmaking(
     tournament_id: i64,
     scheduled_event_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .ok_or_else(|| "Event not found for this tournament.".to_string())?;
 
     if !scheduled.contact_type.eq_ignore_ascii_case("Contact") {
@@ -2869,9 +2869,9 @@ pub fn reset_automatic_matchmaking(
         tournament_id,
         scheduled_event_id,
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     matches_repository::delete_by_scheduled_event(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
 
     let _ = scheduled_events_repository::update_status_and_winner(
         &mut conn,
@@ -2935,7 +2935,7 @@ fn populate_judge_scores(
         let fight_round = item.fight_round.or(item.round).unwrap_or(1);
         item.judge_scores =
             match_judges_repository::list_by_match(conn, tournament_id, item.id, fight_round)
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
     }
     Ok(())
 }

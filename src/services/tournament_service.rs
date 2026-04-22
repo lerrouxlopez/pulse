@@ -49,33 +49,33 @@ pub fn update_name(
     if trimmed.is_empty() {
         return Err("Tournament name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.".to_string())?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     if !tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
     {
         return Err("Tournament not found.".to_string());
     }
     let tournament = tournaments_repository::get_by_id(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Tournament not found.".to_string())?;
     let base_slug = slugify(trimmed);
     let mut next_slug = base_slug.clone();
     let mut counter = 2;
     while tournaments_repository::slug_exists(&mut conn, &next_slug)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         && next_slug != tournament.slug
     {
         next_slug = format!("{}-{}", base_slug, counter);
         counter += 1;
     }
     tournaments_repository::update_name(&mut conn, tournament_id, trimmed)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if tournament.slug != next_slug {
         tournaments_repository::create_slug_alias(&mut conn, tournament_id, &tournament.slug)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
     tournaments_repository::update_slug(&mut conn, tournament_id, &next_slug)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     Ok(next_slug)
 }
 
@@ -90,9 +90,9 @@ pub fn update_branding(
     nav_background_color: Option<&str>,
     nav_text_color: Option<&str>,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.".to_string())?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     if !tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
     {
         return Err("Tournament not found.".to_string());
     }
@@ -106,7 +106,7 @@ pub fn update_branding(
         nav_background_color,
         nav_text_color,
     )
-    .map_err(|_| "Storage error.".to_string())
+    .map_err(|err| format!("Storage error: {err}"))
 }
 
 pub fn mark_setup_complete(state: &State<AppState>, tournament_id: i64) -> bool {

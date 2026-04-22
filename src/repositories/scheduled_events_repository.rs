@@ -3,6 +3,15 @@ use mysql::prelude::*;
 use mysql::{params, PooledConn, Row};
 
 fn row_to_event(row: Row) -> ScheduledEvent {
+    let division_id = row
+        .get::<Option<i64>, _>(10)
+        .unwrap_or(None)
+        .filter(|value| *value != 0);
+    let weight_class_id = row
+        .get::<Option<i64>, _>(11)
+        .unwrap_or(None)
+        .filter(|value| *value != 0);
+
     ScheduledEvent {
         id: row.get(0).unwrap_or_default(),
         event_id: row.get(1).unwrap_or_default(),
@@ -23,8 +32,8 @@ fn row_to_event(row: Row) -> ScheduledEvent {
         point_system: row.get::<Option<String>, _>(7).unwrap_or(None),
         time_rule: row.get::<Option<String>, _>(8).unwrap_or(None),
         draw_system: row.get::<Option<String>, _>(9).unwrap_or(None),
-        division_id: row.get::<Option<i64>, _>(10).unwrap_or(None),
-        weight_class_id: row.get::<Option<i64>, _>(11).unwrap_or(None),
+        division_id,
+        weight_class_id,
         winner_member_id: row.get::<Option<i64>, _>(12).unwrap_or(None),
         division_name: row.get::<Option<String>, _>(13).unwrap_or(None),
         weight_class_name: row.get::<Option<String>, _>(14).unwrap_or(None),
@@ -116,8 +125,8 @@ pub fn create(
             point_system,
             time_rule,
             draw_system,
-            division_id,
-            weight_class_id,
+            division_id.unwrap_or(0),
+            weight_class_id.unwrap_or(0),
         ),
     )?;
     Ok(conn.last_insert_id() as i64)
@@ -152,8 +161,8 @@ pub fn update(
             point_system,
             time_rule,
             draw_system,
-            division_id,
-            weight_class_id,
+            division_id.unwrap_or(0),
+            weight_class_id.unwrap_or(0),
             id,
             tournament_id,
         ),

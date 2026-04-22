@@ -177,13 +177,14 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             point_system TEXT,
             time_rule TEXT,
             draw_system TEXT,
-            division_id BIGINT,
-            weight_class_id BIGINT,
+            division_id BIGINT NOT NULL DEFAULT 0,
+            weight_class_id BIGINT NOT NULL DEFAULT 0,
             winner_member_id BIGINT,
             created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-            UNIQUE KEY idx_scheduled_events_unique (tournament_id, event_id)
+            UNIQUE KEY idx_scheduled_events_unique (tournament_id, event_id, contact_type, division_id, weight_class_id)
         )",
     )?;
+    apply_migration_scheduled_events_unique(&mut conn)?;
 
     conn.query_drop(
         "CREATE TABLE IF NOT EXISTS matches (
@@ -259,6 +260,52 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     apply_tournament_branding_migration(&mut conn)?;
     apply_tournament_nav_colors_migration(&mut conn)?;
 
+    Ok(())
+}
+
+fn apply_migration_scheduled_events_unique(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "2026-04-22-scheduled-events-unique-v2";
+    let applied: Option<String> = conn.exec_first(
+        "SELECT id FROM schema_migrations WHERE id = ? LIMIT 1",
+        (migration_id,),
+    )?;
+    if applied.is_some() {
+        return Ok(());
+    }
+
+    // Backfill NULLs so we can safely make these columns NOT NULL.
+    conn.query_drop("UPDATE scheduled_events SET division_id = 0 WHERE division_id IS NULL")?;
+    conn.query_drop(
+        "UPDATE scheduled_events SET weight_class_id = 0 WHERE weight_class_id IS NULL",
+    )?;
+
+    conn.query_drop(
+        "ALTER TABLE scheduled_events MODIFY division_id BIGINT NOT NULL DEFAULT 0",
+    )?;
+    conn.query_drop(
+        "ALTER TABLE scheduled_events MODIFY weight_class_id BIGINT NOT NULL DEFAULT 0",
+    )?;
+
+    let existing_index_count: Option<u64> = conn.exec_first(
+        "SELECT COUNT(1)
+         FROM information_schema.statistics
+         WHERE table_schema = DATABASE()
+           AND table_name = 'scheduled_events'
+           AND index_name = 'idx_scheduled_events_unique'",
+        (),
+    )?;
+    if existing_index_count.unwrap_or(0) > 0 {
+        conn.query_drop("ALTER TABLE scheduled_events DROP INDEX idx_scheduled_events_unique")?;
+    }
+    conn.query_drop(
+        "ALTER TABLE scheduled_events
+         ADD UNIQUE KEY idx_scheduled_events_unique (tournament_id, event_id, contact_type, division_id, weight_class_id)",
+    )?;
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
     Ok(())
 }
 

@@ -42,14 +42,14 @@ pub fn list(
     user_id: i64,
     tournament_id: i64,
 ) -> Result<Vec<ScheduledEvent>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let mut events = scheduled_events_repository::list(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for item in events.iter_mut() {
         item.weight_class_label = format_weight_class_label(&item.weight_class_name);
     }
@@ -62,14 +62,14 @@ pub fn get_by_id(
     tournament_id: i64,
     id: i64,
 ) -> Result<Option<ScheduledEvent>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let mut event = scheduled_events_repository::get_by_id(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if let Some(item) = event.as_mut() {
         item.weight_class_label = format_weight_class_label(&item.weight_class_name);
     }
@@ -108,9 +108,9 @@ pub fn create(
     division_id: Option<i64>,
     weight_class_id: Option<i64>,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -127,9 +127,16 @@ pub fn create(
         return Err("Invalid status.".to_string());
     }
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
-    if existing.iter().any(|item| item.event_id == event_id) {
+    let duplicate_division_id = if is_contact { division_id } else { None };
+    let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
+    if existing.iter().any(|item| {
+        item.event_id == event_id
+            && item.contact_type.eq_ignore_ascii_case(contact_type)
+            && item.division_id == duplicate_division_id
+            && item.weight_class_id == duplicate_weight_class_id
+    }) {
         return Err("Event is already scheduled for this tournament.".to_string());
     }
     if is_contact {
@@ -159,20 +166,20 @@ pub fn create(
             return Err("Invalid draw system.".to_string());
         }
         if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .is_none()
         {
             return Err("Division not found.".to_string());
         }
         if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .is_none()
         {
             return Err("Weight class not found.".to_string());
         }
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .into_iter()
         .map(|item| item.id)
         .collect::<Vec<_>>();
@@ -206,7 +213,7 @@ pub fn create(
         if is_contact { division_id } else { None },
         if is_contact { weight_class_id } else { None },
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
 }
 
@@ -226,9 +233,9 @@ pub fn update(
     division_id: Option<i64>,
     weight_class_id: Option<i64>,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -245,12 +252,17 @@ pub fn update(
         return Err("Invalid status.".to_string());
     }
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
-    if existing
-        .iter()
-        .any(|item| item.id != id && item.event_id == event_id)
-    {
+    let duplicate_division_id = if is_contact { division_id } else { None };
+    let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
+    if existing.iter().any(|item| {
+        item.id != id
+            && item.event_id == event_id
+            && item.contact_type.eq_ignore_ascii_case(contact_type)
+            && item.division_id == duplicate_division_id
+            && item.weight_class_id == duplicate_weight_class_id
+    }) {
         return Err("Event is already scheduled for this tournament.".to_string());
     }
     if is_contact {
@@ -280,20 +292,20 @@ pub fn update(
             return Err("Invalid draw system.".to_string());
         }
         if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .is_none()
         {
             return Err("Division not found.".to_string());
         }
         if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
-            .map_err(|_| "Storage error.".to_string())?
+            .map_err(|err| format!("Storage error: {err}"))?
             .is_none()
         {
             return Err("Weight class not found.".to_string());
         }
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .into_iter()
         .map(|item| item.id)
         .collect::<Vec<_>>();
@@ -328,7 +340,7 @@ pub fn update(
         if is_contact { division_id } else { None },
         if is_contact { weight_class_id } else { None },
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Event not found for this tournament.".to_string());
     }
@@ -341,9 +353,9 @@ pub fn delete(
     tournament_id: i64,
     id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -351,7 +363,7 @@ pub fn delete(
     let _ = match_judges_repository::delete_by_scheduled_event(&mut conn, tournament_id, id);
     let _ = matches_repository::delete_by_scheduled_event(&mut conn, tournament_id, id);
     let changed = scheduled_events_repository::delete(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Event not found for this tournament.".to_string());
     }
