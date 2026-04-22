@@ -2345,6 +2345,7 @@ dependencies = [
  "rocket",
  "rocket_dyn_templates",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
