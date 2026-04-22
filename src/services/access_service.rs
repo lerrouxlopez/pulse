@@ -249,9 +249,9 @@ pub fn create_role(state: &State<AppState>, tournament_id: i64, name: &str) -> R
     if trimmed.is_empty() {
         return Err("Role name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let _ = tournament_roles_repository::create(&mut conn, tournament_id, trimmed, false)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
 }
 
@@ -260,9 +260,9 @@ pub fn delete_role(
     tournament_id: i64,
     role_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let changed = tournament_roles_repository::delete(&mut conn, tournament_id, role_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Role not found or cannot delete Owner.".to_string());
     }
@@ -275,13 +275,13 @@ pub fn update_role_permissions(
     role_id: i64,
     requested_permissions: &[String],
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let is_owner = conn
         .exec_first::<i64, _, _>(
             "SELECT COUNT(*) FROM tournament_roles WHERE id = ? AND tournament_id = ? AND is_owner = 1",
             (role_id, tournament_id),
         )
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .unwrap_or(0)
         > 0;
     if is_owner {
@@ -298,7 +298,7 @@ pub fn update_role_permissions(
         .map(|item| item.to_string())
         .collect();
     role_permissions_repository::replace_for_role(&mut conn, role_id, &filtered)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
 }
 
@@ -308,9 +308,9 @@ pub fn assign_user_role(
     user_id: i64,
     role_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("User does not have tournament access.".to_string());
     }
@@ -318,7 +318,7 @@ pub fn assign_user_role(
         if tournament.user_id == user_id {
             let owner_role_id =
                 tournament_roles_repository::get_owner_role_id(&mut conn, tournament_id)
-                    .map_err(|_| "Storage error.".to_string())?
+                    .map_err(|err| format!("Storage error: {err}"))?
                     .ok_or_else(|| "Owner role missing.".to_string())?;
             if owner_role_id != role_id {
                 return Err("Tournament owner must keep the Owner role.".to_string());
@@ -326,7 +326,7 @@ pub fn assign_user_role(
         }
     }
     tournament_user_roles_repository::set_user_role(&mut conn, tournament_id, user_id, role_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
 }
 
@@ -360,14 +360,15 @@ pub fn create_user(
             "Email already used for this tournament.".to_string()
         }
         auth_service::AuthError::Validation(message) => message,
-        _ => "Storage error.".to_string(),
+        auth_service::AuthError::Storage(message) => message,
+        _ => "Unexpected error creating user.".to_string(),
     })?;
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     conn.exec_drop(
         "UPDATE users SET user_type = 'tournament', tournament_id = ? WHERE id = ?",
         (tournament_id, user_id),
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     if let Some(role_id) = role_id {
         let _ = tournament_user_roles_repository::set_user_role(
             &mut conn,
@@ -393,18 +394,18 @@ pub fn update_user(
     if trimmed_name.is_empty() || trimmed_email.is_empty() {
         return Err("Name and email are required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let matches: Option<i64> = conn
         .exec_first(
             "SELECT id FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
             (user_id, tournament_id),
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if matches.is_none() {
         return Err("User not found for this tournament.".to_string());
     }
     users_repository::update_user(&mut conn, user_id, trimmed_name, &trimmed_email, photo_url)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
 
     if let Some(password) = new_password {
         let password = password.trim();
@@ -414,10 +415,11 @@ pub fn update_user(
             }
             let password_hash = auth_service::hash_password(password).map_err(|err| match err {
                 auth_service::AuthError::Validation(message) => message,
-                _ => "Storage error.".to_string(),
+                auth_service::AuthError::Storage(message) => message,
+                _ => "Unexpected error creating password hash.".to_string(),
             })?;
             users_repository::update_password_hash(&mut conn, user_id, &password_hash)
-                .map_err(|_| "Storage error.".to_string())?;
+                .map_err(|err| format!("Storage error: {err}"))?;
         }
     }
     Ok(())
@@ -428,9 +430,9 @@ pub fn remove_user_from_tournament(
     tournament_id: i64,
     user_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let tournament = tournaments_repository::get_by_id(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Tournament not found.".to_string())?;
     if tournament.user_id == user_id {
         return Err("Cannot remove the owner.".to_string());
@@ -440,17 +442,17 @@ pub fn remove_user_from_tournament(
             "SELECT id FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
             (user_id, tournament_id),
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if matches.is_none() {
         return Err("User not found for this tournament.".to_string());
     }
     tournament_user_roles_repository::remove_user(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     conn.exec_drop(
         "DELETE FROM users WHERE id = ? AND user_type = 'tournament' AND tournament_id = ?",
         (user_id, tournament_id),
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
 }
 

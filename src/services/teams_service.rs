@@ -12,21 +12,21 @@ pub fn list(
     user_id: i64,
     tournament_id: i64,
 ) -> Result<Vec<Team>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
 
     let mut teams =
-        teams_repository::list_teams(&mut conn, tournament_id).map_err(|_| "Storage error.")?;
+        teams_repository::list_teams(&mut conn, tournament_id).map_err(|err| format!("Storage error: {err}"))?;
     let mut members =
-        teams_repository::list_members(&mut conn, tournament_id).map_err(|_| "Storage error.")?;
+        teams_repository::list_members(&mut conn, tournament_id).map_err(|err| format!("Storage error: {err}"))?;
     let member_categories = teams_repository::list_member_categories(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let member_events = teams_repository::list_member_events(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for member in members.iter_mut() {
         if member.photo_url.is_none() || avatar_missing(member.photo_url.as_deref()) {
             if let Ok(url) =
@@ -39,11 +39,11 @@ pub fn list(
         member.event_ids = collect_member_ids(&member_events, member.id);
     }
     let team_divisions = teams_repository::list_team_divisions(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let team_categories = teams_repository::list_team_categories(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let team_events = teams_repository::list_team_events(&mut conn, tournament_id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     let mut division_name_map = std::collections::HashMap::new();
     for (_, item) in team_divisions.iter() {
         division_name_map.insert(item.id, item.name.clone());
@@ -103,14 +103,14 @@ pub fn create_team(
     if trimmed.is_empty() {
         return Err("Team name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let team_id = teams_repository::create_team(&mut conn, tournament_id, trimmed, logo_url)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     sync_team_divisions(&mut conn, tournament_id, team_id, division_ids)?;
     sync_team_categories(&mut conn, tournament_id, team_id, category_ids)?;
     sync_team_events(&mut conn, tournament_id, team_id, event_ids)?;
@@ -132,19 +132,19 @@ pub fn update_team(
     if trimmed.is_empty() {
         return Err("Team name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let exists =
-        teams_repository::team_exists(&mut conn, tournament_id, id).map_err(|_| "Storage error.")?;
+        teams_repository::team_exists(&mut conn, tournament_id, id).map_err(|err| format!("Storage error: {err}"))?;
     if !exists {
         return Err("Team not found for this tournament.".to_string());
     }
     let _ = teams_repository::update_team(&mut conn, tournament_id, id, trimmed, logo_url)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     sync_team_divisions(&mut conn, tournament_id, id, division_ids)?;
     sync_team_categories(&mut conn, tournament_id, id, category_ids)?;
     sync_team_events(&mut conn, tournament_id, id, event_ids)?;
@@ -157,9 +157,9 @@ pub fn delete_team(
     tournament_id: i64,
     id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -180,7 +180,7 @@ pub fn delete_team(
         (id, tournament_id),
     );
     let changed = teams_repository::delete_team(&mut conn, tournament_id, id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Team not found for this tournament.".to_string());
     }
@@ -204,9 +204,9 @@ pub fn add_member(
     if trimmed.is_empty() {
         return Err("Player name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -230,7 +230,7 @@ pub fn add_member(
         division_id,
         photo_url,
     )
-    .map_err(|_| "Storage error.")?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     sync_member_categories(&mut conn, tournament_id, team_id, member_id, category_ids)?;
     sync_member_events(&mut conn, tournament_id, team_id, member_id, event_ids)?;
     if photo_url.is_none() {
@@ -245,16 +245,16 @@ pub fn delete_member(
     tournament_id: i64,
     member_id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let _ = teams_repository::clear_member_categories(&mut conn, tournament_id, member_id);
     let _ = teams_repository::clear_member_events(&mut conn, tournament_id, member_id);
     let changed = teams_repository::delete_member(&mut conn, tournament_id, member_id)
-        .map_err(|_| "Storage error.")?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
         return Err("Member not found for this tournament.".to_string());
     }
@@ -267,14 +267,14 @@ pub fn get_member_team_id(
     tournament_id: i64,
     member_id: i64,
 ) -> Result<i64, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let member = teams_repository::get_member(&mut conn, tournament_id, member_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Player not found for this tournament.".to_string())?;
     Ok(member.team_id)
 }
@@ -298,14 +298,14 @@ pub fn update_member(
     photo_url: Option<&str>,
     clear_photo: bool,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     let existing = teams_repository::get_member(&mut conn, tournament_id, member_id)
-        .map_err(|_| "Storage error.".to_string())?
+        .map_err(|err| format!("Storage error: {err}"))?
         .ok_or_else(|| "Player not found for this tournament.".to_string())?;
 
     let next_name = name
@@ -335,12 +335,12 @@ pub fn update_member(
     };
     let existing_category_ids = collect_member_ids(
         &teams_repository::list_member_categories(&mut conn, tournament_id)
-            .map_err(|_| "Storage error.".to_string())?,
+            .map_err(|err| format!("Storage error: {err}"))?,
         existing.id,
     );
     let existing_event_ids = collect_member_ids(
         &teams_repository::list_member_events(&mut conn, tournament_id)
-            .map_err(|_| "Storage error.".to_string())?,
+            .map_err(|err| format!("Storage error: {err}"))?,
         existing.id,
     );
     let next_category_ids = if clear_categories {
@@ -385,7 +385,7 @@ pub fn update_member(
         next_division_id,
         next_photo.as_deref(),
     )
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
     sync_member_categories(
         &mut conn,
         tournament_id,
@@ -419,7 +419,7 @@ fn resolve_weight_class_id(
         return Ok(None);
     }
     let found = weight_classes_repository::get_by_name(conn, tournament_id, trimmed)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     match found {
         Some(item) => Ok(Some(item.id)),
         None => Err("Weight class not found.".to_string()),
@@ -436,7 +436,7 @@ fn validate_member_selection(
 ) -> Result<(), String> {
     if let Some(division_id) = division_id {
         let team_divisions = teams_repository::list_team_divisions(conn, tournament_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
         let is_allowed = team_divisions
             .iter()
             .any(|(owner_id, item)| *owner_id == team_id && item.id == division_id);
@@ -445,7 +445,7 @@ fn validate_member_selection(
         }
     }
     let team_categories = teams_repository::list_team_categories(conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for category_id in category_ids {
         let is_allowed = team_categories
             .iter()
@@ -455,7 +455,7 @@ fn validate_member_selection(
         }
     }
     let team_events = teams_repository::list_team_events(conn, tournament_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for event_id in event_ids {
         let is_allowed = team_events
             .iter()
@@ -483,7 +483,7 @@ fn sync_member_categories(
     category_ids: &[i64],
 ) -> Result<(), String> {
     teams_repository::clear_member_categories(conn, tournament_id, member_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for category_id in category_ids {
         teams_repository::add_member_category(
             conn,
@@ -492,7 +492,7 @@ fn sync_member_categories(
             member_id,
             *category_id,
         )
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     }
     Ok(())
 }
@@ -505,10 +505,10 @@ fn sync_member_events(
     event_ids: &[i64],
 ) -> Result<(), String> {
     teams_repository::clear_member_events(conn, tournament_id, member_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for event_id in event_ids {
         teams_repository::add_member_event(conn, tournament_id, team_id, member_id, *event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
     Ok(())
 }
@@ -520,7 +520,7 @@ fn ensure_avatar_for_member(
     name: &str,
 ) -> Result<String, String> {
     let avatars_dir = Path::new("static").join("avatars");
-    fs::create_dir_all(&avatars_dir).map_err(|_| "Storage error.".to_string())?;
+    fs::create_dir_all(&avatars_dir).map_err(|err| format!("Storage error: {err}"))?;
     let safe_name: String = name
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || *ch == ' ')
@@ -536,7 +536,7 @@ fn ensure_avatar_for_member(
             color,
             initials
         );
-        fs::write(&filepath, svg).map_err(|_| "Storage error.".to_string())?;
+        fs::write(&filepath, svg).map_err(|err| format!("Storage error: {err}"))?;
     }
     let public_path = format!(
         "/static/avatars/{}",
@@ -597,14 +597,14 @@ pub fn get_team_logo(
     tournament_id: i64,
     team_id: i64,
 ) -> Result<Option<String>, String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
     teams_repository::get_team_logo(&mut conn, tournament_id, team_id)
-        .map_err(|_| "Storage error.".to_string())
+        .map_err(|err| format!("Storage error: {err}"))
 }
 
 fn collect_team_items(items: &[(i64, NamedItem)], team_id: i64) -> Vec<NamedItem> {
@@ -625,10 +625,10 @@ fn sync_team_divisions(
     division_ids: &[i64],
 ) -> Result<(), String> {
     teams_repository::clear_team_divisions(conn, tournament_id, team_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for division_id in division_ids {
         teams_repository::add_team_division(conn, tournament_id, team_id, *division_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
     Ok(())
 }
@@ -640,10 +640,10 @@ fn sync_team_categories(
     category_ids: &[i64],
 ) -> Result<(), String> {
     teams_repository::clear_team_categories(conn, tournament_id, team_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for category_id in category_ids {
         teams_repository::add_team_category(conn, tournament_id, team_id, *category_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
     Ok(())
 }
@@ -655,10 +655,10 @@ fn sync_team_events(
     event_ids: &[i64],
 ) -> Result<(), String> {
     teams_repository::clear_team_events(conn, tournament_id, team_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     for event_id in event_ids {
         teams_repository::add_team_event(conn, tournament_id, team_id, *event_id)
-            .map_err(|_| "Storage error.".to_string())?;
+            .map_err(|err| format!("Storage error: {err}"))?;
     }
     Ok(())
 }

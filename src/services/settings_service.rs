@@ -46,9 +46,9 @@ pub fn create(
     if trimmed.is_empty() {
         return Err("Name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -63,7 +63,7 @@ pub fn create(
         SettingsEntity::Event => events_repository::create(&mut conn, tournament_id, trimmed),
     }
     .map(|_| ())
-    .map_err(|_| "Storage error.".to_string())
+    .map_err(|err| format!("Storage error: {err}"))
 }
 
 pub fn update(
@@ -78,9 +78,9 @@ pub fn update(
     if trimmed.is_empty() {
         return Err("Name is required.".to_string());
     }
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
@@ -97,7 +97,7 @@ pub fn update(
         }
         SettingsEntity::Event => events_repository::update(&mut conn, tournament_id, id, trimmed),
     }
-    .map_err(|_| "Storage error.".to_string())?;
+    .map_err(|err| format!("Storage error: {err}"))?;
 
     if changed == 0 {
         return Err("Item not found for this tournament.".to_string());
@@ -112,9 +112,9 @@ pub fn delete(
     entity: SettingsEntity,
     id: i64,
 ) -> Result<(), String> {
-    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
     let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
-        .map_err(|_| "Storage error.".to_string())?;
+        .map_err(|err| format!("Storage error: {err}"))?;
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
