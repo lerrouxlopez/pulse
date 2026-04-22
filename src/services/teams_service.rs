@@ -400,9 +400,9 @@ pub fn update_member(
         member_id,
         &next_event_ids,
     )?;
-    if changed == 0 {
+/*    if changed == 0 {
         return Err("Player not found for this tournament.".to_string());
-    }
+    }*/
     Ok(())
 }
 
