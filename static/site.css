@@ -1300,6 +1300,40 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
   white-space: nowrap;
 }
 
+.judge-vote-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #334155;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+}
+
+.judge-vote-pill.is-red {
+  background: rgba(220, 38, 38, 0.10);
+  border-color: rgba(220, 38, 38, 0.30);
+  color: #b91c1c;
+}
+
+.judge-vote-pill.is-blue {
+  background: rgba(37, 99, 235, 0.10);
+  border-color: rgba(37, 99, 235, 0.30);
+  color: #1d4ed8;
+}
+
+.judge-vote-pill.is-none {
+  background: rgba(100, 116, 139, 0.08);
+  border-color: rgba(100, 116, 139, 0.22);
+  color: #475569;
+}
+
 @media (max-width: 1400px) {
   .competitor-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));

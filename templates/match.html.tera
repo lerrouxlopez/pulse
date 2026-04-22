@@ -174,7 +174,7 @@
         timerEl.classList.toggle("is-expired", elapsed >= duration);
       };
 
-      const renderJudges = (judges) => {
+      const renderJudges = (judges, isVoteMode) => {
         if (!judgesEl) return;
         judgesEl.innerHTML = (judges || [])
           .map((judge) => {
@@ -182,6 +182,11 @@
             const safePhoto = String(judge.photo_url || "");
             const red = Number(judge.red_score || 0);
             const blue = Number(judge.blue_score || 0);
+            const voteRaw = String(judge.vote_side || "").toLowerCase();
+            const voteLabel =
+              voteRaw === "red" ? "RED" : voteRaw === "blue" ? "BLUE" : "—";
+            const voteClass =
+              voteRaw === "red" ? "is-red" : voteRaw === "blue" ? "is-blue" : "is-none";
             return `
               <article class="judge-card">
                 <div class="judge-left">
@@ -193,8 +198,12 @@
                   </div>
                 </div>
                 <div class="judge-right">
-                  <div class="judge-score-label">Score</div>
-                  <div class="judge-score">Red: ${red} | Blue: ${blue}</div>
+                  <div class="judge-score-label">${isVoteMode ? "Vote" : "Score"}</div>
+                  ${
+                    isVoteMode
+                      ? `<div class="judge-score"><span class="judge-vote-pill ${voteClass}">${voteLabel}</span></div>`
+                      : `<div class="judge-score">Red: ${red} | Blue: ${blue}</div>`
+                  }
                 </div>
               </article>
             `;
@@ -227,7 +236,7 @@
             timerEl.dataset.timerRunning = data.timer_is_running ? "1" : "0";
             renderTimer();
           }
-          renderJudges(data.judges);
+          renderJudges(data.judges, !!data.is_pause_vote_scoring);
         } catch (_) {
           // ignore
         } finally {
@@ -235,7 +244,7 @@
         }
       };
 
-      renderJudges([]);
+      renderJudges([], false);
       renderTimer();
       poll();
       setInterval(poll, 1000);

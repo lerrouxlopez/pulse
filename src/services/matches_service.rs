@@ -247,6 +247,51 @@ pub fn get_detail(
         .map(|round| format!("Round {}", round))
         .unwrap_or_else(|| "Round".to_string());
 
+    let is_pause_vote_scoring = is_contact_first_point_advantage(&event);
+    let mut vote_map: HashMap<i64, String> = HashMap::new();
+    if is_pause_vote_scoring {
+        let vote_event = match_pause_votes_repository::latest_pending_vote_event(
+            &mut conn,
+            tournament_id,
+            item.id,
+            resolved_fight_round_value,
+        )
+        .ok()
+        .flatten()
+        .or_else(|| {
+            match_pause_votes_repository::latest_vote_event(
+                &mut conn,
+                tournament_id,
+                item.id,
+                resolved_fight_round_value,
+            )
+            .ok()
+            .flatten()
+        });
+
+        if let Some(vote_event) = vote_event {
+            let votes = match_pause_votes_repository::list_votes(
+                &mut conn,
+                tournament_id,
+                item.id,
+                vote_event.fight_round,
+                vote_event.pause_seq,
+            )
+            .unwrap_or_default();
+            vote_map = votes
+                .into_iter()
+                .filter_map(|(judge_user_id, side)| {
+                    let side = side.trim().to_lowercase();
+                    if side == "red" || side == "blue" {
+                        Some((judge_user_id, side))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+        }
+    }
+
     Ok(Some(MatchDetail {
         id: item.id,
         event_id: event.id,
@@ -274,6 +319,7 @@ pub fn get_detail(
             .judge_scores
             .iter()
             .map(|judge| JudgeScoreCard {
+                judge_user_id: judge.judge_user_id,
                 name: judge.judge_name.clone(),
                 photo_url: judge
                     .judge_photo_url
@@ -282,8 +328,10 @@ pub fn get_detail(
                     .unwrap_or_else(|| "/static/placeholders/player-3.svg".to_string()),
                 red_score: judge.red_score,
                 blue_score: judge.blue_score,
+                vote_side: vote_map.get(&judge.judge_user_id).cloned(),
             })
             .collect(),
+        is_pause_vote_scoring,
     }))
 }
 

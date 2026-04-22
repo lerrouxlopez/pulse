@@ -79,6 +79,36 @@ pub fn latest_pending_vote_event(
     })
 }
 
+pub fn latest_vote_event(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+) -> mysql::Result<Option<PauseVoteEvent>> {
+    conn.exec_first(
+        "SELECT e.fight_round, e.pause_seq, e.winner_side, e.applied_at
+         FROM match_pause_vote_events e
+         WHERE e.tournament_id = :tournament_id
+           AND e.match_id = :match_id
+           AND e.fight_round = :fight_round
+         ORDER BY e.pause_seq DESC
+         LIMIT 1",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+            "fight_round" => fight_round,
+        },
+    )
+    .map(|row: Option<(i64, i64, Option<String>, Option<String>)>| {
+        row.map(|(fight_round, pause_seq, winner_side, applied_at)| PauseVoteEvent {
+            fight_round,
+            pause_seq,
+            winner_side,
+            applied_at,
+        })
+    })
+}
+
 pub fn count_votes(
     conn: &mut PooledConn,
     tournament_id: i64,
@@ -101,6 +131,30 @@ pub fn count_votes(
         },
     )?;
     Ok(value.unwrap_or(0))
+}
+
+pub fn list_votes(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    fight_round: i64,
+    pause_seq: i64,
+) -> mysql::Result<Vec<(i64, String)>> {
+    conn.exec_map(
+        "SELECT v.judge_user_id, v.side
+         FROM match_pause_votes v
+         WHERE v.tournament_id = :tournament_id
+           AND v.match_id = :match_id
+           AND v.fight_round = :fight_round
+           AND v.pause_seq = :pause_seq",
+        params! {
+            "tournament_id" => tournament_id,
+            "match_id" => match_id,
+            "fight_round" => fight_round,
+            "pause_seq" => pause_seq,
+        },
+        |(judge_user_id, side)| (judge_user_id, side),
+    )
 }
 
 pub fn get_vote_for_judge(
@@ -230,4 +284,3 @@ pub fn first_applied_point_side(
         },
     )
 }
-
