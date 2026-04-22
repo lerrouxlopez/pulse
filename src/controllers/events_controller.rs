@@ -110,6 +110,9 @@ pub fn events_page(
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
     let contact_types = scheduled_events_service::contact_types();
     let statuses = scheduled_events_service::statuses();
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "events",
@@ -129,7 +132,8 @@ pub fn events_page(
             success: success,
             active: "events",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     ))
 }
@@ -613,6 +617,9 @@ pub fn event_profile(
     }
 
     let canvas_width = champion_x + champion_width + margin_left;
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "event_profile",
@@ -647,7 +654,8 @@ pub fn event_profile(
             fight_round_options: fight_round_options,
             active: "events",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     ))
 }

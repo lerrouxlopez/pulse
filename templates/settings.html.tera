@@ -41,8 +41,8 @@
           </div>
           <div class="d-flex flex-column align-items-end gap-2">
             {% if is_owner %}
-            <form action="/tournaments/new" method="post">
-              <input type="hidden" name="name" value="New Tournament" />
+            <form action="/tournaments/new" method="post" class="d-flex align-items-center gap-2">
+              <input class="form-control form-control-sm" name="name" placeholder="Tournament name" required />
               <button class="btn btn-outline-light" type="submit">Create New Tournament</button>
             </form>
             {% endif %}
@@ -68,6 +68,11 @@
 
         <section class="panel">
           <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link {% if active_tab == 'branding' %}active{% endif %}" id="branding-tab" data-bs-toggle="tab" data-bs-target="#branding-pane" type="button" role="tab">
+                Branding
+              </button>
+            </li>
             <li class="nav-item" role="presentation">
               <button class="nav-link {% if active_tab == 'divisions' %}active{% endif %}" id="divisions-tab" data-bs-toggle="tab" data-bs-target="#divisions-pane" type="button" role="tab">
                 Divisions
@@ -96,6 +101,95 @@
           </ul>
 
           <div class="tab-content pt-4" id="settingsTabsContent">
+            <div class="tab-pane fade {% if active_tab == 'branding' %}show active{% endif %}" id="branding-pane" role="tabpanel">
+              <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                  <h5 class="fw-semibold mb-2">Tournament Name</h5>
+                  <form action="/{{ tournament_slug }}/settings/tournament/name" method="post" class="d-flex flex-wrap gap-2">
+                    <input class="form-control flex-grow-1" name="name" value="{{ tournament_name }}" required />
+                    <button class="btn btn-outline-light" type="submit">Save Name</button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                  <h5 class="fw-semibold mb-2">White Label</h5>
+                  <p class="text-cream-60 mb-3">Update logo and theme colors for this tournament.</p>
+                  <form action="/{{ tournament_slug }}/settings/tournament/branding" method="post" enctype="multipart/form-data" class="row g-3">
+                    <div class="col-lg-4">
+                      <label class="form-label text-muted">Tournament Logo</label>
+                      <input class="form-control" type="file" name="logo_file" accept="image/png,image/jpeg" />
+                      <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="clear_logo" id="clear-tournament-logo">
+                        <label class="form-check-label small" for="clear-tournament-logo">Clear logo</label>
+                      </div>
+                      {% if tournament_logo_url %}
+                      <img src="{{ tournament_logo_url }}" alt="Tournament logo" class="mt-2" style="width: 96px; height: 96px; border-radius: 16px; object-fit: cover;">
+                      {% endif %}
+                    </div>
+                    <div class="col-lg-8">
+                      <div class="row g-2 mb-3">
+                        <div class="col-md-8">
+                          <label class="form-label text-muted">Preset Themes</label>
+                          <select class="form-select" id="branding-preset">
+                            <option value="">Custom (no preset)</option>
+                            <option value="classic">Classic Pulse</option>
+                            <option value="forest">Forest Arena</option>
+                            <option value="sunset">Sunset Fight</option>
+                            <option value="mono">Monochrome Pro</option>
+                            <option value="royal">Royal Blue</option>
+                            <option value="volcanic">Volcanic Red</option>
+                            <option value="oceanic">Oceanic Teal</option>
+                            <option value="golden">Golden Night</option>
+                            <option value="mint">Mint Breeze</option>
+                            <option value="grape">Grape Pop</option>
+                            <option value="ember">Ember Steel</option>
+                            <option value="citrus">Citrus Punch</option>
+                            <option value="sandstone">Sandstone Calm</option>
+                            <option value="midnight">Midnight Neon</option>
+                          </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                          <button class="btn btn-outline-secondary w-100" type="button" id="apply-branding-preset">Apply Preset</button>
+                        </div>
+                      </div>
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Primary</label>
+                          <input class="form-control form-control-color w-100 js-branding-color" type="color" name="theme_primary_color" value="{{ theme_primary_color }}">
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Accent</label>
+                          <input class="form-control form-control-color w-100 js-branding-color" type="color" name="theme_accent_color" value="{{ theme_accent_color }}">
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Background</label>
+                          <input class="form-control form-control-color w-100 js-branding-color" type="color" name="theme_background_color" value="{{ theme_background_color }}">
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Navigation Background</label>
+                          <input class="form-control form-control-color w-100 js-branding-color" type="color" name="nav_background_color" value="{{ nav_background_color }}">
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label text-muted">Navigation Text</label>
+                          <input class="form-control form-control-color w-100 js-branding-color" type="color" name="nav_text_color" value="{{ nav_text_color }}">
+                        </div>
+                      </div>
+                      <div class="mt-3 p-3 rounded-3" style="background: {{ theme_background_color }}; border: 1px solid #e5e7eb;">
+                        <span class="badge" style="background: {{ theme_primary_color }}; color: #fff;">Primary</span>
+                        <span class="badge ms-2" style="background: {{ theme_accent_color }}; color: #fff;">Accent</span>
+                        <span class="badge ms-2" style="background: {{ nav_background_color }}; color: {{ nav_text_color }};">Nav</span>
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <button class="btn btn-outline-light" type="submit">Save Branding</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
             <div class="tab-pane fade {% if active_tab == 'divisions' %}show active{% endif %}" id="divisions-pane" role="tabpanel">
               <form action="/{{ tournament_slug }}/settings/divisions" method="post" class="d-flex flex-wrap gap-2 mb-3">
                 <input class="form-control flex-grow-1" name="name" placeholder="New division name" />
@@ -689,6 +783,120 @@
           link.href = absolute;
         } catch (_) {}
       });
+
+      const brandingPresets = {
+        classic: {
+          theme_primary_color: "#2d62ff",
+          theme_accent_color: "#ff6b35",
+          theme_background_color: "#f2f3f5",
+          nav_background_color: "#0f1426",
+          nav_text_color: "#f5efe6"
+        },
+        forest: {
+          theme_primary_color: "#166534",
+          theme_accent_color: "#eab308",
+          theme_background_color: "#ecfdf5",
+          nav_background_color: "#052e16",
+          nav_text_color: "#dcfce7"
+        },
+        sunset: {
+          theme_primary_color: "#c2410c",
+          theme_accent_color: "#7c3aed",
+          theme_background_color: "#fff7ed",
+          nav_background_color: "#7c2d12",
+          nav_text_color: "#ffedd5"
+        },
+        mono: {
+          theme_primary_color: "#334155",
+          theme_accent_color: "#0f172a",
+          theme_background_color: "#f8fafc",
+          nav_background_color: "#111827",
+          nav_text_color: "#e5e7eb"
+        },
+        royal: {
+          theme_primary_color: "#1d4ed8",
+          theme_accent_color: "#2563eb",
+          theme_background_color: "#eff6ff",
+          nav_background_color: "#1e3a8a",
+          nav_text_color: "#dbeafe"
+        },
+        volcanic: {
+          theme_primary_color: "#b91c1c",
+          theme_accent_color: "#ef4444",
+          theme_background_color: "#fef2f2",
+          nav_background_color: "#7f1d1d",
+          nav_text_color: "#fee2e2"
+        },
+        oceanic: {
+          theme_primary_color: "#0f766e",
+          theme_accent_color: "#14b8a6",
+          theme_background_color: "#f0fdfa",
+          nav_background_color: "#134e4a",
+          nav_text_color: "#ccfbf1"
+        },
+        golden: {
+          theme_primary_color: "#a16207",
+          theme_accent_color: "#eab308",
+          theme_background_color: "#fefce8",
+          nav_background_color: "#713f12",
+          nav_text_color: "#fef3c7"
+        },
+        mint: {
+          theme_primary_color: "#059669",
+          theme_accent_color: "#34d399",
+          theme_background_color: "#ecfdf5",
+          nav_background_color: "#065f46",
+          nav_text_color: "#d1fae5"
+        },
+        grape: {
+          theme_primary_color: "#7c3aed",
+          theme_accent_color: "#a78bfa",
+          theme_background_color: "#f5f3ff",
+          nav_background_color: "#4c1d95",
+          nav_text_color: "#ede9fe"
+        },
+        ember: {
+          theme_primary_color: "#ea580c",
+          theme_accent_color: "#fb7185",
+          theme_background_color: "#fff7ed",
+          nav_background_color: "#7c2d12",
+          nav_text_color: "#ffedd5"
+        },
+        citrus: {
+          theme_primary_color: "#65a30d",
+          theme_accent_color: "#f59e0b",
+          theme_background_color: "#f7fee7",
+          nav_background_color: "#3f6212",
+          nav_text_color: "#ecfccb"
+        },
+        sandstone: {
+          theme_primary_color: "#78716c",
+          theme_accent_color: "#a8a29e",
+          theme_background_color: "#fafaf9",
+          nav_background_color: "#44403c",
+          nav_text_color: "#f5f5f4"
+        },
+        midnight: {
+          theme_primary_color: "#06b6d4",
+          theme_accent_color: "#22d3ee",
+          theme_background_color: "#ecfeff",
+          nav_background_color: "#0f172a",
+          nav_text_color: "#cffafe"
+        }
+      };
+      const presetSelect = document.getElementById("branding-preset");
+      const presetBtn = document.getElementById("apply-branding-preset");
+      if (presetSelect && presetBtn) {
+        presetBtn.addEventListener("click", () => {
+          const selected = presetSelect.value;
+          const preset = brandingPresets[selected];
+          if (!preset) return;
+          Object.entries(preset).forEach(([name, value]) => {
+            const input = document.querySelector(`input[name="${name}"]`);
+            if (input) input.value = value;
+          });
+        });
+      }
     </script>
   </body>
 </html>

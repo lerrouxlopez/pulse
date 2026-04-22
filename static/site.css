@@ -6,6 +6,12 @@
   --cobalt: #2d62ff;
   --cobalt-2: #1d3b99;
   --ember: #ff6b35;
+  --theme-primary: #2d62ff;
+  --theme-accent: #ff6b35;
+  --theme-background: #f2f3f5;
+  --nav-bg: #0f1426;
+  --nav-text: #f5efe6;
+  --nav-active: #1d4ed8;
   --card: rgba(15, 20, 36, 0.85);
   --stroke: rgba(255, 255, 255, 0.1);
 }
@@ -20,7 +26,7 @@ body {
 
 a,
 a:visited {
-  color: var(--cobalt);
+  color: var(--theme-primary);
   font-weight: 700;
   text-decoration: underline;
   text-decoration-color: rgba(45, 98, 255, 0.65);
@@ -29,8 +35,8 @@ a:visited {
 
 a:hover,
 a:focus-visible {
-  color: var(--cobalt-2);
-  text-decoration-color: rgba(29, 59, 153, 0.8);
+  color: var(--theme-accent);
+  text-decoration-color: rgba(0, 0, 0, 0.35);
 }
 
 /* Keep button-like links consistent with Bootstrap button styling. */
@@ -106,12 +112,12 @@ a.btn:visited {
 }
 
 .btn-primary {
-  background: linear-gradient(120deg, #8f6d3f, #c09a6a);
+  background: linear-gradient(120deg, var(--theme-primary), var(--theme-accent));
   border: none;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(120deg, #c09a6a, #8f6d3f);
+  background: linear-gradient(120deg, var(--theme-accent), var(--theme-primary));
 }
 
 .btn-outline-light {
@@ -149,7 +155,7 @@ a.btn:visited {
 }
 
 .shadow-glow {
-  box-shadow: 0 12px 30px rgba(45, 98, 255, 0.45);
+  box-shadow: 0 12px 30px var(--theme-primary);
 }
 
 .flow-step {
@@ -244,7 +250,7 @@ a.btn:visited {
 }
 
 .dashboard-body {
-  background: #f2f3f5;
+  background: var(--theme-background);
   color: #10131a;
 }
 
@@ -265,7 +271,7 @@ body.sidebar-collapsed .dashboard-wrap {
 }
 
 .sidebar {
-  background: #0f1426;
+  background: var(--nav-bg);
   border-right: 1px solid var(--stroke);
   padding: 24px 20px;
   display: flex;
@@ -280,10 +286,15 @@ body.sidebar-collapsed .sidebar {
 }
 
 .sidebar .nav-link {
-  color: var(--cream-75);
+  color: var(--nav-text);
   border-radius: 12px;
   padding: 10px 14px;
   margin-bottom: 6px;
+}
+
+.sidebar .brand {
+  width: 100%;
+  justify-content: center;
 }
 
 .sidebar-toggle {
@@ -433,13 +444,13 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
 
 .sidebar .nav-link.active,
 .sidebar .nav-link:hover {
-  color: var(--cream);
-  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  background: var(--nav-active);
 }
 
 .content {
   padding: 32px 36px 48px;
-  background: #f2f3f5;
+  background: var(--theme-background);
 }
 
 .stat-card,

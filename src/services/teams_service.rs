@@ -138,11 +138,13 @@ pub fn update_team(
     if !has_access {
         return Err("Tournament not found.".to_string());
     }
-    let changed = teams_repository::update_team(&mut conn, tournament_id, id, trimmed, logo_url)
-        .map_err(|_| "Storage error.")?;
-    if changed == 0 {
+    let exists =
+        teams_repository::team_exists(&mut conn, tournament_id, id).map_err(|_| "Storage error.")?;
+    if !exists {
         return Err("Team not found for this tournament.".to_string());
     }
+    let _ = teams_repository::update_team(&mut conn, tournament_id, id, trimmed, logo_url)
+        .map_err(|_| "Storage error.")?;
     sync_team_divisions(&mut conn, tournament_id, id, division_ids)?;
     sync_team_categories(&mut conn, tournament_id, id, category_ids)?;
     sync_team_events(&mut conn, tournament_id, id, event_ids)?;

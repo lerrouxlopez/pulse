@@ -44,8 +44,8 @@
           <div class="d-flex align-items-center gap-2">
             <span class="badge text-bg-light text-ink">Day 1 • 6 Mats • Live</span>
             {% if is_system_user %}
-            <form action="/tournaments/new" method="post">
-              <input type="hidden" name="name" value="New Tournament" />
+            <form action="/tournaments/new" method="post" class="d-flex align-items-center gap-2">
+              <input class="form-control form-control-sm" name="name" placeholder="Tournament name" required />
               <button class="btn btn-outline-light btn-sm" type="submit">Create New Tournament</button>
             </form>
             {% endif %}
@@ -215,7 +215,7 @@
 
             {% if is_system_user %}
             <form action="/tournaments/new" method="post" class="d-flex flex-wrap gap-2">
-              <input class="form-control flex-grow-1" name="name" placeholder="New tournament name" />
+              <input class="form-control flex-grow-1" name="name" placeholder="New tournament name" required />
               <button class="btn btn-primary" type="submit">Create Tournament</button>
             </form>
             {% endif %}

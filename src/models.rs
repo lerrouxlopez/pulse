@@ -58,6 +58,12 @@ pub struct Tournament {
     pub is_setup: bool,
     pub user_id: i64,
     pub started_at: Option<String>,
+    pub logo_url: Option<String>,
+    pub theme_primary_color: Option<String>,
+    pub theme_accent_color: Option<String>,
+    pub theme_background_color: Option<String>,
+    pub nav_background_color: Option<String>,
+    pub nav_text_color: Option<String>,
 }
 
 #[derive(Serialize)]

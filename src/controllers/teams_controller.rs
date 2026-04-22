@@ -105,6 +105,9 @@ fn render_teams_template(
     let categories = settings_service::list(state, tournament.id, SettingsEntity::Category);
     let events = settings_service::list(state, tournament.id, SettingsEntity::Event);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Template::render(
         "teams",
@@ -122,7 +125,8 @@ fn render_teams_template(
             import_failures: import_failures,
             active: "teams",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     )
 }
@@ -441,6 +445,9 @@ pub fn team_profile(
 
         filtered
     };
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "team_profile",
@@ -467,7 +474,8 @@ pub fn team_profile(
             coverage_division: coverage_division,
             coverage_category: coverage_category,
             coverage_event: coverage_event,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     ))
 }
