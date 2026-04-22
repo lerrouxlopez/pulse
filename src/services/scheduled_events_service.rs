@@ -129,7 +129,14 @@ pub fn create(
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
-    if existing.iter().any(|item| item.event_id == event_id) {
+    let duplicate_division_id = if is_contact { division_id } else { None };
+    let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
+    if existing.iter().any(|item| {
+        item.event_id == event_id
+            && item.contact_type.eq_ignore_ascii_case(contact_type)
+            && item.division_id == duplicate_division_id
+            && item.weight_class_id == duplicate_weight_class_id
+    }) {
         return Err("Event is already scheduled for this tournament.".to_string());
     }
     if is_contact {
@@ -247,10 +254,15 @@ pub fn update(
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
-    if existing
-        .iter()
-        .any(|item| item.id != id && item.event_id == event_id)
-    {
+    let duplicate_division_id = if is_contact { division_id } else { None };
+    let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
+    if existing.iter().any(|item| {
+        item.id != id
+            && item.event_id == event_id
+            && item.contact_type.eq_ignore_ascii_case(contact_type)
+            && item.division_id == duplicate_division_id
+            && item.weight_class_id == duplicate_weight_class_id
+    }) {
         return Err("Event is already scheduled for this tournament.".to_string());
     }
     if is_contact {
