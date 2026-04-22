@@ -47,6 +47,62 @@
         {% if success %}
         <div class="alert alert-success">{{ success }}</div>
         {% endif %}
+        {% if import_failures | length > 0 %}
+        <div class="alert alert-warning">
+          <div class="fw-semibold mb-2">Failed Rows (for correction)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Data</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for failure in import_failures %}
+                <tr>
+                  <td>{{ failure.row_number }}</td>
+                  <td><code>{{ failure.row_data }}</code></td>
+                  <td>{{ failure.error }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+
+        <section class="panel mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <h3 class="fw-semibold mb-0">Import Teams / Members</h3>
+              <span class="text-cream-60 small">CSV or XLSX with partial success handling</span>
+            </div>
+          </div>
+          <form action="/{{ tournament_slug }}/teams/import" method="post" enctype="multipart/form-data" class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Import Type</label>
+              <select class="form-select" name="import_type">
+                <option value="teams">Teams</option>
+                <option value="members">Members</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label text-cream-60">Upload File</label>
+              <input class="form-control" type="file" name="import_file" accept=".csv,.xlsx" required />
+            </div>
+            <div class="col-md-4 d-flex align-items-end gap-2">
+              <button class="btn btn-outline-light" type="submit">Import</button>
+              <a class="btn btn-outline-secondary" href="/{{ tournament_slug }}/teams/import/template/teams" download="teams-template.csv">Download Teams Template</a>
+              <a class="btn btn-outline-secondary" href="/{{ tournament_slug }}/teams/import/template/members" download="members-template.csv">Download Members Template</a>
+            </div>
+          </form>
+          <div class="mt-3 text-cream-60 small">
+            For columns that accept multiple values (for example: <code>divisions</code>, <code>categories</code>, <code>events</code>), separate entries with a pipe <code>|</code>.
+            Example: <code>Male Division|Female Division</code> or <code>Single Live Stick|Double Live Stick</code>.
+          </div>
+        </section>
 
         <section class="panel mb-4">
           <div class="d-flex align-items-center justify-content-between mb-3">

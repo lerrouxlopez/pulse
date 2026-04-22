@@ -90,9 +90,12 @@ fn rocket() -> _ {
                 controllers::teams_controller::create_team,
                 controllers::teams_controller::update_team,
                 controllers::teams_controller::delete_team,
+                controllers::teams_controller::download_import_template,
+                controllers::teams_controller::import_teams_data,
                 controllers::teams_controller::add_member,
                 controllers::teams_controller::delete_member,
-                controllers::teams_controller::update_member
+                controllers::teams_controller::update_member,
+                controllers::teams_controller::bulk_assign_members
             ],
         )
         .mount("/static", FileServer::from(relative!("static")))

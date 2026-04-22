@@ -112,6 +112,10 @@ pub fn settings_page(
         .iter()
         .map(|item| item.name.to_lowercase())
         .collect();
+    let division_names: Vec<String> = divisions
+        .iter()
+        .map(|item| item.name.to_lowercase())
+        .collect();
     let event_names: Vec<String> = events.iter().map(|item| item.name.to_lowercase()).collect();
     let weight_names: Vec<String> = weight_classes
         .iter()
@@ -128,6 +132,7 @@ pub fn settings_page(
             tournament_slug: tournament.slug,
             is_setup: tournament.is_setup,
             divisions: divisions,
+            division_names: division_names,
             categories: categories,
             category_names: category_names,
             weight_classes: weight_classes,

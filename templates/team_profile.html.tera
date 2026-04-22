@@ -62,6 +62,12 @@
             <a class="btn btn-outline-light" href="/{{ tournament_slug }}/teams">Back to Teams</a>
           </div>
         </header>
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% endif %}
 
         <section class="stat-strip mb-4">
           <div class="stat-card stat-blue">
@@ -258,11 +264,64 @@
         </section>
 
         <section class="panel">
-          <h3 class="fw-semibold mb-3">Players</h3>
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+            <h3 class="fw-semibold mb-0">Players</h3>
+            <form id="bulk-assign-form" action="/{{ tournament_slug }}/teams/{{ team.id }}/members/bulk-assign" method="post" class="d-flex flex-wrap align-items-end gap-2">
+              <div>
+                <label class="form-label text-cream-60 mb-1">Division</label>
+                <select class="form-select form-select-sm" name="division_id">
+                  <option value="">Clear division</option>
+                  {% for division in team.divisions %}
+                  <option value="{{ division.id }}">{{ division.name }}</option>
+                  {% endfor %}
+                </select>
+                <div class="form-check mt-1">
+                  <input class="form-check-input" type="checkbox" name="apply_division" id="bulk-apply-division">
+                  <label class="form-check-label small" for="bulk-apply-division">Apply division</label>
+                </div>
+              </div>
+              <div>
+                <label class="form-label text-cream-60 mb-1">Categories</label>
+                <div class="drawer-grid">
+                  {% for category in team.categories %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="bulk-category-{{ category.id }}">
+                    <label class="form-check-label small" for="bulk-category-{{ category.id }}">{{ category.name }}</label>
+                  </div>
+                  {% endfor %}
+                </div>
+                <div class="form-check mt-1">
+                  <input class="form-check-input" type="checkbox" name="apply_categories" id="bulk-apply-categories">
+                  <label class="form-check-label small" for="bulk-apply-categories">Apply categories</label>
+                </div>
+              </div>
+              <div>
+                <label class="form-label text-cream-60 mb-1">Events</label>
+                <div class="drawer-grid">
+                  {% for event in team.events %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="bulk-event-{{ event.id }}">
+                    <label class="form-check-label small" for="bulk-event-{{ event.id }}">{{ event.name }}</label>
+                  </div>
+                  {% endfor %}
+                </div>
+                <div class="form-check mt-1">
+                  <input class="form-check-input" type="checkbox" name="apply_events" id="bulk-apply-events">
+                  <label class="form-check-label small" for="bulk-apply-events">Apply events</label>
+                </div>
+              </div>
+              <div class="d-flex flex-column gap-2">
+                <button class="btn btn-sm btn-outline-light" type="submit">Apply to Selected</button>
+                <span class="text-cream-60 small">Select players from the table first.</span>
+              </div>
+              <div id="bulk-member-ids"></div>
+            </form>
+          </div>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0">
               <thead>
                 <tr>
+                  <th><input id="bulk-select-all" class="form-check-input" type="checkbox" /></th>
                   <th>Photo</th>
                   <th>Name</th>
                   <th>Weight Class</th>
@@ -276,6 +335,7 @@
               <tbody>
                 {% for member in team.members %}
                 <tr>
+                  <td><input class="form-check-input js-bulk-member" type="checkbox" value="{{ member.id }}" /></td>
                   <td>
                     {% if member.photo_url %}
                     <img src="{{ member.photo_url }}" alt="Player photo" style="width: 42px; height: 42px; object-fit: cover; border-radius: 12px;">
@@ -325,7 +385,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="8" class="text-cream-60">No players yet.</td>
+                  <td colspan="9" class="text-cream-60">No players yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -478,6 +538,38 @@
           }
         });
       });
+    </script>
+    <script>
+      const bulkSelectAll = document.getElementById("bulk-select-all");
+      const bulkMemberBoxes = Array.from(document.querySelectorAll(".js-bulk-member"));
+      const bulkForm = document.getElementById("bulk-assign-form");
+      const bulkIdsWrap = document.getElementById("bulk-member-ids");
+
+      if (bulkSelectAll) {
+        bulkSelectAll.addEventListener("change", () => {
+          bulkMemberBoxes.forEach((box) => {
+            box.checked = bulkSelectAll.checked;
+          });
+        });
+      }
+
+      if (bulkForm && bulkIdsWrap) {
+        bulkForm.addEventListener("submit", (event) => {
+          bulkIdsWrap.innerHTML = "";
+          const selected = bulkMemberBoxes.filter((box) => box.checked);
+          if (selected.length === 0) {
+            event.preventDefault();
+            return;
+          }
+          selected.forEach((box) => {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "member_ids";
+            input.value = box.value;
+            bulkIdsWrap.appendChild(input);
+          });
+        });
+      }
     </script>
     <script>
       const placeholderSets = {
