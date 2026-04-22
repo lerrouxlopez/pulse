@@ -81,6 +81,14 @@ pub fn team_exists(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql:
     Ok(count.unwrap_or(0) > 0)
 }
 
+pub fn member_exists(conn: &mut PooledConn, tournament_id: i64, member_id: i64) -> mysql::Result<bool> {
+    let count: Option<i64> = conn.exec_first(
+        "SELECT COUNT(*) FROM teams_members WHERE id = ? AND tournament_id = ?",
+        (member_id, tournament_id),
+    )?;
+    Ok(count.unwrap_or(0) > 0)
+}
+
 pub fn delete_team(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql::Result<usize> {
     conn.exec_drop(
         "DELETE FROM teams WHERE id = ? AND tournament_id = ?",
