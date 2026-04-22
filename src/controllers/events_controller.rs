@@ -45,6 +45,15 @@ pub struct MatchForm {
 }
 
 #[derive(FromForm)]
+pub struct EventJudgesForm {
+    pub judge_1_id: Option<i64>,
+    pub judge_2_id: Option<i64>,
+    pub judge_3_id: Option<i64>,
+    pub judge_4_id: Option<i64>,
+    pub judge_5_id: Option<i64>,
+}
+
+#[derive(FromForm)]
 pub struct MatchTimerForm {
     pub fight_round: Option<i64>,
     pub auto_complete: Option<i32>,
@@ -87,6 +96,15 @@ pub fn events_page(
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
     let events = scheduled_events_service::list(state, user.id, tournament.id).unwrap_or_default();
+    let mut contact_events: Vec<&crate::models::ScheduledEvent> = Vec::new();
+    let mut non_contact_events: Vec<&crate::models::ScheduledEvent> = Vec::new();
+    for e in &events {
+        if e.contact_type.eq_ignore_ascii_case("Contact") {
+            contact_events.push(e);
+        } else {
+            non_contact_events.push(e);
+        }
+    }
     let event_options = settings_service::list(state, tournament.id, SettingsEntity::Event);
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let weight_classes = settings_service::list(state, tournament.id, SettingsEntity::WeightClass);
@@ -99,7 +117,9 @@ pub fn events_page(
             name: user.name,
             tournament_name: tournament.name,
             tournament_slug: tournament.slug,
-            events: events,
+            events: &events,
+            contact_events: contact_events,
+            non_contact_events: non_contact_events,
             event_options: event_options,
             divisions: divisions,
             weight_classes: weight_classes,
@@ -114,12 +134,14 @@ pub fn events_page(
     ))
 }
 
-#[get("/<slug>/events/<id>")]
+#[get("/<slug>/events/<id>?<error>&<success>")]
 pub fn event_profile(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
     id: i64,
+    error: Option<String>,
+    success: Option<String>,
 ) -> Result<Template, Redirect> {
     let user = match auth_service::current_user(state, jar) {
         Some(user) => user,
@@ -166,6 +188,13 @@ pub fn event_profile(
             event.id,
             event.event_id,
         );
+    } else {
+        let _ = matches_service::ensure_performances_for_non_contact_event(
+            state,
+            user.id,
+            tournament.id,
+            event.id,
+        );
     }
 
     let mut matches = matches_service::list(state, user.id, tournament.id, id).unwrap_or_default();
@@ -210,12 +239,68 @@ pub fn event_profile(
             let sb = b.slot.unwrap_or(0);
             ra.cmp(&rb).then(sa.cmp(&sb))
         });
+    } else {
+        matches.sort_by(|a, b| {
+            let sa = a.slot.unwrap_or(0);
+            let sb = b.slot.unwrap_or(0);
+            sa.cmp(&sb).then(a.id.cmp(&b.id))
+        });
     }
     let match_statuses = matches_service::statuses();
-    let competitors = matches_service::list_competitors(state, user.id, tournament.id, event.id)
-        .unwrap_or_default();
     let judge_users = matches_service::list_judges(state, tournament.id);
     let is_contact = event.contact_type.eq_ignore_ascii_case("Contact");
+
+    let mut competitors =
+        matches_service::list_competitors(state, user.id, tournament.id, event.id)
+            .unwrap_or_default();
+    if competitors.is_empty() && !is_contact {
+        // Fallback: derive participants from performances if the event->member mapping isn't present.
+        // This keeps the Participants panel useful for non-contact events.
+        if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+            let mut seen = std::collections::HashSet::new();
+            for m in &matches {
+                let Some(member_id) = m.red_member_id else {
+                    continue;
+                };
+                if !seen.insert(member_id) {
+                    continue;
+                }
+                if let Ok(Some(member)) =
+                    crate::repositories::teams_repository::get_member(&mut conn, tournament.id, member_id)
+                {
+                    competitors.push(crate::models::EventCompetitor {
+                        member_id: member.id,
+                        team_id: member.team_id,
+                        name: member.name,
+                        photo_url: member.photo_url,
+                    });
+                }
+            }
+        }
+    }
+
+    let event_judge_user_ids: Vec<i64> = if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+        crate::repositories::scheduled_event_judges_repository::list_assigned_judges(
+            &mut conn,
+            tournament.id,
+            event.id,
+        )
+        .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    #[derive(Serialize, Clone)]
+    struct EventJudgeSlotView {
+        order: i32,
+        judge_user_id: Option<i64>,
+    }
+    let mut event_judge_slots: Vec<EventJudgeSlotView> = Vec::new();
+    for order in 1..=5 {
+        event_judge_slots.push(EventJudgeSlotView {
+            order,
+            judge_user_id: event_judge_user_ids.get((order - 1) as usize).copied(),
+        });
+    }
     let max_round = matches
         .iter()
         .filter_map(|item| item.round)
@@ -565,6 +650,9 @@ pub fn event_profile(
             match_statuses: match_statuses,
             competitors: competitors,
             judge_users: judge_users,
+            event_judge_slots: event_judge_slots,
+            error: error,
+            success: success,
             is_contact: is_contact,
             rounds: rounds,
             bracket_rounds: bracket_rounds,
@@ -749,83 +837,79 @@ pub fn create_match(
     event_id: i64,
     form: Form<MatchForm>,
 ) -> Result<Redirect, Status> {
+    let _ = form;
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament =
         tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let event = scheduled_events_service::get_by_id(state, user.id, tournament.id, event_id)
         .map_err(|_| Status::InternalServerError)?
         .ok_or(Status::NotFound)?;
+
+    // Matches are not manually created from the event profile anymore.
+    // Contact events use an auto-generated bracket, and non-contact events use auto-generated performances.
+    let message = if event.contact_type.eq_ignore_ascii_case("Contact") {
+        None
+    } else {
+        Some("Non-contact events use performances; matches are auto-generated.".to_string())
+    };
+    return Ok(Redirect::to(uri!(event_profile(
+        slug = slug,
+        id = event_id,
+        error = message,
+        success = Option::<String>::None
+    ))));
+}
+
+#[post("/<slug>/events/<event_id>/judges", data = "<form>")]
+pub fn set_non_contact_event_judges(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    event_id: i64,
+    form: Form<EventJudgesForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+
+    let event = scheduled_events_service::get_by_id(state, user.id, tournament.id, event_id)
+        .map_err(|_| Status::InternalServerError)?
+        .ok_or(Status::NotFound)?;
     if event.contact_type.eq_ignore_ascii_case("Contact") {
         return Ok(Redirect::to(uri!(event_profile(
             slug = slug,
-            id = event_id
+            id = event_id,
+            error = Some("Judge assignments for contact events are set per match.".to_string()),
+            success = Option::<String>::None
         ))));
     }
-    let mat = form
-        .mat
-        .as_deref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let category = form
-        .category
-        .as_deref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let red = form
-        .red
-        .as_deref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let blue = form
-        .blue
-        .as_deref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let location = form
-        .location
-        .as_deref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let match_time = form
-        .match_time
-        .as_deref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let status = match form.status.as_deref() {
-        Some(value) if !value.trim().is_empty() => value.trim(),
-        _ => {
-            return Ok(Redirect::to(uri!(event_profile(
-                slug = slug,
-                id = event_id
-            ))));
-        }
-    };
-    match matches_service::create(
+
+    let judge_user_ids = build_judge_assignments_from_event(&form);
+    let result = matches_service::set_non_contact_event_judges(
         state,
         user.id,
         tournament.id,
         event_id,
-        mat,
-        category,
-        red,
-        blue,
-        status,
-        location,
-        match_time,
-        None,
-        None,
-        None,
-        None,
-        false,
-        0,
-        0,
-    ) {
-        Ok(_) => Ok(Redirect::to(uri!(event_profile(
+        &judge_user_ids,
+    );
+    match result {
+        Ok(_) => {
+            let _ = matches_service::ensure_performances_for_non_contact_event(
+                state,
+                user.id,
+                tournament.id,
+                event_id,
+            );
+            Ok(Redirect::to(uri!(event_profile(
+                slug = slug,
+                id = event_id,
+                error = Option::<String>::None,
+                success = Some("Judges updated.".to_string())
+            ))))
+        }
+        Err(message) => Ok(Redirect::to(uri!(event_profile(
             slug = slug,
-            id = event_id
-        )))),
-        Err(message) => Ok(Redirect::to(uri!(events_page(
-            slug = slug,
+            id = event_id,
             error = Some(message),
             success = Option::<String>::None
         )))),
@@ -925,7 +1009,9 @@ pub fn update_match(
     match result {
         Ok(_) => Ok(Redirect::to(uri!(event_profile(
             slug = slug,
-            id = event_id
+            id = event_id,
+            error = Option::<String>::None,
+            success = Option::<String>::None
         )))),
         Err(message) => Ok(Redirect::to(uri!(events_page(
             slug = slug,
@@ -965,7 +1051,9 @@ pub fn toggle_match_timer(
 
     Ok(Redirect::to(uri!(event_profile(
         slug = slug,
-        id = event_id
+        id = event_id,
+        error = Option::<String>::None,
+        success = Option::<String>::None
     ))))
 }
 
@@ -990,7 +1078,9 @@ pub fn toggle_match_timer_pause(
 
     Ok(Redirect::to(uri!(event_profile(
         slug = slug,
-        id = event_id
+        id = event_id,
+        error = Option::<String>::None,
+        success = Option::<String>::None
     ))))
 }
 
@@ -1008,7 +1098,9 @@ pub fn delete_match(
     match matches_service::delete(state, user.id, tournament.id, id) {
         Ok(_) => Ok(Redirect::to(uri!(event_profile(
             slug = slug,
-            id = event_id
+            id = event_id,
+            error = Option::<String>::None,
+            success = Option::<String>::None
         )))),
         Err(message) => Ok(Redirect::to(uri!(events_page(
             slug = slug,
@@ -1035,7 +1127,12 @@ pub fn reset_matchmaking(
     }
 
     match matches_service::reset_automatic_matchmaking(state, user.id, tournament.id, id) {
-        Ok(_) => Ok(Redirect::to(uri!(event_profile(slug = slug, id = id)))),
+        Ok(_) => Ok(Redirect::to(uri!(event_profile(
+            slug = slug,
+            id = id,
+            error = Option::<String>::None,
+            success = Option::<String>::None
+        )))),
         Err(message) => Ok(Redirect::to(uri!(events_page(
             slug = slug,
             error = Some(message),
@@ -1044,15 +1141,26 @@ pub fn reset_matchmaking(
     }
 }
 
+fn build_judge_assignments_from_slots(values: [Option<i64>; 5]) -> Vec<i64> {
+    values.into_iter().flatten().collect()
+}
+
 fn build_judge_assignments(form: &MatchForm) -> Vec<i64> {
-    [
+    build_judge_assignments_from_slots([
         form.judge_1_id,
         form.judge_2_id,
         form.judge_3_id,
         form.judge_4_id,
         form.judge_5_id,
-    ]
-    .into_iter()
-    .flatten()
-    .collect()
+    ])
+}
+
+fn build_judge_assignments_from_event(form: &EventJudgesForm) -> Vec<i64> {
+    build_judge_assignments_from_slots([
+        form.judge_1_id,
+        form.judge_2_id,
+        form.judge_3_id,
+        form.judge_4_id,
+        form.judge_5_id,
+    ])
 }

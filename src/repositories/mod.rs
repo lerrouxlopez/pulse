@@ -6,6 +6,8 @@ pub mod match_pause_votes_repository;
 pub mod matches_repository;
 pub mod role_permissions_repository;
 pub mod scheduled_events_repository;
+pub mod scheduled_event_judges_repository;
+pub mod scheduled_event_winners_repository;
 pub mod teams_repository;
 pub mod tournament_roles_repository;
 pub mod tournament_user_roles_repository;

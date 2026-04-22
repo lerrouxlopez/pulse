@@ -37,13 +37,20 @@ pub fn list(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Vec<Sche
     conn.exec_map(
         "SELECT se.id, se.event_id, e.name, se.contact_type, se.status, se.location, se.event_time,
                 se.point_system, se.time_rule, se.draw_system, se.division_id, se.weight_class_id, se.winner_member_id,
-                d.name, w.name, tm.name
+                d.name, w.name,
+                COALESCE(
+                    NULLIF(GROUP_CONCAT(DISTINCT tmw.name ORDER BY tmw.name SEPARATOR ', '), ''),
+                    tm.name
+                ) AS winner_names
          FROM scheduled_events se
          JOIN events e ON e.id = se.event_id
          LEFT JOIN divisions d ON d.id = se.division_id
          LEFT JOIN weight_classes w ON w.id = se.weight_class_id
+         LEFT JOIN scheduled_event_winners sew ON sew.scheduled_event_id = se.id AND sew.tournament_id = se.tournament_id
+         LEFT JOIN team_members tmw ON tmw.id = sew.winner_member_id
          LEFT JOIN team_members tm ON tm.id = se.winner_member_id
          WHERE se.tournament_id = :tournament_id
+         GROUP BY se.id
          ORDER BY se.id DESC",
         params! {
             "tournament_id" => tournament_id,
@@ -60,13 +67,20 @@ pub fn get_by_id(
     let row: Option<Row> = conn.exec_first(
         "SELECT se.id, se.event_id, e.name, se.contact_type, se.status, se.location, se.event_time,
                 se.point_system, se.time_rule, se.draw_system, se.division_id, se.weight_class_id, se.winner_member_id,
-                d.name, w.name, tm.name
+                d.name, w.name,
+                COALESCE(
+                    NULLIF(GROUP_CONCAT(DISTINCT tmw.name ORDER BY tmw.name SEPARATOR ', '), ''),
+                    tm.name
+                ) AS winner_names
          FROM scheduled_events se
          JOIN events e ON e.id = se.event_id
          LEFT JOIN divisions d ON d.id = se.division_id
          LEFT JOIN weight_classes w ON w.id = se.weight_class_id
+         LEFT JOIN scheduled_event_winners sew ON sew.scheduled_event_id = se.id AND sew.tournament_id = se.tournament_id
+         LEFT JOIN team_members tmw ON tmw.id = sew.winner_member_id
          LEFT JOIN team_members tm ON tm.id = se.winner_member_id
-         WHERE se.tournament_id = :tournament_id AND se.id = :id",
+         WHERE se.tournament_id = :tournament_id AND se.id = :id
+         GROUP BY se.id",
         params! {
             "tournament_id" => tournament_id,
             "id" => id,

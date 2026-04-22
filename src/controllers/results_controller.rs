@@ -98,17 +98,39 @@ pub fn results_page(
             member_team_by_id.insert(member.id, member.team_id);
         }
 
+        let mut winners_by_event_id: std::collections::HashMap<i64, Vec<i64>> =
+            std::collections::HashMap::new();
+        if let Ok(rows) =
+            crate::repositories::scheduled_event_winners_repository::list_all_winners_for_tournament(
+                &mut conn,
+                tournament.id,
+            )
+        {
+            for (scheduled_event_id, winner_member_id) in rows {
+                winners_by_event_id
+                    .entry(scheduled_event_id)
+                    .or_default()
+                    .push(winner_member_id);
+            }
+        }
+
         // Champion team = number of event wins by team members.
         let mut wins_by_team: std::collections::HashMap<i64, i64> =
             std::collections::HashMap::new();
         for outcome in &outcomes {
-            let Some(member_id) = outcome.winner_member_id else {
-                continue;
+            let winner_member_ids: Vec<i64> = if let Some(list) = winners_by_event_id.get(&outcome.id) {
+                list.clone()
+            } else if let Some(member_id) = outcome.winner_member_id {
+                vec![member_id]
+            } else {
+                Vec::new()
             };
-            let Some(team_id) = member_team_by_id.get(&member_id).copied() else {
-                continue;
-            };
-            *wins_by_team.entry(team_id).or_insert(0) += 1;
+            for member_id in winner_member_ids {
+                let Some(team_id) = member_team_by_id.get(&member_id).copied() else {
+                    continue;
+                };
+                *wins_by_team.entry(team_id).or_insert(0) += 1;
+            }
         }
 
         let mut leaderboard: Vec<TeamChampionRow> = wins_by_team

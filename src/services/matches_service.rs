@@ -5,11 +5,14 @@ use crate::models::{
 };
 use crate::repositories::{
     match_judges_repository, match_pause_votes_repository, matches_repository,
+    scheduled_event_judges_repository, scheduled_event_winners_repository,
     scheduled_events_repository, teams_repository, tournaments_repository,
 };
 use crate::services::access_service;
 use crate::state::AppState;
 use mysql::prelude::Queryable;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use rocket::State;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -40,6 +43,173 @@ pub struct PendingPauseVoteStatus {
     pub judge_count: i64,
     pub votes_cast: i64,
     pub my_vote: Option<String>,
+}
+
+pub fn set_non_contact_event_judges(
+    state: &State<AppState>,
+    actor_user_id: i64,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    judge_user_ids: &[i64],
+) -> Result<(), String> {
+    if judge_user_ids.len() < 3 || judge_user_ids.len() > 5 {
+        return Err("Add between 3 and 5 judges.".to_string());
+    }
+    if judge_user_ids.len() % 2 == 0 {
+        return Err("Add an odd number of judges to avoid ties.".to_string());
+    }
+    let mut seen = std::collections::HashSet::new();
+    if !judge_user_ids.iter().all(|id| seen.insert(*id)) {
+        return Err("Judges must be unique.".to_string());
+    }
+
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access =
+        tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+    if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Err("Judge assignments for contact events are set per match.".to_string());
+    }
+
+    // If performances already have scored values, do not allow changing judges.
+    let performances = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    for perf in &performances {
+        let scored = match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
+            &mut conn,
+            tournament_id,
+            perf.id,
+            1,
+            5,
+            10,
+        )
+        .unwrap_or(0);
+        if scored > 0 {
+            return Err("Cannot change judges after scoring has started.".to_string());
+        }
+    }
+
+    scheduled_event_judges_repository::replace_for_event(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+        judge_user_ids,
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+
+    Ok(())
+}
+
+pub fn ensure_performances_for_non_contact_event(
+    state: &State<AppState>,
+    actor_user_id: i64,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> Result<(), String> {
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access =
+        tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+    if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Ok(());
+    }
+
+    let mut existing = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if existing.is_empty() {
+        let mut competitors =
+            list_competitors(state, actor_user_id, tournament_id, scheduled_event_id)?;
+        // Persist a random order once.
+        competitors.shuffle(&mut thread_rng());
+        for (idx, competitor) in competitors.iter().enumerate() {
+            let _ = matches_repository::create(
+                &mut conn,
+                tournament_id,
+                scheduled_event_id,
+                None,
+                Some("Performance"),
+                Some(competitor.name.as_str()),
+                None,
+                "Scheduled",
+                scheduled.location.as_deref(),
+                scheduled.event_time.as_deref(),
+                Some(1),
+                Some((idx as i64) + 1),
+                Some(competitor.member_id),
+                None,
+                false,
+                0,
+                0,
+            )
+            .map_err(|_| "Storage error.".to_string())?;
+        }
+        existing = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    }
+
+    // Ensure judge assignments exist on each performance based on the event assignments.
+    let judge_user_ids = scheduled_event_judges_repository::list_assigned_judges(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+    if judge_user_ids.is_empty() {
+        return Ok(());
+    }
+    // Validate once.
+    if judge_user_ids.len() < 3 || judge_user_ids.len() > 5 || judge_user_ids.len() % 2 == 0 {
+        return Err("Assign 3 or 5 judges to this non-contact event.".to_string());
+    }
+
+    for perf in &existing {
+        // If there are scored values, don't clobber.
+        let scored =
+            match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
+                &mut conn,
+                tournament_id,
+                perf.id,
+                1,
+                5,
+                10,
+            )
+            .unwrap_or(0);
+        if scored > 0 {
+            continue;
+        }
+        let judge_scores = prepare_judge_scores_for_match_round(
+            &mut conn,
+            state,
+            tournament_id,
+            perf.id,
+            1,
+            &judge_user_ids,
+        )?;
+        match_judges_repository::replace_for_match(
+            &mut conn,
+            tournament_id,
+            perf.id,
+            1,
+            &judge_scores,
+        )
+        .map_err(|_| "Storage error.".to_string())?;
+    }
+
+    Ok(())
 }
 
 pub fn list(
@@ -616,6 +786,7 @@ pub fn toggle_match_timer(
         crate::services::scheduled_events_service::parse_time_rule(scheduled.time_rule.as_deref());
     let max_fight_rounds = time_rule.map(|rule| rule.rounds).unwrap_or(1);
     let duration_seconds = time_rule.map(|rule| rule.seconds_per_round).unwrap_or(0);
+    let is_non_contact = !scheduled.contact_type.eq_ignore_ascii_case("Contact");
 
     if existing.status.eq_ignore_ascii_case("Ongoing") {
         if auto_complete && existing.timer_is_running {
@@ -625,7 +796,7 @@ pub fn toggle_match_timer(
                 tournament_id,
                 scheduled_event_id,
                 match_id,
-                "Scheduled",
+                if is_non_contact { "Finished" } else { "Scheduled" },
                 existing.fight_round,
                 existing.timer_started_at,
                 existing.timer_duration_seconds,
@@ -666,6 +837,16 @@ pub fn toggle_match_timer(
                     );
                 }
             }
+
+            if is_non_contact {
+                // When a performance timer ends, try to finalize the non-contact event if all performances are done + scored.
+                let _ = try_finalize_non_contact_event_from_scores(
+                    state,
+                    user_id,
+                    tournament_id,
+                    match_id,
+                );
+            }
             return Ok(());
         }
 
@@ -674,7 +855,7 @@ pub fn toggle_match_timer(
             tournament_id,
             scheduled_event_id,
             match_id,
-            "Scheduled",
+            if is_non_contact { "Finished" } else { "Scheduled" },
             existing.fight_round,
             None,
             None,
@@ -686,6 +867,10 @@ pub fn toggle_match_timer(
             return Err("Match not found for this event.".to_string());
         }
         return Ok(());
+    }
+
+    if is_non_contact && existing.status.eq_ignore_ascii_case("Finished") {
+        return Err("Performance is already completed.".to_string());
     }
 
     let mut resolved_round = fight_round.unwrap_or(1);
@@ -1132,12 +1317,15 @@ pub fn set_or_adjust_judge_score(
         return Err("This event uses pause-vote scoring; judge round scores are disabled.".to_string());
     }
 
+    let is_non_contact = !scheduled.contact_type.eq_ignore_ascii_case("Contact");
+    let allow_unassigned = if is_non_contact { false } else { allow_unassigned };
+
     let point_rule = crate::services::scheduled_events_service::parse_point_rule(
         scheduled.point_system.as_deref(),
     )
     .unwrap_or(crate::services::scheduled_events_service::PointRule { min: 0, max: 10 });
-    let min_allowed = point_rule.min;
-    let max_allowed = point_rule.max;
+    let min_allowed = if is_non_contact { 5 } else { point_rule.min };
+    let max_allowed = if is_non_contact { 10 } else { point_rule.max };
 
     let fight_round = if fight_round < 1 { 1 } else { fight_round };
 
@@ -1186,6 +1374,9 @@ pub fn set_or_adjust_judge_score(
     let mut next_blue = existing_blue;
 
     let side = side.trim().to_lowercase();
+    if is_non_contact && side == "blue" {
+        return Err("Non-contact performances have a single score; select Red/Performance.".to_string());
+    }
     if let Some(value) = value {
         if value < min_allowed || value > max_allowed {
             return Err("Invalid score value.".to_string());
@@ -1203,6 +1394,11 @@ pub fn set_or_adjust_judge_score(
         }
     } else {
         return Err("No score change provided.".to_string());
+    }
+
+    if is_non_contact {
+        // Keep the unused side at 0 so totals remain single-sided.
+        next_blue = 0;
     }
 
     match_judges_repository::upsert_score(
@@ -1229,8 +1425,16 @@ pub fn set_or_adjust_judge_score(
         tournament_id,
         match_id,
         sum_red.min(i64::from(i32::MAX)) as i32,
-        sum_blue.min(i64::from(i32::MAX)) as i32,
+        if is_non_contact {
+            0
+        } else {
+            sum_blue.min(i64::from(i32::MAX)) as i32
+        },
     );
+
+    if is_non_contact {
+        let _ = try_finalize_non_contact_event_from_scores(state, actor_user_id, tournament_id, match_id);
+    }
 
     Ok(())
 }
@@ -1589,6 +1793,141 @@ fn total_scores_for_match(
         sum_blue = sum_blue.saturating_add(blue);
     }
     Ok((sum_red, sum_blue))
+}
+
+pub fn try_finalize_non_contact_event_from_scores(
+    state: &State<AppState>,
+    actor_user_id: i64,
+    tournament_id: i64,
+    match_id: i64,
+) -> Result<(), String> {
+    // Best-effort finalization: return Ok(()) if the event is not ready, error only on storage/access issues.
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+    let has_access =
+        tournaments_repository::user_has_access(&mut conn, tournament_id, actor_user_id)
+            .map_err(|_| "Storage error.".to_string())?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+
+    let match_row = matches_repository::get_by_id(&mut conn, tournament_id, match_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Match not found.".to_string())?;
+
+    let scheduled_event_id = match_row.scheduled_event_id;
+    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?
+        .ok_or_else(|| "Event not found.".to_string())?;
+    if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Ok(());
+    }
+
+    // Ensure performances exist and event judges have been propagated into per-performance assignments.
+    drop(conn);
+    let _ = ensure_performances_for_non_contact_event(state, actor_user_id, tournament_id, scheduled_event_id);
+    let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
+
+    let judge_user_ids = scheduled_event_judges_repository::list_assigned_judges(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+    if judge_user_ids.is_empty() {
+        return Ok(());
+    }
+    if judge_user_ids.len() < 3 || judge_user_ids.len() > 5 || judge_user_ids.len() % 2 == 0 {
+        return Err("Assign 3 or 5 judges to this non-contact event.".to_string());
+    }
+
+    let performances = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|_| "Storage error.".to_string())?;
+    if performances.is_empty() {
+        return Ok(());
+    }
+
+    // Event finalizes only when all performances are completed and fully scored by all assigned judges.
+    if performances
+        .iter()
+        .any(|m| !m.status.eq_ignore_ascii_case("Finished"))
+    {
+        return Ok(());
+    }
+
+    let judge_count = judge_user_ids.len() as i64;
+    for perf in &performances {
+        let scored =
+            match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
+                &mut conn,
+                tournament_id,
+                perf.id,
+                1,
+                5,
+                10,
+            )
+            .map_err(|_| "Storage error.".to_string())?;
+        if scored != judge_count {
+            return Ok(());
+        }
+    }
+
+    let mut best_total: Option<i64> = None;
+    let mut winners: Vec<i64> = Vec::new();
+
+    for perf in &performances {
+        let (sum_red, _sum_blue) =
+            match_judges_repository::sum_for_match_round(&mut conn, tournament_id, perf.id, 1)
+                .map_err(|_| "Storage error.".to_string())?;
+        let _ = matches_repository::set_totals(
+            &mut conn,
+            tournament_id,
+            perf.id,
+            sum_red.min(i64::from(i32::MAX)) as i32,
+            0,
+        );
+        let Some(member_id) = perf.red_member_id else {
+            continue;
+        };
+        match best_total {
+            None => {
+                best_total = Some(sum_red);
+                winners.clear();
+                winners.push(member_id);
+            }
+            Some(best) if sum_red > best => {
+                best_total = Some(sum_red);
+                winners.clear();
+                winners.push(member_id);
+            }
+            Some(best) if sum_red == best => {
+                winners.push(member_id);
+            }
+            _ => {}
+        }
+    }
+
+    if winners.is_empty() {
+        return Ok(());
+    }
+    winners.sort();
+    winners.dedup();
+
+    scheduled_event_winners_repository::replace_winners(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+        &winners,
+    )
+    .map_err(|_| "Storage error.".to_string())?;
+    let _ = scheduled_events_repository::update_status_and_winner(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+        "Finished",
+        winners.first().copied(),
+    );
+
+    Ok(())
 }
 
 pub fn try_finalize_contact_match_from_scores(

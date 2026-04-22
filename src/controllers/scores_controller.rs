@@ -106,9 +106,11 @@ pub fn scores_page(
     let mut options: Vec<ScoreMatchOption> = Vec::new();
     let scheduled_events =
         scheduled_events_service::list(state, user.id, tournament.id).unwrap_or_default();
-    let mut event_map = std::collections::HashMap::new();
+    let mut event_name_by_id = std::collections::HashMap::new();
+    let mut event_contact_by_id = std::collections::HashMap::new();
     for item in &scheduled_events {
-        event_map.insert(item.id, item.event_name.clone());
+        event_name_by_id.insert(item.id, item.event_name.clone());
+        event_contact_by_id.insert(item.id, item.contact_type.clone());
     }
 
     let match_rows = if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
@@ -138,15 +140,30 @@ pub fn scores_page(
 
     for row in &match_rows {
         // Hide orphan matches (matches whose scheduled event was deleted).
-        let Some(event_name) = event_map.get(&row.scheduled_event_id).cloned() else {
+        let Some(event_name) = event_name_by_id.get(&row.scheduled_event_id).cloned() else {
             continue;
         };
-        let label = format!(
-            "{}: {} vs {}",
-            event_name,
-            row.red.clone().unwrap_or_else(|| "TBD".to_string()),
-            row.blue.clone().unwrap_or_else(|| "TBD".to_string())
-        );
+        let contact_type = event_contact_by_id
+            .get(&row.scheduled_event_id)
+            .map(|v| v.as_str())
+            .unwrap_or("");
+        let is_contact = contact_type.eq_ignore_ascii_case("Contact");
+        let label = if !is_contact && row.blue.is_none() {
+            let performer = row.red.clone().unwrap_or_else(|| "TBD".to_string());
+            let slot = row.slot.unwrap_or(0);
+            if slot > 0 {
+                format!("{event_name}: Performance #{slot} - {performer}")
+            } else {
+                format!("{event_name}: {performer}")
+            }
+        } else {
+            format!(
+                "{}: {} vs {}",
+                event_name,
+                row.red.clone().unwrap_or_else(|| "TBD".to_string()),
+                row.blue.clone().unwrap_or_else(|| "TBD".to_string())
+            )
+        };
         options.push(ScoreMatchOption {
             id: row.id,
             label,
@@ -166,6 +183,11 @@ pub fn scores_page(
                 .ok()
                 .flatten();
     }
+    let selected_is_non_contact = selected_match
+        .as_ref()
+        .and_then(|m| event_contact_by_id.get(&m.scheduled_event_id))
+        .map(|ct| !ct.eq_ignore_ascii_case("Contact"))
+        .unwrap_or(false);
 
     let judges: Vec<ScoreJudgeOption> = if can_admin {
         let mut assigned: Vec<ScoreJudgeOption> = Vec::new();
@@ -187,14 +209,19 @@ pub fn scores_page(
         }
 
         if assigned.is_empty() {
-            // If the match has no judge assignments yet, keep admin scoring possible by listing all judges.
-            matches_service::list_judges(state, tournament.id)
-                .into_iter()
-                .map(|item| ScoreJudgeOption {
-                    id: item.id,
-                    name: item.name,
-                })
-                .collect()
+            if selected_is_non_contact {
+                // Non-contact performances are scored only by assigned event judges.
+                Vec::new()
+            } else {
+                // If the match has no judge assignments yet, keep admin scoring possible by listing all judges.
+                matches_service::list_judges(state, tournament.id)
+                    .into_iter()
+                    .map(|item| ScoreJudgeOption {
+                        id: item.id,
+                        name: item.name,
+                    })
+                    .collect()
+            }
         } else {
             assigned
         }
@@ -206,9 +233,8 @@ pub fn scores_page(
         selected_judge_id = judges[0].id;
     }
 
-    let (rounds, allowed_scores, red_score, blue_score) = if let Some(ref match_row) =
-        selected_match
-    {
+    let (rounds, selected_round, allowed_scores, red_score, blue_score, is_non_contact_performance) =
+        if let Some(ref match_row) = selected_match {
         let scheduled = scheduled_events_service::get_by_id(
             state,
             user.id,
@@ -217,6 +243,40 @@ pub fn scores_page(
         )
         .ok()
         .flatten();
+        let is_non_contact_performance = scheduled
+            .as_ref()
+            .map(|s| !s.contact_type.eq_ignore_ascii_case("Contact"))
+            .unwrap_or(false);
+
+        if is_non_contact_performance {
+            let selected_round = 1;
+            let allowed_scores: Vec<i32> = (5..=10).collect();
+            let red_score = {
+                let mut conn = crate::db::open_conn(&state.pool).ok();
+                conn.as_mut()
+                    .and_then(|conn| {
+                        crate::repositories::match_judges_repository::get_score(
+                            conn,
+                            tournament.id,
+                            match_row.id,
+                            selected_judge_id,
+                            selected_round,
+                        )
+                        .ok()
+                        .flatten()
+                    })
+                    .map(|(red, _blue)| red)
+                    .unwrap_or(5)
+            };
+            (
+                vec![1],
+                selected_round,
+                allowed_scores,
+                red_score,
+                0,
+                true,
+            )
+        } else {
         let time_rule = scheduled
             .as_ref()
             .and_then(|item| scheduled_events_service::parse_time_rule(item.time_rule.as_deref()));
@@ -348,12 +408,15 @@ pub fn scores_page(
 
         (
             (1..=rounds_total).collect::<Vec<i64>>(),
+            selected_round,
             allowed_scores,
             red_score,
             blue_score,
+            false,
         )
+        }
     } else {
-        (Vec::new(), Vec::new(), 0, 0)
+        (Vec::new(), 1, Vec::new(), 0, 0, false)
     };
 
     let (is_pause_vote_scoring, pending_pause_vote) = if let Some(ref match_row) = selected_match {
@@ -445,7 +508,7 @@ pub fn scores_page(
             matches: options,
             selected_match_id: selected_match_id,
             selected_match_detail: selected_match_detail,
-            selected_round: round.unwrap_or(1),
+            selected_round: selected_round,
             can_admin: can_admin,
             judges: judges,
             selected_judge_id: selected_judge_id,
@@ -453,6 +516,7 @@ pub fn scores_page(
             allowed_scores: allowed_scores,
             red_score: red_score,
             blue_score: blue_score,
+            is_non_contact_performance: is_non_contact_performance,
             is_pause_vote_scoring: is_pause_vote_scoring,
             pending_pause_vote: pending_pause_vote,
             round_tables: round_tables,

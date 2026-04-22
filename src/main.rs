@@ -67,6 +67,7 @@ fn rocket() -> _ {
                 controllers::events_controller::update_event,
                 controllers::events_controller::delete_event,
                 controllers::events_controller::create_match,
+                controllers::events_controller::set_non_contact_event_judges,
                 controllers::events_controller::update_match,
                 controllers::events_controller::toggle_match_timer,
                 controllers::events_controller::toggle_match_timer_pause,
