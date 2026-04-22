@@ -250,34 +250,9 @@ pub fn event_profile(
     let judge_users = matches_service::list_judges(state, tournament.id);
     let is_contact = event.contact_type.eq_ignore_ascii_case("Contact");
 
-    let mut competitors =
+    let competitors =
         matches_service::list_competitors(state, user.id, tournament.id, event.id)
             .unwrap_or_default();
-    if competitors.is_empty() && !is_contact {
-        // Fallback: derive participants from performances if the event->member mapping isn't present.
-        // This keeps the Participants panel useful for non-contact events.
-        if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
-            let mut seen = std::collections::HashSet::new();
-            for m in &matches {
-                let Some(member_id) = m.red_member_id else {
-                    continue;
-                };
-                if !seen.insert(member_id) {
-                    continue;
-                }
-                if let Ok(Some(member)) =
-                    crate::repositories::teams_repository::get_member(&mut conn, tournament.id, member_id)
-                {
-                    competitors.push(crate::models::EventCompetitor {
-                        member_id: member.id,
-                        team_id: member.team_id,
-                        name: member.name,
-                        photo_url: member.photo_url,
-                    });
-                }
-            }
-        }
-    }
 
     let event_judge_user_ids: Vec<i64> = if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
         crate::repositories::scheduled_event_judges_repository::list_assigned_judges(

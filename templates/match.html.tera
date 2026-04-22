@@ -46,7 +46,7 @@
         <div class="alert alert-danger" role="alert">{{ error }}</div>
         {% endif %}
 
-        <section class="match-live-shell">
+        <section class="match-live-shell{% if match_item.event_type != "Contact" %} is-non-contact{% endif %}">
           <div class="match-live-head">
             <span id="js-live-status" class="pill {{ match_item.status_class }}">{{ match_item.status }}</span>
             <h2 class="match-live-title">{{ match_item.event_name }}</h2>
@@ -67,7 +67,9 @@
             </div>
 
             <div class="match-live-center">
+              {% if match_item.event_type == "Contact" %}
               <div class="match-live-vs">VS</div>
+              {% endif %}
               <div id="js-live-round" class="match-live-round">{{ match_item.round_label }}</div>
               <div
                 id="js-live-timer"
@@ -122,6 +124,7 @@
               {% endif %}
             </div>
 
+            {% if match_item.event_type == "Contact" %}
             <div class="match-live-fighter is-blue">
               <div class="match-live-photo-frame">
                 <img src="{{ match_item.blue_photo_url }}" alt="{{ match_item.blue_name }}" class="match-live-photo" />
@@ -129,6 +132,7 @@
               <div class="match-live-name">{{ match_item.blue_name }}</div>
               <div class="pill match-card-pill">Total: <span id="js-live-blue-total">{{ match_item.blue_total_score }}</span></div>
             </div>
+            {% endif %}
           </div>
 
           <div id="js-live-judges" class="match-live-judges"></div>
@@ -143,6 +147,7 @@
       const blueTotalEl = document.getElementById("js-live-blue-total");
       const timerEl = document.getElementById("js-live-timer");
       const judgesEl = document.getElementById("js-live-judges");
+      const isNonContactEvent = `{{ match_item.event_type }}`.toLowerCase() !== "contact";
 
       const pad2 = (value) => String(Math.max(0, value)).padStart(2, "0");
       const formatTimer = (seconds) => {
@@ -174,7 +179,7 @@
         timerEl.classList.toggle("is-expired", elapsed >= duration);
       };
 
-      const renderJudges = (judges, isVoteMode) => {
+      const renderJudges = (judges, isVoteMode, fightRound, isNonContact) => {
         if (!judgesEl) return;
         judgesEl.innerHTML = (judges || [])
           .map((judge) => {
@@ -182,6 +187,7 @@
             const safePhoto = String(judge.photo_url || "");
             const red = Number(judge.red_score || 0);
             const blue = Number(judge.blue_score || 0);
+            const roundValue = Number(fightRound || 1);
             const voteRaw = String(judge.vote_side || "").toLowerCase();
             const voteLabel =
               voteRaw === "red" ? "RED" : voteRaw === "blue" ? "BLUE" : "—";
@@ -202,7 +208,9 @@
                   ${
                     isVoteMode
                       ? `<div class="judge-score"><span class="judge-vote-pill ${voteClass}">${voteLabel}</span></div>`
-                      : `<div class="judge-score">Red: ${red} | Blue: ${blue}</div>`
+                      : isNonContact
+                        ? `<div class="judge-score">Round ${roundValue}: ${red}</div>`
+                        : `<div class="judge-score">Red: ${red} | Blue: ${blue}</div>`
                   }
                 </div>
               </article>
@@ -236,7 +244,12 @@
             timerEl.dataset.timerRunning = data.timer_is_running ? "1" : "0";
             renderTimer();
           }
-          renderJudges(data.judges, !!data.is_pause_vote_scoring);
+          renderJudges(
+            data.judges,
+            !!data.is_pause_vote_scoring,
+            Number(data.fight_round || 1),
+            isNonContactEvent
+          );
         } catch (_) {
           // ignore
         } finally {
@@ -244,7 +257,7 @@
         }
       };
 
-      renderJudges([], false);
+      renderJudges([], false, Number(`{{ match_item.fight_round }}` || 1), isNonContactEvent);
       renderTimer();
       poll();
       setInterval(poll, 1000);

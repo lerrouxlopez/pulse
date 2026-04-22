@@ -1007,6 +1007,55 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
   flex: 0 0 auto;
 }
 
+.match-live-shell.is-non-contact .match-live-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 0;
+  width: 100%;
+  min-height: clamp(320px, 46vh, 460px);
+}
+
+.match-live-shell.is-non-contact .match-live-fighter {
+  width: min(100%, 380px);
+  margin: 0 auto;
+}
+
+.match-live-shell.is-non-contact .match-live-center {
+  position: absolute;
+  right: clamp(8px, 2vw, 26px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(100%, 260px);
+  gap: 14px;
+}
+
+.match-live-shell.is-non-contact .match-live-round,
+.match-live-shell.is-non-contact .match-live-timer,
+.match-live-shell.is-non-contact .match-live-controls {
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .match-live-shell.is-non-contact .match-live-stage {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+    min-height: 0;
+  }
+
+  .match-live-shell.is-non-contact .match-live-center {
+    position: static;
+    right: auto;
+    top: auto;
+    transform: none;
+    width: min(100%, 360px);
+    justify-self: center;
+  }
+}
+
 .match-live-fighter {
   display: flex;
   flex-direction: column;

@@ -170,24 +170,6 @@ pub fn create(
         {
             return Err("Weight class not found.".to_string());
         }
-    } else {
-        // Non-contact: division/weight are optional, but if provided, validate them.
-        if let Some(division_id) = division_id {
-            if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
-                .map_err(|_| "Storage error.".to_string())?
-                .is_none()
-            {
-                return Err("Division not found.".to_string());
-            }
-        }
-        if let Some(weight_class_id) = weight_class_id {
-            if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
-                .map_err(|_| "Storage error.".to_string())?
-                .is_none()
-            {
-                return Err("Weight class not found.".to_string());
-            }
-        }
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?
@@ -221,8 +203,8 @@ pub fn create(
         point_system_value,
         time_rule_value,
         draw_system_value,
-        division_id,
-        weight_class_id,
+        if is_contact { division_id } else { None },
+        if is_contact { weight_class_id } else { None },
     )
     .map_err(|_| "Storage error.".to_string())?;
     Ok(())
@@ -309,24 +291,6 @@ pub fn update(
         {
             return Err("Weight class not found.".to_string());
         }
-    } else {
-        // Non-contact: division/weight are optional, but if provided, validate them.
-        if let Some(division_id) = division_id {
-            if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
-                .map_err(|_| "Storage error.".to_string())?
-                .is_none()
-            {
-                return Err("Division not found.".to_string());
-            }
-        }
-        if let Some(weight_class_id) = weight_class_id {
-            if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
-                .map_err(|_| "Storage error.".to_string())?
-                .is_none()
-            {
-                return Err("Weight class not found.".to_string());
-            }
-        }
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
         .map_err(|_| "Storage error.".to_string())?
@@ -361,8 +325,8 @@ pub fn update(
         point_system_value,
         time_rule_value,
         draw_system_value,
-        division_id,
-        weight_class_id,
+        if is_contact { division_id } else { None },
+        if is_contact { weight_class_id } else { None },
     )
     .map_err(|_| "Storage error.".to_string())?;
     if changed == 0 {
