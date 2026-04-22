@@ -9,7 +9,7 @@ use crate::state::AppState;
 use mysql::prelude::*;
 use rocket::State;
 
-const PERMISSIONS: [&str; 5] = ["dashboard", "events", "teams", "settings", "scores"];
+const PERMISSIONS: [&str; 6] = ["dashboard", "events", "teams", "settings", "scores", "match_timer"];
 
 pub fn permissions() -> Vec<String> {
     PERMISSIONS.iter().map(|item| item.to_string()).collect()
@@ -276,6 +276,7 @@ pub fn update_user(
     name: &str,
     email: &str,
     photo_url: Option<&str>,
+    new_password: Option<&str>,
 ) -> Result<(), String> {
     let trimmed_name = name.trim();
     let trimmed_email = email.trim().to_lowercase();
@@ -294,6 +295,21 @@ pub fn update_user(
     }
     users_repository::update_user(&mut conn, user_id, trimmed_name, &trimmed_email, photo_url)
         .map_err(|_| "Storage error.".to_string())?;
+
+    if let Some(password) = new_password {
+        let password = password.trim();
+        if !password.is_empty() {
+            if password.len() < 6 {
+                return Err("Password must be at least 6 characters.".to_string());
+            }
+            let password_hash = auth_service::hash_password(password).map_err(|err| match err {
+                auth_service::AuthError::Validation(message) => message,
+                _ => "Storage error.".to_string(),
+            })?;
+            users_repository::update_password_hash(&mut conn, user_id, &password_hash)
+                .map_err(|_| "Storage error.".to_string())?;
+        }
+    }
     Ok(())
 }
 

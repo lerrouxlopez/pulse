@@ -49,6 +49,8 @@ pub struct UpdateUserForm<'r> {
     pub email: String,
     pub role_id: Option<i64>,
     pub photo_file: Option<TempFile<'r>>,
+    pub password: Option<String>,
+    pub password_confirm: Option<String>,
 }
 
 #[derive(FromForm)]
@@ -93,6 +95,7 @@ pub fn settings_page(
     }
 
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
+    let tournament_login_path = format!("/t/{}/login", tournament.slug);
 
     let divisions = settings_service::list(state, tournament.id, SettingsEntity::Division);
     let categories = settings_service::list(state, tournament.id, SettingsEntity::Category);
@@ -142,6 +145,7 @@ pub fn settings_page(
             allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
             is_owner: is_owner,
             tournament_owner_id: tournament.user_id,
+            tournament_login_path: tournament_login_path,
         },
     ))
 }
@@ -999,7 +1003,36 @@ pub async fn update_user(
     };
     let photo_url = uploaded_photo.as_deref().or(existing_photo.as_deref());
 
-    match access_service::update_user(state, tournament.id, id, &form.name, &form.email, photo_url)
+    let new_password = form
+        .password
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    if let Some(password) = new_password {
+        let confirm = form
+            .password_confirm
+            .as_deref()
+            .map(|value| value.trim())
+            .unwrap_or("");
+        if password != confirm {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug,
+                error = Some("Passwords do not match.".to_string()),
+                success = Option::<String>::None,
+                tab = Some("roles".to_string())
+            ))));
+        }
+    }
+
+    match access_service::update_user(
+        state,
+        tournament.id,
+        id,
+        &form.name,
+        &form.email,
+        photo_url,
+        new_password,
+    )
     {
         Ok(_) => {
             if let Some(role_id) = form.role_id {

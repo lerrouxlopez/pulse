@@ -340,6 +340,33 @@ pub fn set_totals(
     Ok(conn.affected_rows() as usize)
 }
 
+pub fn increment_total(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    match_id: i64,
+    side: &str,
+) -> mysql::Result<usize> {
+    let column = if side.eq_ignore_ascii_case("red") {
+        "red_total_score"
+    } else if side.eq_ignore_ascii_case("blue") {
+        "blue_total_score"
+    } else {
+        // No-op for invalid input; keep API surface small for callers.
+        return Ok(0);
+    };
+    conn.exec_drop(
+        format!(
+            "UPDATE matches SET {} = {} + 1 WHERE id = :id AND tournament_id = :tournament_id",
+            column, column
+        ),
+        params! {
+            "id" => match_id,
+            "tournament_id" => tournament_id,
+        },
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
 pub fn set_status_and_fight_round(
     conn: &mut PooledConn,
     tournament_id: i64,

@@ -2,6 +2,7 @@ pub mod categories_repository;
 pub mod divisions_repository;
 pub mod events_repository;
 pub mod match_judges_repository;
+pub mod match_pause_votes_repository;
 pub mod matches_repository;
 pub mod role_permissions_repository;
 pub mod scheduled_events_repository;

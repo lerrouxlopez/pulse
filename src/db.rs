@@ -245,6 +245,7 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     apply_match_judge_round_scores_migration(&mut conn)?;
     apply_scores_permission_migration(&mut conn)?;
     apply_draw_system_migration(&mut conn)?;
+    apply_contact_pause_vote_scoring_migration(&mut conn)?;
 
     Ok(())
 }
@@ -520,6 +521,55 @@ fn apply_draw_system_migration(conn: &mut PooledConn) -> mysql::Result<()> {
 
     if !column_exists(conn, "scheduled_events", "draw_system")? {
         conn.query_drop("ALTER TABLE scheduled_events ADD COLUMN draw_system TEXT")?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_contact_pause_vote_scoring_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260422_contact_pause_vote_scoring";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !table_exists(conn, "match_pause_vote_events")? {
+        conn.query_drop(
+            "CREATE TABLE match_pause_vote_events (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                tournament_id BIGINT NOT NULL,
+                match_id BIGINT NOT NULL,
+                fight_round BIGINT NOT NULL DEFAULT 1,
+                pause_seq BIGINT NOT NULL DEFAULT 1,
+                winner_side TEXT,
+                applied_at TEXT,
+                created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+                UNIQUE KEY idx_pause_vote_events_unique (match_id, fight_round, pause_seq),
+                KEY idx_pause_vote_events_match (match_id),
+                KEY idx_pause_vote_events_tournament (tournament_id)
+            )",
+        )?;
+    }
+
+    if !table_exists(conn, "match_pause_votes")? {
+        conn.query_drop(
+            "CREATE TABLE match_pause_votes (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                tournament_id BIGINT NOT NULL,
+                match_id BIGINT NOT NULL,
+                fight_round BIGINT NOT NULL DEFAULT 1,
+                pause_seq BIGINT NOT NULL DEFAULT 1,
+                judge_user_id BIGINT NOT NULL,
+                side TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+                UNIQUE KEY idx_pause_votes_unique (match_id, fight_round, pause_seq, judge_user_id),
+                KEY idx_pause_votes_match (match_id),
+                KEY idx_pause_votes_tournament (tournament_id)
+            )",
+        )?;
     }
 
     conn.exec_drop(

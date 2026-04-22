@@ -969,6 +969,31 @@ pub fn toggle_match_timer(
     ))))
 }
 
+#[post("/<slug>/events/<event_id>/matches/<id>/toggle-pause")]
+pub fn toggle_match_timer_pause(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    event_id: i64,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Ok(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
+
+    let _ = matches_service::toggle_match_timer_pause(state, user.id, tournament.id, event_id, id);
+
+    Ok(Redirect::to(uri!(event_profile(
+        slug = slug,
+        id = event_id
+    ))))
+}
+
 #[post("/<slug>/events/<event_id>/matches/<id>/delete")]
 pub fn delete_match(
     state: &State<AppState>,

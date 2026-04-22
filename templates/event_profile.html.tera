@@ -185,6 +185,22 @@
                       {% set last_completed = match.timer_last_completed_round | default(value=0) %}
                       {% set selected_round = match.fight_round | default(value=1) %}
                       {% if event.time_rule %}
+                      {% if match.status == "Ongoing" %}
+                      <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/toggle-pause" method="post">
+                        <button class="btn btn-sm btn-outline-light" type="submit" aria-label="{% if match.timer_is_running %}Pause timer{% else %}Resume timer{% endif %}" title="{% if match.timer_is_running %}Pause{% else %}Resume{% endif %}">
+                          {% if match.timer_is_running %}
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                            <path d="M8 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                            <path d="M16 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                          </svg>
+                          {% else %}
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                            <path d="M8 5l11 7-11 7z" fill="currentColor"></path>
+                          </svg>
+                          {% endif %}
+                        </button>
+                      </form>
+                      {% endif %}
                       <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/toggle-timer" method="post" class="match-timer-form" data-running="{% if is_running %}1{% else %}0{% endif %}" data-last-completed-round="{{ last_completed }}">
                         <button class="btn btn-sm {% if is_running %}btn-outline-warning{% else %}btn-outline-success{% endif %}" type="submit" {% if not is_running and selected_round <= last_completed %}disabled{% endif %}>
                           {% if is_running %}Stop{% else %}Start{% endif %}
@@ -254,6 +270,22 @@
                     <div class="match-actions">
                       {% set is_running = match.timer_is_running or match.status == "Ongoing" %}
                       {% if event.time_rule %}
+                      {% if match.status == "Ongoing" %}
+                      <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/toggle-pause" method="post">
+                        <button class="btn btn-sm btn-outline-light" type="submit" aria-label="{% if match.timer_is_running %}Pause timer{% else %}Resume timer{% endif %}" title="{% if match.timer_is_running %}Pause{% else %}Resume{% endif %}">
+                          {% if match.timer_is_running %}
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                            <path d="M8 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                            <path d="M16 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                          </svg>
+                          {% else %}
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                            <path d="M8 5l11 7-11 7z" fill="currentColor"></path>
+                          </svg>
+                          {% endif %}
+                        </button>
+                      </form>
+                      {% endif %}
                       <form action="/{{ tournament_slug }}/events/{{ event.id }}/matches/{{ match.id }}/toggle-timer" method="post" class="match-timer-form">
                         <button class="btn btn-sm {% if is_running %}btn-outline-warning{% else %}btn-outline-success{% endif %}" type="submit">
                           {% if is_running %}Stop{% else %}Start{% endif %}
