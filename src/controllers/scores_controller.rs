@@ -498,6 +498,9 @@ pub fn scores_page(
     } else {
         Vec::new()
     };
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "scores",
@@ -522,7 +525,8 @@ pub fn scores_page(
             round_tables: round_tables,
             active: "scores",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     ))
 }

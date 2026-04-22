@@ -301,6 +301,9 @@ pub fn results_page(
     let match_results_page_numbers: Vec<usize> = (from..=to).collect();
     let has_prev = match_results_page > 1;
     let has_next = match_results_page < match_results_pages;
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "results",
@@ -310,7 +313,8 @@ pub fn results_page(
             tournament_slug: tournament.slug,
             active: "results",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
             champion_teams: champion_teams,
             team_leaderboard: team_leaderboard,
             event_winners: event_winners,

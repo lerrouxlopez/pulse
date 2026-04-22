@@ -57,6 +57,22 @@ pub struct UpdateUserForm<'r> {
 pub struct SettingsOptionsForm {
     pub options: Vec<String>,
 }
+
+#[derive(FromForm)]
+pub struct TournamentNameForm {
+    pub name: String,
+}
+
+#[derive(FromForm)]
+pub struct TournamentBrandingForm<'r> {
+    pub theme_primary_color: Option<String>,
+    pub theme_accent_color: Option<String>,
+    pub theme_background_color: Option<String>,
+    pub nav_background_color: Option<String>,
+    pub nav_text_color: Option<String>,
+    pub logo_file: Option<TempFile<'r>>,
+    pub clear_logo: Option<String>,
+}
 #[get("/<slug>/settings?<error>&<success>&<tab>")]
 pub fn settings_page(
     state: &State<AppState>,
@@ -104,6 +120,9 @@ pub fn settings_page(
     let access_users = access_service::list_access_users(state, tournament.id);
     let roles = access_service::list_roles(state, tournament.id);
     let permissions = access_service::permissions();
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
     let can_complete_setup = !divisions.is_empty()
         && !categories.is_empty()
         && !weight_classes.is_empty()
@@ -147,12 +166,165 @@ pub fn settings_page(
             active: "settings",
             active_tab: active_tab,
             can_complete_setup: can_complete_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
             is_owner: is_owner,
             tournament_owner_id: tournament.user_id,
             tournament_login_path: tournament_login_path,
+            tournament_logo_url: tournament.logo_url,
+            theme_primary_color: tournament.theme_primary_color.unwrap_or_else(|| "#2d62ff".to_string()),
+            theme_accent_color: tournament.theme_accent_color.unwrap_or_else(|| "#ff6b35".to_string()),
+            theme_background_color: tournament.theme_background_color.unwrap_or_else(|| "#f2f3f5".to_string()),
+            nav_background_color: tournament.nav_background_color.unwrap_or_else(|| "#0f1426".to_string()),
+            nav_text_color: tournament.nav_text_color.unwrap_or_else(|| "#f5efe6".to_string()),
         },
     ))
+}
+
+#[post("/<slug>/settings/tournament/name", data = "<form>")]
+pub fn update_tournament_name(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    form: Form<TournamentNameForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "settings") {
+        return Err(Status::Forbidden);
+    }
+    match tournament_service::update_name(state, user.id, tournament.id, &form.name) {
+        Ok(new_slug) => Ok(Redirect::to(uri!(settings_page(
+            slug = new_slug,
+            error = Option::<String>::None,
+            success = Some("Tournament name updated.".to_string()),
+            tab = Some("branding".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("branding".to_string())
+        )))),
+    }
+}
+
+#[post("/<slug>/settings/tournament/branding", data = "<form>")]
+pub async fn update_tournament_branding(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    mut form: Form<TournamentBrandingForm<'_>>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "settings") {
+        return Err(Status::Forbidden);
+    }
+
+    let primary = match normalize_hex_color(form.theme_primary_color.as_deref()) {
+        Ok(value) => value,
+        Err(message) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug.clone(),
+                error = Some(message.to_string()),
+                success = Option::<String>::None,
+                tab = Some("branding".to_string())
+            ))))
+        }
+    };
+    let accent = match normalize_hex_color(form.theme_accent_color.as_deref()) {
+        Ok(value) => value,
+        Err(message) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug.clone(),
+                error = Some(message.to_string()),
+                success = Option::<String>::None,
+                tab = Some("branding".to_string())
+            ))))
+        }
+    };
+    let background = match normalize_hex_color(form.theme_background_color.as_deref()) {
+        Ok(value) => value,
+        Err(message) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug.clone(),
+                error = Some(message.to_string()),
+                success = Option::<String>::None,
+                tab = Some("branding".to_string())
+            ))))
+        }
+    };
+    let nav_background = match normalize_hex_color(form.nav_background_color.as_deref()) {
+        Ok(value) => value,
+        Err(message) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug.clone(),
+                error = Some(message.to_string()),
+                success = Option::<String>::None,
+                tab = Some("branding".to_string())
+            ))))
+        }
+    };
+    let nav_text = match normalize_hex_color(form.nav_text_color.as_deref()) {
+        Ok(value) => value,
+        Err(message) => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug.clone(),
+                error = Some(message.to_string()),
+                success = Option::<String>::None,
+                tab = Some("branding".to_string())
+            ))))
+        }
+    };
+
+    let uploaded_logo = match save_tournament_logo(&mut form.logo_file).await {
+        Ok(value) => value,
+        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
+            return Ok(Redirect::to(uri!(settings_page(
+                slug = slug,
+                error = Some(format!("Invalid tournament logo: {}", err)),
+                success = Option::<String>::None,
+                tab = Some("branding".to_string())
+            ))));
+        }
+        Err(_) => return Err(Status::InternalServerError),
+    };
+
+    let next_logo = if form.clear_logo.is_some() {
+        None
+    } else if let Some(url) = uploaded_logo.as_deref() {
+        Some(url.to_string())
+    } else {
+        tournament.logo_url
+    };
+
+    match tournament_service::update_branding(
+        state,
+        user.id,
+        tournament.id,
+        next_logo.as_deref(),
+        primary.as_deref(),
+        accent.as_deref(),
+        background.as_deref(),
+        nav_background.as_deref(),
+        nav_text.as_deref(),
+    ) {
+        Ok(_) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Option::<String>::None,
+            success = Some("Tournament branding updated.".to_string()),
+            tab = Some("branding".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(settings_page(
+            slug = slug,
+            error = Some(message),
+            success = Option::<String>::None,
+            tab = Some("branding".to_string())
+        )))),
+    }
 }
 
 #[post("/<slug>/settings/setup/complete")]
@@ -1057,6 +1229,88 @@ pub async fn update_user(
             tab = Some("roles".to_string())
         )))),
     }
+}
+
+fn normalize_hex_color(value: Option<&str>) -> Result<Option<String>, &'static str> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() != 7 || !trimmed.starts_with('#') {
+        return Err("Color must be a 7-character hex value like #2d62ff.");
+    }
+    if !trimmed
+        .chars()
+        .skip(1)
+        .all(|ch| ch.is_ascii_hexdigit())
+    {
+        return Err("Color must be a valid hex value like #2d62ff.");
+    }
+    Ok(Some(trimmed.to_lowercase()))
+}
+
+async fn save_tournament_logo(
+    file: &mut Option<TempFile<'_>>,
+) -> Result<Option<String>, std::io::Error> {
+    let Some(upload) = file else {
+        return Ok(None);
+    };
+    if upload.len() == 0 {
+        return Ok(None);
+    }
+    const MAX_UPLOAD_BYTES: u64 = 5 * 1024 * 1024;
+    if upload.len() > MAX_UPLOAD_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Logo too large",
+        ));
+    }
+
+    let uploads_dir = Path::new("static").join("uploads");
+    std::fs::create_dir_all(&uploads_dir)?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let raw_filename = format!("tournament-logo-raw-{}.bin", timestamp);
+    let raw_path = uploads_dir.join(raw_filename);
+    upload.persist_to(&raw_path).await?;
+
+    let data = std::fs::read(&raw_path)?;
+    let is_png = data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    let is_jpeg = data.starts_with(&[0xFF, 0xD8, 0xFF]);
+    if !(is_png || is_jpeg) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "File is not a PNG or JPEG",
+        ));
+    }
+
+    let reader = image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid image format")
+        })?;
+    let image = reader.decode().map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "Unable to decode image")
+    })?;
+    let resized = image.resize(420, 420, FilterType::CatmullRom);
+
+    let filename = format!("tournament-logo-{}.png", timestamp);
+    let filepath = uploads_dir.join(filename);
+    resized
+        .save(&filepath)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Unable to save image"))?;
+    let _ = std::fs::remove_file(&raw_path);
+    let public_path = format!(
+        "/static/uploads/{}",
+        filepath.file_name().unwrap().to_string_lossy()
+    );
+    Ok(Some(public_path))
 }
 
 async fn save_user_photo(

@@ -39,6 +39,15 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
             UNIQUE KEY idx_tournaments_slug (slug)
         )",
     )?;
+    conn.query_drop(
+        "CREATE TABLE IF NOT EXISTS tournament_slug_aliases (
+            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            tournament_id BIGINT NOT NULL,
+            old_slug TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+            UNIQUE KEY idx_tournament_slug_aliases_old_slug (old_slug(191))
+        )",
+    )?;
 
     conn.query_drop(
         "CREATE TABLE IF NOT EXISTS tournament_roles (
@@ -247,6 +256,8 @@ pub fn init_db(pool: &Pool) -> mysql::Result<()> {
     apply_draw_system_migration(&mut conn)?;
     apply_contact_pause_vote_scoring_migration(&mut conn)?;
     apply_non_contact_performances_migration(&mut conn)?;
+    apply_tournament_branding_migration(&mut conn)?;
+    apply_tournament_nav_colors_migration(&mut conn)?;
 
     Ok(())
 }
@@ -437,6 +448,61 @@ fn apply_match_judge_round_scores_migration(conn: &mut PooledConn) -> mysql::Res
         conn.query_drop(
             "CREATE UNIQUE INDEX idx_match_judges_match_order_round ON match_judges (match_id, judge_order, fight_round)",
         )?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_tournament_branding_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260422_tournament_branding";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "tournaments", "logo_url")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN logo_url TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "theme_primary_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN theme_primary_color TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "theme_accent_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN theme_accent_color TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "theme_background_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN theme_background_color TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "nav_background_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN nav_background_color TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "nav_text_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN nav_text_color TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "nav_active_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN nav_active_color TEXT")?;
+    }
+
+    conn.exec_drop(
+        "INSERT INTO schema_migrations (id) VALUES (?)",
+        (migration_id,),
+    )?;
+    Ok(())
+}
+
+fn apply_tournament_nav_colors_migration(conn: &mut PooledConn) -> mysql::Result<()> {
+    let migration_id = "20260422_tournament_nav_colors";
+    if migration_applied(conn, migration_id)? {
+        return Ok(());
+    }
+
+    if !column_exists(conn, "tournaments", "nav_background_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN nav_background_color TEXT")?;
+    }
+    if !column_exists(conn, "tournaments", "nav_text_color")? {
+        conn.query_drop("ALTER TABLE tournaments ADD COLUMN nav_text_color TEXT")?;
     }
 
     conn.exec_drop(

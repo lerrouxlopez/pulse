@@ -8,11 +8,120 @@ use crate::services::auth_service;
 use crate::state::AppState;
 use mysql::prelude::*;
 use rocket::State;
+use serde::Serialize;
 
-const PERMISSIONS: [&str; 6] = ["dashboard", "events", "teams", "settings", "scores", "match_timer"];
+struct NavPageDefinition {
+    label: &'static str,
+    active_key: &'static str,
+    path: &'static str,
+    required_any_permissions: &'static [&'static str],
+    visible_before_setup: bool,
+}
+
+const NAVIGATION_DEFINITIONS: [NavPageDefinition; 7] = [
+    NavPageDefinition {
+        label: "Dashboard",
+        active_key: "dashboard",
+        path: "dashboard",
+        required_any_permissions: &["dashboard"],
+        visible_before_setup: false,
+    },
+    NavPageDefinition {
+        label: "Results",
+        active_key: "results",
+        path: "results",
+        required_any_permissions: &["dashboard"],
+        visible_before_setup: false,
+    },
+    NavPageDefinition {
+        label: "Events",
+        active_key: "events",
+        path: "events",
+        required_any_permissions: &["events"],
+        visible_before_setup: false,
+    },
+    NavPageDefinition {
+        label: "Matches",
+        active_key: "matches",
+        path: "matches",
+        required_any_permissions: &["events", "match_timer"],
+        visible_before_setup: false,
+    },
+    NavPageDefinition {
+        label: "Scores",
+        active_key: "scores",
+        path: "scores",
+        required_any_permissions: &["scores", "events"],
+        visible_before_setup: false,
+    },
+    NavPageDefinition {
+        label: "Teams",
+        active_key: "teams",
+        path: "teams",
+        required_any_permissions: &["teams"],
+        visible_before_setup: false,
+    },
+    NavPageDefinition {
+        label: "Settings",
+        active_key: "settings",
+        path: "settings",
+        required_any_permissions: &["settings"],
+        visible_before_setup: true,
+    },
+];
+
+#[derive(Serialize, Clone)]
+pub struct SidebarNavItem {
+    pub label: String,
+    pub active_key: String,
+    pub href: String,
+}
 
 pub fn permissions() -> Vec<String> {
-    PERMISSIONS.iter().map(|item| item.to_string()).collect()
+    let mut items: Vec<String> = Vec::new();
+    for page in NAVIGATION_DEFINITIONS {
+        for permission in page.required_any_permissions {
+            if !items
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(permission))
+            {
+                items.push((*permission).to_string());
+            }
+        }
+    }
+    items
+}
+
+pub fn sidebar_nav_items(
+    allowed_permissions: &[String],
+    is_setup: bool,
+    tournament_slug: Option<&str>,
+) -> Vec<SidebarNavItem> {
+    let mut items: Vec<SidebarNavItem> = Vec::new();
+    for page in NAVIGATION_DEFINITIONS {
+        if !is_setup && !page.visible_before_setup {
+            continue;
+        }
+        let has_access = page.required_any_permissions.iter().any(|permission| {
+            allowed_permissions
+                .iter()
+                .any(|item| item.eq_ignore_ascii_case(permission))
+        });
+        if !has_access {
+            continue;
+        }
+        let href = if let Some(slug) = tournament_slug {
+            format!("/{}/{}", slug, page.path)
+        } else {
+            "/dashboard".to_string()
+        };
+        items.push(SidebarNavItem {
+            label: page.label.to_string(),
+            active_key: page.active_key.to_string(),
+            href,
+        });
+    }
+    items
 }
 
 pub fn is_owner(state: &State<AppState>, user_id: i64, tournament_id: i64) -> bool {
@@ -164,7 +273,7 @@ pub fn update_role_permissions(
     state: &State<AppState>,
     tournament_id: i64,
     role_id: i64,
-    permissions: &[String],
+    requested_permissions: &[String],
 ) -> Result<(), String> {
     let mut conn = db::open_conn(&state.pool).map_err(|_| "Storage error.")?;
     let is_owner = conn
@@ -178,10 +287,11 @@ pub fn update_role_permissions(
     if is_owner {
         return Err("Owner permissions cannot be changed.".to_string());
     }
-    let filtered: Vec<String> = permissions
+    let valid_permissions = permissions();
+    let filtered: Vec<String> = requested_permissions
         .iter()
         .filter(|item| {
-            PERMISSIONS
+            valid_permissions
                 .iter()
                 .any(|perm| perm.eq_ignore_ascii_case(item))
         })

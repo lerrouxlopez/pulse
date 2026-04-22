@@ -3,20 +3,24 @@ use mysql::prelude::*;
 use mysql::PooledConn;
 
 pub fn get_by_id(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Option<Tournament>> {
-    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
-        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments WHERE id = ?",
+    let row: Option<(
+        i64,
+        String,
+        String,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = conn.exec_first(
+        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at, logo_url, theme_primary_color, theme_accent_color, theme_background_color, nav_background_color, nav_text_color FROM tournaments WHERE id = ?",
         (tournament_id,),
     )?;
-    Ok(row.map(
-        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
-            id,
-            name,
-            slug,
-            is_setup: is_setup_value != 0,
-            user_id,
-            started_at,
-        },
-    ))
+    Ok(row.map(map_tournament))
 }
 
 pub fn get_by_id_for_user(
@@ -24,8 +28,21 @@ pub fn get_by_id_for_user(
     tournament_id: i64,
     user_id: i64,
 ) -> mysql::Result<Option<Tournament>> {
-    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
-        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
+    let row: Option<(
+        i64,
+        String,
+        String,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = conn.exec_first(
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at, t.logo_url, t.theme_primary_color, t.theme_accent_color, t.theme_background_color, t.nav_background_color, t.nav_text_color
          FROM tournaments t
          JOIN users u ON u.id = ?
          WHERE t.id = ?
@@ -36,42 +53,32 @@ pub fn get_by_id_for_user(
            )",
         (user_id, tournament_id),
     )?;
-    Ok(row.map(
-        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
-            id,
-            name,
-            slug,
-            is_setup: is_setup_value != 0,
-            user_id,
-            started_at,
-        },
-    ))
+    Ok(row.map(map_tournament))
 }
 
 pub fn list_by_user(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Vec<Tournament>> {
     conn.exec_map(
-        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at, t.logo_url, t.theme_primary_color, t.theme_accent_color, t.theme_background_color, t.nav_background_color, t.nav_text_color
          FROM tournaments t
          JOIN users u ON u.id = ?
          WHERE (u.user_type = 'system' AND t.user_id = u.id)
             OR (u.user_type = 'tournament' AND t.id = u.tournament_id)
          ORDER BY t.id DESC",
         (user_id,),
-        |(id, name, slug, is_setup_value, user_id, started_at): (
+        |row: (
             i64,
             String,
             String,
             i64,
             i64,
             Option<String>,
-        )| Tournament {
-            id,
-            name,
-            slug,
-            is_setup: is_setup_value != 0,
-            user_id,
-            started_at,
-        },
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )| map_tournament(row),
     )
 }
 
@@ -92,20 +99,31 @@ pub fn set_setup(conn: &mut PooledConn, tournament_id: i64, is_setup: bool) -> m
 }
 
 pub fn get_by_slug(conn: &mut PooledConn, slug: &str) -> mysql::Result<Option<Tournament>> {
-    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
-        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at FROM tournaments WHERE slug = ?",
-        (slug,),
+    let row: Option<(
+        i64,
+        String,
+        String,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = conn.exec_first(
+        "SELECT id, name, COALESCE(slug, ''), CAST(is_setup AS SIGNED), user_id, started_at, logo_url, theme_primary_color, theme_accent_color, theme_background_color, nav_background_color, nav_text_color
+         FROM tournaments t
+         WHERE t.slug = ?
+            OR EXISTS (
+              SELECT 1 FROM tournament_slug_aliases a
+              WHERE a.tournament_id = t.id AND a.old_slug = ?
+            )
+         LIMIT 1",
+        (slug, slug),
     )?;
-    Ok(row.map(
-        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
-            id,
-            name,
-            slug,
-            is_setup: is_setup_value != 0,
-            user_id,
-            started_at,
-        },
-    ))
+    Ok(row.map(map_tournament))
 }
 
 pub fn get_by_slug_for_user(
@@ -113,28 +131,38 @@ pub fn get_by_slug_for_user(
     slug: &str,
     user_id: i64,
 ) -> mysql::Result<Option<Tournament>> {
-    let row: Option<(i64, String, String, i64, i64, Option<String>)> = conn.exec_first(
-        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at
+    let row: Option<(
+        i64,
+        String,
+        String,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = conn.exec_first(
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at, t.logo_url, t.theme_primary_color, t.theme_accent_color, t.theme_background_color, t.nav_background_color, t.nav_text_color
          FROM tournaments t
          JOIN users u ON u.id = ?
-         WHERE t.slug = ?
+         WHERE (
+             t.slug = ?
+             OR EXISTS (
+               SELECT 1 FROM tournament_slug_aliases a
+               WHERE a.tournament_id = t.id AND a.old_slug = ?
+             )
+           )
            AND (
              (u.user_type = 'system' AND t.user_id = u.id)
              OR (u.user_type = 'tournament' AND u.tournament_id = t.id)
              OR u.tournament_id = t.id
            )",
-        (user_id, slug),
+        (user_id, slug, slug),
     )?;
-    Ok(row.map(
-        |(id, name, slug, is_setup_value, user_id, started_at)| Tournament {
-            id,
-            name,
-            slug,
-            is_setup: is_setup_value != 0,
-            user_id,
-            started_at,
-        },
-    ))
+    Ok(row.map(map_tournament))
 }
 
 pub fn slug_exists(conn: &mut PooledConn, slug: &str) -> mysql::Result<bool> {
@@ -193,4 +221,96 @@ pub fn update_slug(conn: &mut PooledConn, tournament_id: i64, slug: &str) -> mys
         (slug, tournament_id),
     )?;
     Ok(())
+}
+
+pub fn create_slug_alias(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    old_slug: &str,
+) -> mysql::Result<()> {
+    conn.exec_drop(
+        "INSERT IGNORE INTO tournament_slug_aliases (tournament_id, old_slug) VALUES (?, ?)",
+        (tournament_id, old_slug),
+    )?;
+    Ok(())
+}
+
+pub fn update_name(conn: &mut PooledConn, tournament_id: i64, name: &str) -> mysql::Result<()> {
+    conn.exec_drop(
+        "UPDATE tournaments SET name = ? WHERE id = ?",
+        (name, tournament_id),
+    )?;
+    Ok(())
+}
+
+pub fn update_branding(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    logo_url: Option<&str>,
+    theme_primary_color: Option<&str>,
+    theme_accent_color: Option<&str>,
+    theme_background_color: Option<&str>,
+    nav_background_color: Option<&str>,
+    nav_text_color: Option<&str>,
+) -> mysql::Result<()> {
+    conn.exec_drop(
+        "UPDATE tournaments
+         SET logo_url = ?, theme_primary_color = ?, theme_accent_color = ?, theme_background_color = ?, nav_background_color = ?, nav_text_color = ?
+         WHERE id = ?",
+        (
+            logo_url,
+            theme_primary_color,
+            theme_accent_color,
+            theme_background_color,
+            nav_background_color,
+            nav_text_color,
+            tournament_id,
+        ),
+    )?;
+    Ok(())
+}
+
+fn map_tournament(
+    (
+        id,
+        name,
+        slug,
+        is_setup_value,
+        user_id,
+        started_at,
+        logo_url,
+        theme_primary_color,
+        theme_accent_color,
+        theme_background_color,
+        nav_background_color,
+        nav_text_color,
+    ): (
+        i64,
+        String,
+        String,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ),
+) -> Tournament {
+    Tournament {
+        id,
+        name,
+        slug,
+        is_setup: is_setup_value != 0,
+        user_id,
+        started_at,
+        logo_url,
+        theme_primary_color,
+        theme_accent_color,
+        theme_background_color,
+        nav_background_color,
+        nav_text_color,
+    }
 }

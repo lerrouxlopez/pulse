@@ -52,6 +52,9 @@ pub fn matches_page(
     jar.add(Cookie::new("last_tournament_slug", tournament.slug.clone()));
 
     let matches = matches_service::list_cards(state, user.id, tournament.id).unwrap_or_default();
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "matches",
@@ -62,7 +65,8 @@ pub fn matches_page(
             matches: matches,
             active: "matches",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     ))
 }
@@ -130,6 +134,9 @@ pub fn match_page(
 
     let can_control_timer = access_service::is_owner(state, user.id, tournament.id)
         || access_service::user_has_permission(state, user.id, tournament.id, "match_timer");
+    let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
 
     Ok(Template::render(
         "match",
@@ -144,7 +151,8 @@ pub fn match_page(
             error: error,
             active: "matches",
             is_setup: tournament.is_setup,
-            allowed_pages: access_service::user_permissions(state, user.id, tournament.id),
+            allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
         },
     ))
 }

@@ -68,6 +68,7 @@ pub fn dashboard(
             current_tournament_name: Option::<String>::None,
             tournament_slug: Option::<String>::None,
             allowed_pages: Vec::<String>::new(),
+            sidebar_nav_items: Vec::<crate::services::access_service::SidebarNavItem>::new(),
             is_system_user: true,
         },
     ))
@@ -114,6 +115,8 @@ pub fn tournament_dashboard(
     }
 
     let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
+    let sidebar_nav_items =
+        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
     if !access_service::user_has_permission(state, user.id, tournament.id, "dashboard") {
         if allowed_pages
             .iter()
@@ -166,6 +169,7 @@ pub fn tournament_dashboard(
             current_tournament_name: tournament.name,
             tournament_slug: tournament.slug,
             allowed_pages: allowed_pages,
+            sidebar_nav_items: sidebar_nav_items,
             is_system_user: user.user_type.eq_ignore_ascii_case("system"),
         },
     ))

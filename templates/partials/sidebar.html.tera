@@ -1,45 +1,39 @@
 <div class="brand d-flex align-items-center gap-2">
-  <img src="/static/logo-dark.png" class="brand-logo logo-dark" alt="Pulse logo dark" />
-  <img src="/static/logo-light.png" class="brand-logo logo-light" alt="Pulse logo light" />
-  <span class="fw-bold">Pulse</span>
+  <img src="/static/logo-dark.png" class="brand-logo logo-dark js-brand-logo-dark" alt="Pulse logo dark" />
+  <img src="/static/logo-light.png" class="brand-logo logo-light js-brand-logo-light" alt="Pulse logo light" />
 </div>
 <nav class="nav flex-column mt-4">
-  {% set nav_perms = allowed_pages | default(value=[]) %}
-  {% set can_dashboard = "dashboard" in nav_perms %}
-  {% set can_events = "events" in nav_perms %}
-  {% set can_teams = "teams" in nav_perms %}
-  {% set can_settings = "settings" in nav_perms %}
-  {% set can_match_timer = "match_timer" in nav_perms %}
-  {# Scores access is granted to roles with "scores" OR "events" permission (see controller checks). #}
-  {% set can_scores = ("scores" in nav_perms) or can_events %}
-  {% if is_setup %}
-    {% if can_dashboard %}
-    <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/dashboard{% else %}/dashboard{% endif %}">Dashboard</a>
-    <a class="nav-link {% if active == 'results' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/results{% else %}/dashboard{% endif %}">Results</a>
-    {% endif %}
-    {% if can_events %}
-    <a class="nav-link {% if active == 'events' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/events{% else %}/dashboard{% endif %}">Events</a>
-    {% endif %}
-    {% if can_events or can_match_timer %}
-    <a class="nav-link {% if active == 'matches' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/matches{% else %}/dashboard{% endif %}">Matches</a>
-    {% endif %}
-    {% if can_scores %}
-    <a class="nav-link {% if active == 'scores' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/scores{% else %}/dashboard{% endif %}">Scores</a>
-    {% endif %}
-    {% if can_teams %}
-    <a class="nav-link {% if active == 'teams' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/teams{% else %}/dashboard{% endif %}">Teams</a>
-    {% endif %}
-    {% if can_settings %}
-    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/settings{% else %}/dashboard{% endif %}">Settings</a>
-    {% endif %}
-  {% else %}
-    {% if can_settings %}
-    <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{% if tournament_slug %}/{{ tournament_slug }}/settings{% else %}/dashboard{% endif %}">Settings</a>
-    {% endif %}
-  {% endif %}
+  {% set nav_items = sidebar_nav_items | default(value=[]) %}
+  {% for item in nav_items %}
+  <a class="nav-link {% if active == item.active_key %}active{% endif %}" href="{{ item.href }}">{{ item.label }}</a>
+  {% endfor %}
 </nav>
 <form action="/logout" method="post" class="mt-auto w-100">
   <button class="btn btn-outline-light w-100 mt-4" type="submit">
     Sign out
   </button>
 </form>
+<script>
+  (async () => {
+    const slug = "{{ tournament_slug | default(value="") }}";
+    if (!slug) return;
+    try {
+      const res = await fetch(`/${slug}/branding.json`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const branding = await res.json();
+      const root = document.documentElement;
+      root.style.setProperty("--theme-primary", branding.theme_primary_color || "#2d62ff");
+      root.style.setProperty("--theme-accent", branding.theme_accent_color || "#ff6b35");
+      root.style.setProperty("--theme-background", branding.theme_background_color || "#f2f3f5");
+      root.style.setProperty("--nav-bg", branding.nav_background_color || "#0f1426");
+      root.style.setProperty("--nav-text", branding.nav_text_color || "#f5efe6");
+      root.style.setProperty("--nav-active", branding.theme_primary_color || "#1d4ed8");
+
+      if (branding.logo_url) {
+        document.querySelectorAll(".js-brand-logo-dark, .js-brand-logo-light").forEach((img) => {
+          img.src = branding.logo_url;
+        });
+      }
+    } catch (_) {}
+  })();
+</script>
