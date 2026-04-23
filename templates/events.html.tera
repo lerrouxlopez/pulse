@@ -108,7 +108,7 @@
                   </select>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label text-cream-60">Division</label>
+                  <label class="form-label text-cream-60">Gender Division</label>
                   <select class="form-select" name="division_id">
                     <option value="">Select division</option>
                     {% for division in divisions %}
@@ -150,7 +150,7 @@
                     <th>Date & Time</th>
                     <th>Point System</th>
                     <th>Time</th>
-                    <th>Division</th>
+                    <th>Gender Division</th>
                     <th>Weight Class</th>
                     <th class="text-end">Actions</th>
                   </tr>

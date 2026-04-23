@@ -203,7 +203,7 @@
                 </select>
               </div>
               <div class="col-md-3">
-                <label class="form-label text-cream-60">Division</label>
+                <label class="form-label text-cream-60">Gender Division</label>
                 <select class="form-select" name="division_id">
                   <option value="">Select division</option>
                   {% for division in team.divisions %}
@@ -216,7 +216,7 @@
                 <input class="form-control" type="file" name="photo_file" accept="image/*" />
               </div>
               <div class="col-md-6">
-                <label class="form-label text-cream-60">Categories</label>
+                <label class="form-label text-cream-60">Age Categories</label>
                 <div class="drawer-grid">
                   {% for category in team.categories %}
                   <div class="form-check">
@@ -282,7 +282,7 @@
             <form id="bulk-assign-form" action="/{{ tournament_slug }}/teams/{{ team.id }}/members/bulk-assign" method="post">
               <div class="row g-3 align-items-start">
                 <div class="col-lg-3">
-                  <label class="form-label text-cream-60 mb-1">Division</label>
+                  <label class="form-label text-cream-60 mb-1">Age Division</label>
                   <select class="form-select form-select-sm" name="division_id">
                     <option value="">Clear division</option>
                     {% for division in team.divisions %}
@@ -298,7 +298,7 @@
 
                 <div class="col-lg-4">
                   <label class="form-label text-cream-60 mb-1 d-flex align-items-center justify-content-between">
-                    <span>Categories</span>
+                    <span>Age Categories</span>
                     <span class="text-cream-60 small">{{ team.categories | length }}</span>
                   </label>
                   <div class="bulk-scroll drawer-grid">
@@ -355,8 +355,8 @@
                   <th>Photo</th>
                   <th>Name</th>
                   <th>Weight Class</th>
-                  <th>Division</th>
-                  <th>Category</th>
+                  <th>Gender Division</th>
+                  <th>Age Category</th>
                   <th>Event</th>
                   <th>Notes</th>
                   <th class="text-end">Actions</th>
@@ -452,7 +452,7 @@
                       </div>
                     </div>
                     <div class="col-md-3">
-                      <label class="form-label text-muted">Division</label>
+                      <label class="form-label text-muted">Gender Division</label>
                       <select class="form-select" name="division_id">
                         <option value="">Select division</option>
                         {% for division in team.divisions %}
@@ -473,7 +473,7 @@
                       </div>
                     </div>
                     <div class="col-md-6">
-                      <label class="form-label text-muted">Categories</label>
+                      <label class="form-label text-muted">Age Categories</label>
                       <div class="drawer-grid">
                         {% for category in team.categories %}
                         <div class="form-check">
