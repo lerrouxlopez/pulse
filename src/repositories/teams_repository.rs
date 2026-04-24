@@ -6,7 +6,7 @@ pub fn list_teams(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Ve
     conn.exec_map(
         "SELECT id, name, logo_url FROM teams WHERE tournament_id = ? ORDER BY id",
         (tournament_id,),
-        |(id, name, logo_url)| Team {
+        |(id, name, logo_url): (i64, String, Option<String>)| Team {
             id,
             name,
             logo_url,
@@ -211,10 +211,13 @@ pub fn get_team_logo(
     tournament_id: i64,
     team_id: i64,
 ) -> mysql::Result<Option<String>> {
-    conn.exec_first(
+    // `exec_first` wraps "row not found" as `Option<T>`. Since `logo_url` can itself be NULL,
+    // we need `Option<Option<String>>` and then flatten.
+    let row: Option<Option<String>> = conn.exec_first(
         "SELECT logo_url FROM teams WHERE id = ? AND tournament_id = ?",
         (team_id, tournament_id),
-    )
+    )?;
+    Ok(row.flatten())
 }
 
 pub fn list_team_divisions(

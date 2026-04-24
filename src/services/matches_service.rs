@@ -941,7 +941,13 @@ pub fn toggle_match_timer_pause(
     let time_rule =
         crate::services::scheduled_events_service::parse_time_rule(scheduled.time_rule.as_deref());
     let duration_limit = time_rule.map(|rule| rule.seconds_per_round).unwrap_or(0);
-    if duration_limit <= 0 {
+    let is_no_time_limit = scheduled
+        .time_rule
+        .as_deref()
+        .is_some_and(|value| {
+            value.eq_ignore_ascii_case(crate::services::scheduled_events_service::NO_TIME_LIMIT_RULE)
+        });
+    if duration_limit <= 0 && !is_no_time_limit {
         return Err("Timer is not configured for this event.".to_string());
     }
 
@@ -2886,4 +2892,3 @@ fn populate_judge_scores(
     }
     Ok(())
 }
-

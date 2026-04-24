@@ -166,7 +166,7 @@
         const startedAt = Number(timerEl.dataset.timerStartedAt || "0");
         const duration = Number(timerEl.dataset.timerDuration || "0");
         const isRunning = timerEl.dataset.timerRunning === "1";
-        if (!startedAt || !duration) {
+        if (!startedAt) {
           timerEl.textContent = "00:00";
           timerEl.classList.remove("is-expired");
           return;
@@ -174,9 +174,12 @@
 
         const now = Math.floor(Date.now() / 1000);
         const elapsed = Math.max(0, now - startedAt);
-        const shown = Math.max(0, Math.min(duration, elapsed));
+        const isUnlimited = duration <= 0;
+        const shown = isUnlimited ? elapsed : Math.max(0, Math.min(duration, elapsed));
         timerEl.textContent = formatTimer(shown);
-        timerEl.classList.toggle("is-expired", elapsed >= duration);
+
+        // Only mark expiry for configured countdown timers.
+        timerEl.classList.toggle("is-expired", !isUnlimited && elapsed >= duration);
       };
 
       const renderJudges = (judges, isVoteMode, fightRound, isNonContact) => {

@@ -11,8 +11,15 @@ use rocket::State;
 const CONTACT_TYPES: [&str; 2] = ["Contact", "Non-Contact"];
 const STATUSES: [&str; 4] = ["Scheduled", "Ongoing", "Finished", "Cancelled"];
 const POINT_SYSTEMS: [&str; 2] = ["5-10 points", "Must 8/10 points"];
-const TIME_RULES: [&str; 3] = ["1 round | 1 minute", "1 round | 2 minutes", "3 rounds | 1 minute"];
+const TIME_RULES: [&str; 4] = [
+    "1 round | 1 minute",
+    "1 round | 2 minutes",
+    "3 rounds | 1 minute",
+    "No time limit",
+];
 const DRAW_SYSTEMS: [&str; 2] = ["Extension", "First point Advantage"];
+
+pub const NO_TIME_LIMIT_RULE: &str = "No time limit";
 
 #[derive(Debug, Clone, Copy)]
 pub struct TimeRule {
@@ -129,6 +136,13 @@ pub fn create(
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
         .map_err(|err| format!("Storage error: {err}"))?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
+    if is_contact {
+        if let Some(time_rule) = time_rule {
+            if time_rule.eq_ignore_ascii_case(NO_TIME_LIMIT_RULE) {
+                return Err("No time limit is only supported for Non-Contact events.".to_string());
+            }
+        }
+    }
     let duplicate_division_id = if is_contact { division_id } else { None };
     let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
     if existing.iter().any(|item| {
@@ -190,14 +204,27 @@ pub fn create(
     let (point_system_value, time_rule_value, draw_system_value) = if is_contact {
         (point_system, time_rule, draw_system)
     } else {
-        // Non-contact performances always use the simple 5-10 scale, with a configurable 1-2 minute timer.
-        let parsed = parse_time_rule(time_rule);
-        let canonical_time = match parsed {
-            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 60 => "1 round | 1 minute",
-            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 120 => "1 round | 2 minutes",
-            _ => "1 round | 2 minutes",
-        };
-        (Some("5-10 points"), Some(canonical_time), None)
+        // Non-contact performances always use the simple 5-10 scale, with either:
+        // - a configurable 1-2 minute timer, or
+        // - an unlimited timer ("No time limit").
+        if time_rule
+            .as_ref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(NO_TIME_LIMIT_RULE))
+        {
+            (Some("5-10 points"), Some(NO_TIME_LIMIT_RULE), None)
+        } else {
+            let parsed = parse_time_rule(time_rule);
+            let canonical_time = match parsed {
+                Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 60 => {
+                    "1 round | 1 minute"
+                }
+                Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 120 => {
+                    "1 round | 2 minutes"
+                }
+                _ => "1 round | 2 minutes",
+            };
+            (Some("5-10 points"), Some(canonical_time), None)
+        }
     };
     scheduled_events_repository::create(
         &mut conn,
@@ -254,6 +281,13 @@ pub fn update(
     let existing = scheduled_events_repository::list(&mut conn, tournament_id)
         .map_err(|err| format!("Storage error: {err}"))?;
     let is_contact = contact_type.eq_ignore_ascii_case("Contact");
+    if is_contact {
+        if let Some(time_rule) = time_rule {
+            if time_rule.eq_ignore_ascii_case(NO_TIME_LIMIT_RULE) {
+                return Err("No time limit is only supported for Non-Contact events.".to_string());
+            }
+        }
+    }
     let duplicate_division_id = if is_contact { division_id } else { None };
     let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
     if existing.iter().any(|item| {
@@ -315,14 +349,27 @@ pub fn update(
     let (point_system_value, time_rule_value, draw_system_value) = if is_contact {
         (point_system, time_rule, draw_system)
     } else {
-        // Non-contact performances always use the simple 5-10 scale, with a configurable 1-2 minute timer.
-        let parsed = parse_time_rule(time_rule);
-        let canonical_time = match parsed {
-            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 60 => "1 round | 1 minute",
-            Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 120 => "1 round | 2 minutes",
-            _ => "1 round | 2 minutes",
-        };
-        (Some("5-10 points"), Some(canonical_time), None)
+        // Non-contact performances always use the simple 5-10 scale, with either:
+        // - a configurable 1-2 minute timer, or
+        // - an unlimited timer ("No time limit").
+        if time_rule
+            .as_ref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(NO_TIME_LIMIT_RULE))
+        {
+            (Some("5-10 points"), Some(NO_TIME_LIMIT_RULE), None)
+        } else {
+            let parsed = parse_time_rule(time_rule);
+            let canonical_time = match parsed {
+                Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 60 => {
+                    "1 round | 1 minute"
+                }
+                Some(rule) if rule.rounds == 1 && rule.seconds_per_round == 120 => {
+                    "1 round | 2 minutes"
+                }
+                _ => "1 round | 2 minutes",
+            };
+            (Some("5-10 points"), Some(canonical_time), None)
+        }
     };
 
     let changed = scheduled_events_repository::update(

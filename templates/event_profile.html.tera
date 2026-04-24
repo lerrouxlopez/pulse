@@ -113,7 +113,7 @@
                   <td class="fw-semibold">{{ match.red | default(value="TBD") }}</td>
                   <td>{{ match.status }}</td>
                   <td class="text-nowrap">
-                    <span class="match-timer" data-started-at="{{ match.timer_started_at | default(value=0) }}" data-duration="{{ match.timer_duration_seconds | default(value=0) }}" data-running="{% if match.timer_is_running %}1{% else %}0{% endif %}">00:00:00</span>
+                    <span class="match-timer js-match-row-timer" data-started-at="{{ match.timer_started_at | default(value=0) }}" data-duration="{{ match.timer_duration_seconds | default(value=0) }}" data-running="{% if match.timer_is_running %}1{% else %}0{% endif %}">00:00:00</span>
                   </td>
                   <td class="text-end">
                     <div class="match-actions justify-content-end">
@@ -478,22 +478,27 @@
           const duration = Number(timerEl.dataset.duration || "0");
           const isRunning = timerEl.dataset.running === "1";
 
-          if (!isRunning || !startedAt || !duration) {
-            if (!startedAt) {
-              timerEl.textContent = "00:00:00";
-            } else if (duration) {
-              // Completed or stopped; show best-known elapsed.
-              const now = Math.floor(Date.now() / 1000);
-              const elapsed = Math.max(0, now - startedAt);
-              timerEl.textContent = formatHms(Math.min(duration, elapsed));
-            } else {
-              timerEl.textContent = "00:00:00";
-            }
+          if (!startedAt) {
+            timerEl.textContent = "00:00:00";
             return;
           }
 
           const now = Math.floor(Date.now() / 1000);
           const elapsed = Math.max(0, now - startedAt);
+          const isUnlimited = duration <= 0;
+
+          if (!isRunning) {
+            // Stopped/paused: if duration is >0 we treat it as a cap (paused elapsed or a finished round),
+            // otherwise show the raw elapsed time (unlimited timers).
+            timerEl.textContent = formatHms(isUnlimited ? elapsed : Math.min(duration, elapsed));
+            return;
+          }
+
+          if (isUnlimited) {
+            timerEl.textContent = formatHms(elapsed);
+            return;
+          }
+
           const capped = Math.min(duration, elapsed);
           timerEl.textContent = formatHms(capped);
 
