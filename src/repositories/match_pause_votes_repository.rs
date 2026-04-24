@@ -5,8 +5,6 @@ use mysql::{params, PooledConn};
 pub struct PauseVoteEvent {
     pub fight_round: i64,
     pub pause_seq: i64,
-    pub winner_side: Option<String>,
-    pub applied_at: Option<String>,
 }
 
 pub fn create_vote_event(
@@ -55,7 +53,7 @@ pub fn latest_pending_vote_event(
     fight_round: i64,
 ) -> mysql::Result<Option<PauseVoteEvent>> {
     conn.exec_first(
-        "SELECT e.fight_round, e.pause_seq, e.winner_side, e.applied_at
+        "SELECT e.fight_round, e.pause_seq
          FROM match_pause_vote_events e
          WHERE e.tournament_id = :tournament_id
            AND e.match_id = :match_id
@@ -69,12 +67,10 @@ pub fn latest_pending_vote_event(
             "fight_round" => fight_round,
         },
     )
-    .map(|row: Option<(i64, i64, Option<String>, Option<String>)>| {
-        row.map(|(fight_round, pause_seq, winner_side, applied_at)| PauseVoteEvent {
+    .map(|row: Option<(i64, i64)>| {
+        row.map(|(fight_round, pause_seq)| PauseVoteEvent {
             fight_round,
             pause_seq,
-            winner_side,
-            applied_at,
         })
     })
 }
@@ -86,7 +82,7 @@ pub fn latest_vote_event(
     fight_round: i64,
 ) -> mysql::Result<Option<PauseVoteEvent>> {
     conn.exec_first(
-        "SELECT e.fight_round, e.pause_seq, e.winner_side, e.applied_at
+        "SELECT e.fight_round, e.pause_seq
          FROM match_pause_vote_events e
          WHERE e.tournament_id = :tournament_id
            AND e.match_id = :match_id
@@ -99,12 +95,10 @@ pub fn latest_vote_event(
             "fight_round" => fight_round,
         },
     )
-    .map(|row: Option<(i64, i64, Option<String>, Option<String>)>| {
-        row.map(|(fight_round, pause_seq, winner_side, applied_at)| PauseVoteEvent {
+    .map(|row: Option<(i64, i64)>| {
+        row.map(|(fight_round, pause_seq)| PauseVoteEvent {
             fight_round,
             pause_seq,
-            winner_side,
-            applied_at,
         })
     })
 }

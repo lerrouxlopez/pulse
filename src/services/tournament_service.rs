@@ -131,17 +131,6 @@ pub fn get_by_slug_for_user(
     tournaments_repository::get_by_slug_for_user(&mut conn, slug, user_id).ok()?
 }
 
-pub fn list_access_users(
-    state: &State<AppState>,
-    tournament_id: i64,
-) -> Vec<crate::models::UserSummary> {
-    let mut conn = match db::open_conn(&state.pool) {
-        Ok(conn) => conn,
-        Err(_) => return Vec::new(),
-    };
-    tournaments_repository::list_access_users(&mut conn, tournament_id).unwrap_or_default()
-}
-
 pub fn ensure_slugs(pool: &Pool) -> bool {
     let mut conn = match db::open_conn(pool) {
         Ok(conn) => conn,

@@ -98,7 +98,7 @@
               <thead>
                 <tr>
                   <th scope="col">Event</th>
-                  <th scope="col">Division</th>
+                  <th scope="col">Gender Division</th>
                   <th scope="col">Weight Class</th>
                   <th scope="col">Winner</th>
                   <th scope="col">Team</th>

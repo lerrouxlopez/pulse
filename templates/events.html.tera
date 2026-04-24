@@ -81,6 +81,7 @@
                 <option value="1 round | 2 minutes" selected>1 round | 2 minutes</option>
                 <option value="1 round | 1 minute">1 round | 1 minute</option>
                 <option value="3 rounds | 1 minute">3 rounds | 1 minute</option>
+                <option value="No time limit">No time limit</option>
               </select>
             </div>
             <div class="col-md-6">
@@ -108,7 +109,7 @@
                   </select>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label text-cream-60">Division</label>
+                  <label class="form-label text-cream-60">Gender Division</label>
                   <select class="form-select" name="division_id">
                     <option value="">Select division</option>
                     {% for division in divisions %}
@@ -150,7 +151,7 @@
                     <th>Date & Time</th>
                     <th>Point System</th>
                     <th>Time</th>
-                    <th>Division</th>
+                    <th>Gender Division</th>
                     <th>Weight Class</th>
                     <th class="text-end">Actions</th>
                   </tr>
@@ -280,6 +281,7 @@
                         <option value="1 round | 2 minutes" {% if item.time_rule == "1 round | 2 minutes" %}selected{% endif %}>1 round | 2 minutes</option>
                         <option value="1 round | 1 minute" {% if item.time_rule == "1 round | 1 minute" %}selected{% endif %}>1 round | 1 minute</option>
                         <option value="3 rounds | 1 minute" {% if item.time_rule == "3 rounds | 1 minute" %}selected{% endif %}>3 rounds | 1 minute</option>
+                        <option value="No time limit" {% if item.time_rule == "No time limit" %}selected{% endif %}>No time limit</option>
                       </select>
                     </div>
                     <div class="col-12">
@@ -354,6 +356,21 @@
         }
         const isContact = String(select.value || "").toLowerCase() === "contact";
         block.classList.toggle("d-none", !isContact);
+
+        const form = select.closest("form");
+        const timeSelect = form ? form.querySelector("select[name='time_rule']") : null;
+        if (timeSelect) {
+          const noLimitOption = Array.from(timeSelect.options || []).find(
+            (opt) => String(opt.value || "").toLowerCase() === "no time limit"
+          );
+          if (noLimitOption) {
+            noLimitOption.hidden = isContact;
+            noLimitOption.disabled = isContact;
+          }
+          if (isContact && String(timeSelect.value || "").toLowerCase() === "no time limit") {
+            timeSelect.value = "1 round | 2 minutes";
+          }
+        }
       };
 
       contactSelectors.forEach((select) => {

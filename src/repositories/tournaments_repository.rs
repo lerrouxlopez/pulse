@@ -1,4 +1,4 @@
-use crate::models::{Tournament, UserSummary};
+use crate::models::Tournament;
 use mysql::prelude::*;
 use mysql::PooledConn;
 
@@ -190,21 +190,6 @@ pub fn user_has_access(
         (user_id, tournament_id, tournament_id, tournament_id),
     )?;
     Ok(row.is_some())
-}
-
-pub fn list_access_users(
-    conn: &mut PooledConn,
-    tournament_id: i64,
-) -> mysql::Result<Vec<UserSummary>> {
-    conn.exec_map(
-        "SELECT id, name
-         FROM users
-         WHERE id = (SELECT user_id FROM tournaments WHERE id = ?1)
-            OR (user_type = 'tournament' AND tournament_id = ?1)
-         ORDER BY name",
-        (tournament_id,),
-        |(id, name)| UserSummary { id, name },
-    )
 }
 
 pub fn list_missing_slugs(conn: &mut PooledConn) -> mysql::Result<Vec<(i64, String)>> {

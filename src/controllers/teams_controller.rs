@@ -289,15 +289,16 @@ pub async fn import_teams_data(
         ));
     }
 
-    let (imported, failures) = if import_type == "teams" {
+    let (imported, skipped, failures) = if import_type == "teams" {
         process_team_import_rows(state, user.id, tournament.id, rows)
     } else {
         process_member_import_rows(state, user.id, tournament.id, rows)
     };
 
     let success = Some(format!(
-        "Imported {} row(s). {} row(s) failed.",
+        "Imported {} row(s). Skipped {} duplicate row(s). {} row(s) failed.",
         imported,
+        skipped,
         failures.len()
     ));
     let error = if failures.is_empty() {
@@ -490,12 +491,26 @@ pub async fn create_team(
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament =
         tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
-    let logo_url = save_logo(&mut form.logo_file)
-        .await
-        .map_err(|_| Status::InternalServerError)?;
-    let division_ids = form.division_ids.clone().unwrap_or_default();
-    let category_ids = form.category_ids.clone().unwrap_or_default();
-    let event_ids = form.event_ids.clone().unwrap_or_default();
+    let logo_url = match save_logo(&mut form.logo_file).await {
+        Ok(value) => value,
+        Err(err) => {
+            return Ok(Redirect::to(uri!(teams_page(
+                slug = slug,
+                error = Some(format!("Unable to save team logo: {err}")),
+                success = Option::<String>::None
+            ))))
+        }
+    };
+
+    let mut division_ids = form.division_ids.clone().unwrap_or_default();
+    division_ids.sort_unstable();
+    division_ids.dedup();
+    let mut category_ids = form.category_ids.clone().unwrap_or_default();
+    category_ids.sort_unstable();
+    category_ids.dedup();
+    let mut event_ids = form.event_ids.clone().unwrap_or_default();
+    event_ids.sort_unstable();
+    event_ids.dedup();
     match teams_service::create_team(
         state,
         user.id,
@@ -530,18 +545,47 @@ pub async fn update_team(
     let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
     let tournament =
         tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
-    let uploaded_logo = save_logo(&mut form.logo_file)
-        .await
-        .map_err(|_| Status::InternalServerError)?;
+    let should_save_logo = form
+        .logo_file
+        .as_ref()
+        .is_some_and(|upload| upload.len() > 0);
+    let uploaded_logo = if should_save_logo {
+        match save_logo(&mut form.logo_file).await {
+            Ok(value) => value,
+            Err(err) => {
+                return Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Some(format!("Unable to save team logo: {err}")),
+                    success = Option::<String>::None
+                ))))
+            }
+        }
+    } else {
+        None
+    };
     let logo_url = if uploaded_logo.is_some() {
         uploaded_logo
     } else {
-        teams_service::get_team_logo(state, user.id, tournament.id, id)
-            .map_err(|_| Status::InternalServerError)?
+        match teams_service::get_team_logo(state, user.id, tournament.id, id) {
+            Ok(value) => value,
+            Err(message) => {
+                return Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Some(message),
+                    success = Option::<String>::None
+                ))))
+            }
+        }
     };
-    let division_ids = form.division_ids.clone().unwrap_or_default();
-    let category_ids = form.category_ids.clone().unwrap_or_default();
-    let event_ids = form.event_ids.clone().unwrap_or_default();
+    let mut division_ids = form.division_ids.clone().unwrap_or_default();
+    division_ids.sort_unstable();
+    division_ids.dedup();
+    let mut category_ids = form.category_ids.clone().unwrap_or_default();
+    category_ids.sort_unstable();
+    category_ids.dedup();
+    let mut event_ids = form.event_ids.clone().unwrap_or_default();
+    event_ids.sort_unstable();
+    event_ids.dedup();
     match teams_service::update_team(
         state,
         user.id,
@@ -711,17 +755,42 @@ pub async fn update_member(
     let tournament =
         tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
     let team_id = teams_service::get_member_team_id(state, user.id, tournament.id, member_id);
-    let photo_url = match save_player_photo(&mut form.photo_file).await {
-        Ok(value) => value,
-        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
-            return Ok(Redirect::to(uri!(teams_page(
-                slug = slug,
-                error = Some("Invalid player photo. Use PNG/JPEG under 5MB.".to_string()),
-                success = Option::<String>::None
-            ))))
+    let should_save_photo = form
+        .photo_file
+        .as_ref()
+        .is_some_and(|upload| upload.len() > 0);
+    let photo_url = if should_save_photo {
+        match save_player_photo(&mut form.photo_file).await {
+            Ok(value) => value,
+            Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
+                return Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Some("Invalid player photo. Use PNG/JPEG under 5MB.".to_string()),
+                    success = Option::<String>::None
+                ))))
+            }
+            Err(err) => {
+                return Ok(Redirect::to(uri!(teams_page(
+                    slug = slug,
+                    error = Some(format!("Unable to save player photo: {err}")),
+                    success = Option::<String>::None
+                ))))
+            }
         }
-        Err(_) => return Err(Status::InternalServerError),
+    } else {
+        None
     };
+
+    let next_category_ids = form.category_ids.clone().map(|mut ids| {
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    });
+    let next_event_ids = form.event_ids.clone().map(|mut ids| {
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    });
     match teams_service::update_member(
         state,
         user.id,
@@ -731,8 +800,8 @@ pub async fn update_member(
         form.notes.as_deref(),
         form.weight_class.as_deref(),
         form.division_id,
-        form.category_ids.clone(),
-        form.event_ids.clone(),
+        next_category_ids,
+        next_event_ids,
         form.clear_notes.is_some(),
         form.clear_weight_class.is_some(),
         form.clear_division.is_some(),
@@ -887,6 +956,8 @@ pub fn bulk_assign_members(
 fn normalize_header(value: &str) -> String {
     value
         .trim()
+        // Handle UTF-8 BOM when the CSV is saved with a BOM (common in Excel).
+        .trim_start_matches('\u{feff}')
         .to_lowercase()
         .replace([' ', '-'], "_")
         .replace("__", "_")
@@ -906,33 +977,57 @@ fn split_multi_value(value: &str) -> Vec<String> {
 }
 
 fn parse_csv_rows(path: &Path) -> Result<Vec<ParsedImportRow>, String> {
+    let bytes = std::fs::read(path).map_err(|_| "Unable to read CSV file.".to_string())?;
+
+    // CSV exported by spreadsheet apps is often semicolon-delimited in some locales.
+    let mut delimiter = b',';
+    if let Some(line_end) = bytes.iter().position(|b| *b == b'\n') {
+        let head = &bytes[..line_end];
+        let comma_count = head.iter().filter(|b| **b == b',').count();
+        let semi_count = head.iter().filter(|b| **b == b';').count();
+        if semi_count > comma_count {
+            delimiter = b';';
+        }
+    }
+
+    // Use byte records so we can tolerate non-UTF8 CSV encodings (decode lossily per-field).
     let mut reader = csv::ReaderBuilder::new()
+        .delimiter(delimiter)
         .flexible(true)
-        .from_path(path)
-        .map_err(|_| "Unable to read CSV file.".to_string())?;
+        .from_reader(bytes.as_slice());
+
     let headers = reader
-        .headers()
-        .map_err(|_| "CSV header row is invalid.".to_string())?
+        .byte_headers()
+        .map_err(|err| format!("CSV header row is invalid: {err}"))?
         .iter()
-        .map(normalize_header)
+        .map(|value| normalize_header(&String::from_utf8_lossy(value)))
         .collect::<Vec<_>>();
     if headers.is_empty() {
         return Err("CSV header row is required.".to_string());
     }
 
     let mut rows = Vec::new();
-    for (index, record_result) in reader.records().enumerate() {
-        let record = record_result.map_err(|_| "CSV row is invalid.".to_string())?;
+    for (index, record_result) in reader.byte_records().enumerate() {
+        let record = record_result.map_err(|err| {
+            format!(
+                "CSV row is invalid (row {}): {err}",
+                // +2 for the 1-based header row + 1-based record index.
+                index + 2
+            )
+        })?;
         let raw = record
             .iter()
-            .map(|value| value.trim().to_string())
+            .map(|value| String::from_utf8_lossy(value).trim().to_string())
             .collect::<Vec<_>>();
         if raw.iter().all(|value| value.is_empty()) {
             continue;
         }
         let mut columns = HashMap::new();
         for (position, header) in headers.iter().enumerate() {
-            let value = record.get(position).unwrap_or("").trim().to_string();
+            let value = record
+                .get(position)
+                .map(|value| String::from_utf8_lossy(value).trim().to_string())
+                .unwrap_or_default();
             columns.insert(header.clone(), value);
         }
         rows.push(ParsedImportRow {
@@ -1010,12 +1105,21 @@ fn build_row_text(raw: &[String]) -> String {
     raw.join(" | ")
 }
 
+fn normalize_import_key(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_lowercase()
+}
+
 fn process_team_import_rows(
     state: &State<AppState>,
     user_id: i64,
     tournament_id: i64,
     rows: Vec<ParsedImportRow>,
-) -> (usize, Vec<ImportFailureView>) {
+) -> (usize, usize, Vec<ImportFailureView>) {
     let division_lookup: HashMap<String, i64> =
         settings_service::list(state, tournament_id, SettingsEntity::Division)
             .into_iter()
@@ -1035,10 +1139,11 @@ fn process_team_import_rows(
         teams_service::list(state, user_id, tournament_id)
             .unwrap_or_default()
             .into_iter()
-            .map(|team| team.name.to_lowercase())
+            .map(|team| normalize_import_key(&team.name))
             .collect();
 
     let mut imported = 0usize;
+    let mut skipped = 0usize;
     let mut failures = Vec::new();
     for row in rows {
         let team_name = row
@@ -1054,13 +1159,9 @@ fn process_team_import_rows(
             });
             continue;
         }
-        let lower_name = team_name.to_lowercase();
+        let lower_name = normalize_import_key(&team_name);
         if existing_team_names.contains(&lower_name) {
-            failures.push(ImportFailureView {
-                row_number: row.row_number,
-                row_data: build_row_text(&row.raw),
-                error: "Team already exists.".to_string(),
-            });
+            skipped += 1;
             continue;
         }
 
@@ -1123,7 +1224,7 @@ fn process_team_import_rows(
             }),
         }
     }
-    (imported, failures)
+    (imported, skipped, failures)
 }
 
 fn process_member_import_rows(
@@ -1131,11 +1232,19 @@ fn process_member_import_rows(
     user_id: i64,
     tournament_id: i64,
     rows: Vec<ParsedImportRow>,
-) -> (usize, Vec<ImportFailureView>) {
+) -> (usize, usize, Vec<ImportFailureView>) {
     let teams = teams_service::list(state, user_id, tournament_id).unwrap_or_default();
     let team_lookup: HashMap<String, i64> = teams
         .iter()
-        .map(|team| (team.name.to_lowercase(), team.id))
+        .map(|team| (normalize_import_key(&team.name), team.id))
+        .collect();
+    let mut existing_member_keys: HashSet<String> = teams
+        .iter()
+        .flat_map(|team| {
+            team.members.iter().map(move |member| {
+                format!("{}|{}", team.id, normalize_import_key(&member.name))
+            })
+        })
         .collect();
     let division_lookup: HashMap<String, i64> =
         settings_service::list(state, tournament_id, SettingsEntity::Division)
@@ -1154,6 +1263,7 @@ fn process_member_import_rows(
             .collect();
 
     let mut imported = 0usize;
+    let mut skipped = 0usize;
     let mut failures = Vec::new();
     for row in rows {
         let team_name = row
@@ -1174,7 +1284,7 @@ fn process_member_import_rows(
             });
             continue;
         }
-        let team_id = match team_lookup.get(&team_name.to_lowercase()) {
+        let team_id = match team_lookup.get(&normalize_import_key(&team_name)) {
             Some(id) => *id,
             None => {
                 failures.push(ImportFailureView {
@@ -1185,6 +1295,11 @@ fn process_member_import_rows(
                 continue;
             }
         };
+        let member_key = format!("{}|{}", team_id, normalize_import_key(&member_name));
+        if existing_member_keys.contains(&member_key) {
+            skipped += 1;
+            continue;
+        }
 
         let division_id = {
             let value = row.columns.get("division").cloned().unwrap_or_default();
@@ -1260,7 +1375,10 @@ fn process_member_import_rows(
             &event_ids,
             None,
         ) {
-            Ok(_) => imported += 1,
+            Ok(_) => {
+                existing_member_keys.insert(member_key);
+                imported += 1;
+            }
             Err(error) => failures.push(ImportFailureView {
                 row_number: row.row_number,
                 row_data: build_row_text(&row.raw),
@@ -1268,7 +1386,7 @@ fn process_member_import_rows(
             }),
         }
     }
-    (imported, failures)
+    (imported, skipped, failures)
 }
 
 async fn save_logo(file: &mut Option<TempFile<'_>>) -> Result<Option<String>, std::io::Error> {

@@ -6,7 +6,7 @@ pub fn list_teams(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Ve
     conn.exec_map(
         "SELECT id, name, logo_url FROM teams WHERE tournament_id = ? ORDER BY id",
         (tournament_id,),
-        |(id, name, logo_url)| Team {
+        |(id, name, logo_url): (i64, String, Option<String>)| Team {
             id,
             name,
             logo_url,
@@ -77,14 +77,6 @@ pub fn team_exists(conn: &mut PooledConn, tournament_id: i64, id: i64) -> mysql:
     let count: Option<i64> = conn.exec_first(
         "SELECT COUNT(*) FROM teams WHERE id = ? AND tournament_id = ?",
         (id, tournament_id),
-    )?;
-    Ok(count.unwrap_or(0) > 0)
-}
-
-pub fn member_exists(conn: &mut PooledConn, tournament_id: i64, member_id: i64) -> mysql::Result<bool> {
-    let count: Option<i64> = conn.exec_first(
-        "SELECT COUNT(*) FROM teams_members WHERE id = ? AND tournament_id = ?",
-        (member_id, tournament_id),
     )?;
     Ok(count.unwrap_or(0) > 0)
 }
@@ -219,10 +211,13 @@ pub fn get_team_logo(
     tournament_id: i64,
     team_id: i64,
 ) -> mysql::Result<Option<String>> {
-    conn.exec_first(
+    // `exec_first` wraps "row not found" as `Option<T>`. Since `logo_url` can itself be NULL,
+    // we need `Option<Option<String>>` and then flatten.
+    let row: Option<Option<String>> = conn.exec_first(
         "SELECT logo_url FROM teams WHERE id = ? AND tournament_id = ?",
         (team_id, tournament_id),
-    )
+    )?;
+    Ok(row.flatten())
 }
 
 pub fn list_team_divisions(

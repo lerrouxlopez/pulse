@@ -1,6 +1,5 @@
 pub mod access_service;
 pub mod auth_service;
-pub mod match_service;
 pub mod matches_service;
 pub mod scheduled_events_service;
 pub mod settings_service;

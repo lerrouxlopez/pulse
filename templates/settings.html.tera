@@ -75,12 +75,12 @@
             </li>
             <li class="nav-item" role="presentation">
               <button class="nav-link {% if active_tab == 'divisions' %}active{% endif %}" id="divisions-tab" data-bs-toggle="tab" data-bs-target="#divisions-pane" type="button" role="tab">
-                Divisions
+                Gender Divisions
               </button>
             </li>
             <li class="nav-item" role="presentation">
               <button class="nav-link {% if active_tab == 'categories' %}active{% endif %}" id="categories-tab" data-bs-toggle="tab" data-bs-target="#categories-pane" type="button" role="tab">
-                Categories
+                Age Categories
               </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -90,7 +90,7 @@
             </li>
             <li class="nav-item" role="presentation">
               <button class="nav-link {% if active_tab == 'events' %}active{% endif %}" id="events-tab" data-bs-toggle="tab" data-bs-target="#events-pane" type="button" role="tab">
-                Events
+                Matches / Events
               </button>
             </li>
             <li class="nav-item" role="presentation">
