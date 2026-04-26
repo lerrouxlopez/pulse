@@ -34,13 +34,15 @@ struct TeamChampionRow {
     wins: i64,
 }
 
-#[get("/<slug>/results?<page>&<q>")]
+#[get("/<slug>/results?<page>&<q>&<error>&<success>", rank = 50)]
 pub fn results_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
     page: Option<usize>,
     q: Option<String>,
+    error: Option<String>,
+    success: Option<String>,
 ) -> Result<Template, Redirect> {
     let user = match auth_service::current_user(state, jar) {
         Some(user) => user,
@@ -304,6 +306,7 @@ pub fn results_page(
     let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
     let sidebar_nav_items =
         access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
+    let can_reset_results = access_service::is_owner(state, user.id, tournament.id);
 
     Ok(Template::render(
         "results",
@@ -326,8 +329,174 @@ pub fn results_page(
             match_results_has_prev: has_prev,
             match_results_has_next: has_next,
             match_results_query: query,
+            error: error,
+            success: success,
+            can_reset_results: can_reset_results,
         },
     ))
+}
+
+#[post("/<slug>/results/reset", rank = 50)]
+pub fn reset_results(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::is_owner(state, user.id, tournament.id) {
+        return Err(Status::Forbidden);
+    }
+
+    let mut conn = crate::db::open_conn(&state.pool).map_err(|_| Status::InternalServerError)?;
+    let scheduled_events =
+        crate::repositories::scheduled_events_repository::list(&mut conn, tournament.id)
+            .unwrap_or_default();
+
+    for scheduled in scheduled_events {
+        let matches =
+            crate::repositories::matches_repository::list(&mut conn, tournament.id, scheduled.id)
+                .unwrap_or_default();
+
+        if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+            let max_round = matches.iter().filter_map(|m| m.round).max();
+            let final_match = max_round.and_then(|mr| {
+                matches
+                    .iter()
+                    .filter(|m| m.round == Some(mr))
+                    .max_by_key(|m| m.slot.unwrap_or(0))
+            });
+            let winner_member_id = final_match.and_then(|m| {
+                match m
+                    .winner_side
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim()
+                    .to_ascii_lowercase()
+                    .as_str()
+                {
+                    "red" => m.red_member_id,
+                    "blue" => m.blue_member_id,
+                    _ => None,
+                }
+            });
+
+            let winners: Vec<i64> = winner_member_id.into_iter().collect();
+            let _ = crate::repositories::scheduled_event_winners_repository::replace_winners(
+                &mut conn,
+                tournament.id,
+                scheduled.id,
+                &winners,
+            );
+            let status = if !winners.is_empty() {
+                "Finished"
+            } else {
+                scheduled.status.as_str()
+            };
+            let _ = crate::repositories::scheduled_events_repository::update_status_and_winner(
+                &mut conn,
+                tournament.id,
+                scheduled.id,
+                status,
+                winners.first().copied(),
+            );
+            continue;
+        }
+
+        let judge_user_ids =
+            crate::repositories::scheduled_event_judges_repository::list_assigned_judges(
+                &mut conn,
+                tournament.id,
+                scheduled.id,
+            )
+            .unwrap_or_default();
+        let judge_count = judge_user_ids.len() as i64;
+
+        let mut winners: Vec<i64> = Vec::new();
+        let is_ready = judge_count >= 3
+            && judge_count <= 5
+            && judge_count % 2 == 1
+            && !matches.is_empty()
+            && matches.iter().all(|m| m.status.eq_ignore_ascii_case("Finished"))
+            && matches.iter().all(|m| {
+                let scored =
+                    crate::repositories::match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
+                        &mut conn,
+                        tournament.id,
+                        m.id,
+                        1,
+                        5,
+                        10,
+                    )
+                    .unwrap_or(0);
+                scored == judge_count
+            });
+
+        if is_ready {
+            let mut best_total: Option<i64> = None;
+            for perf in &matches {
+                let Ok((sum_red, _sum_blue)) =
+                    crate::repositories::match_judges_repository::sum_for_match_round(
+                        &mut conn,
+                        tournament.id,
+                        perf.id,
+                        1,
+                    )
+                else {
+                    continue;
+                };
+                let Some(member_id) = perf.red_member_id else {
+                    continue;
+                };
+                match best_total {
+                    None => {
+                        best_total = Some(sum_red);
+                        winners.clear();
+                        winners.push(member_id);
+                    }
+                    Some(best) if sum_red > best => {
+                        best_total = Some(sum_red);
+                        winners.clear();
+                        winners.push(member_id);
+                    }
+                    Some(best) if sum_red == best => {
+                        winners.push(member_id);
+                    }
+                    _ => {}
+                }
+            }
+            winners.sort();
+            winners.dedup();
+        }
+
+        let _ = crate::repositories::scheduled_event_winners_repository::replace_winners(
+            &mut conn,
+            tournament.id,
+            scheduled.id,
+            &winners,
+        );
+        let status = if !winners.is_empty() {
+            "Finished"
+        } else {
+            scheduled.status.as_str()
+        };
+        let _ = crate::repositories::scheduled_events_repository::update_status_and_winner(
+            &mut conn,
+            tournament.id,
+            scheduled.id,
+            status,
+            winners.first().copied(),
+        );
+    }
+
+    Ok(Redirect::to(uri!(results_page(
+        slug = slug,
+        page = Option::<usize>::None,
+        q = Option::<String>::None,
+        error = Option::<String>::None,
+        success = Some("Results recalculated.".to_string())
+    ))))
 }
 
 #[derive(Serialize)]

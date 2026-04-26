@@ -131,7 +131,7 @@ fn render_teams_template(
     )
 }
 
-#[get("/<slug>/teams?<error>&<success>")]
+#[get("/<slug>/teams?<error>&<success>", rank = 50)]
 pub fn teams_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
@@ -977,7 +977,50 @@ fn split_multi_value(value: &str) -> Vec<String> {
 }
 
 fn parse_csv_rows(path: &Path) -> Result<Vec<ParsedImportRow>, String> {
-    let bytes = std::fs::read(path).map_err(|_| "Unable to read CSV file.".to_string())?;
+    let raw_bytes = std::fs::read(path).map_err(|_| "Unable to read CSV file.".to_string())?;
+
+    fn utf16_bytes_to_utf8(bytes: &[u8], little_endian: bool) -> Vec<u8> {
+        // Decode best-effort and feed UTF-8 bytes into the CSV parser.
+        let mut words: Vec<u16> = Vec::with_capacity(bytes.len() / 2);
+        for chunk in bytes.chunks_exact(2) {
+            let word = if little_endian {
+                u16::from_le_bytes([chunk[0], chunk[1]])
+            } else {
+                u16::from_be_bytes([chunk[0], chunk[1]])
+            };
+            words.push(word);
+        }
+        String::from_utf16_lossy(&words).into_bytes()
+    }
+
+    fn looks_like_utf16(bytes: &[u8]) -> bool {
+        // Heuristic for UTF-16 without a BOM (common for some Excel exports): lots of NULs.
+        let sample = bytes.iter().take(2048);
+        let mut total = 0usize;
+        let mut zeros = 0usize;
+        for b in sample {
+            total += 1;
+            if *b == 0 {
+                zeros += 1;
+            }
+        }
+        total >= 32 && zeros > (total / 4)
+    }
+
+    let converted_utf8: Vec<u8>;
+    let bytes: &[u8] = if raw_bytes.starts_with(&[0xFF, 0xFE]) {
+        converted_utf8 = utf16_bytes_to_utf8(&raw_bytes[2..], true);
+        converted_utf8.as_slice()
+    } else if raw_bytes.starts_with(&[0xFE, 0xFF]) {
+        converted_utf8 = utf16_bytes_to_utf8(&raw_bytes[2..], false);
+        converted_utf8.as_slice()
+    } else if looks_like_utf16(&raw_bytes) {
+        // Assume little-endian if there's no BOM; that's by far the most common on Windows.
+        converted_utf8 = utf16_bytes_to_utf8(&raw_bytes, true);
+        converted_utf8.as_slice()
+    } else {
+        raw_bytes.as_slice()
+    };
 
     // CSV exported by spreadsheet apps is often semicolon-delimited in some locales.
     let mut delimiter = b',';
@@ -994,7 +1037,7 @@ fn parse_csv_rows(path: &Path) -> Result<Vec<ParsedImportRow>, String> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(delimiter)
         .flexible(true)
-        .from_reader(bytes.as_slice());
+        .from_reader(bytes);
 
     let headers = reader
         .byte_headers()

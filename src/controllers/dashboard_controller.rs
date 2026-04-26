@@ -76,7 +76,7 @@ pub fn dashboard(
     ))
 }
 
-#[get("/<slug>/dashboard")]
+#[get("/<slug>/dashboard", rank = 50)]
 pub fn tournament_dashboard(
     state: &State<AppState>,
     jar: &rocket::http::CookieJar<'_>,
@@ -178,6 +178,13 @@ pub fn tournament_dashboard(
         events_by_type: Series,
         matches_by_status: Series,
         matches_series: Series,
+        members_by_division: Series,
+        members_by_weight_class: Series,
+        members_by_category: Series,
+        events_per_division: Series,
+        events_per_weight_class: Series,
+        events_per_category: Series,
+        participants_by_event: Series,
         activity: Activity,
     }
 
@@ -205,6 +212,13 @@ pub fn tournament_dashboard(
                         events_by_type: Series { labels: vec![], values: vec![] },
                         matches_by_status: Series { labels: vec![], values: vec![] },
                         matches_series: Series { labels: vec![], values: vec![] },
+                        members_by_division: Series { labels: vec![], values: vec![] },
+                        members_by_weight_class: Series { labels: vec![], values: vec![] },
+                        members_by_category: Series { labels: vec![], values: vec![] },
+                        events_per_division: Series { labels: vec![], values: vec![] },
+                        events_per_weight_class: Series { labels: vec![], values: vec![] },
+                        events_per_category: Series { labels: vec![], values: vec![] },
+                        participants_by_event: Series { labels: vec![], values: vec![] },
                         activity: Activity { labels: vec![], events: vec![], matches: vec![] },
                     }).unwrap_or_else(|_| "{}".to_string()),
                     error: format!("Storage error: {err}"),
@@ -234,6 +248,33 @@ pub fn tournament_dashboard(
         .unwrap_or_default();
     let matches_series = dashboard_repository::matches_timeseries(&mut conn, tournament.id, 30)
         .unwrap_or_default();
+
+    const DASHBOARD_TOP_N: u64 = 12;
+    const DASHBOARD_TOP_EVENTS: u64 = 10;
+
+    let members_by_division =
+        dashboard_repository::members_by_division(&mut conn, tournament.id, DASHBOARD_TOP_N)
+            .unwrap_or_default();
+    let members_by_weight_class =
+        dashboard_repository::members_by_weight_class(&mut conn, tournament.id, DASHBOARD_TOP_N)
+            .unwrap_or_default();
+    let members_by_category =
+        dashboard_repository::members_by_category(&mut conn, tournament.id, DASHBOARD_TOP_N)
+            .unwrap_or_default();
+
+    let events_per_division =
+        dashboard_repository::events_per_division(&mut conn, tournament.id, DASHBOARD_TOP_N)
+            .unwrap_or_default();
+    let events_per_weight_class =
+        dashboard_repository::events_per_weight_class(&mut conn, tournament.id, DASHBOARD_TOP_N)
+            .unwrap_or_default();
+    let events_per_category =
+        dashboard_repository::events_per_category(&mut conn, tournament.id, DASHBOARD_TOP_N)
+            .unwrap_or_default();
+
+    let participants_by_event =
+        dashboard_repository::participants_by_event(&mut conn, tournament.id, DASHBOARD_TOP_EVENTS)
+            .unwrap_or_default();
 
     let upcoming = dashboard_repository::upcoming_scheduled_events(&mut conn, tournament.id, 8)
         .unwrap_or_default();
@@ -289,6 +330,13 @@ pub fn tournament_dashboard(
         events_by_type: split(events_by_type),
         matches_by_status: split(matches_by_status),
         matches_series: matches_series_split,
+        members_by_division: split(members_by_division),
+        members_by_weight_class: split(members_by_weight_class),
+        members_by_category: split(members_by_category),
+        events_per_division: split(events_per_division),
+        events_per_weight_class: split(events_per_weight_class),
+        events_per_category: split(events_per_category),
+        participants_by_event: split(participants_by_event),
         activity: Activity {
             labels: activity_labels,
             events: activity_events,

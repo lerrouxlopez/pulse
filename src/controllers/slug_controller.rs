@@ -18,7 +18,7 @@ pub fn slug_root(path: PathBuf) -> Option<Redirect> {
     // Avoid redirecting reserved top-level routes if they ever fall through.
     if matches!(
         slug.as_str(),
-        "" | "auth" | "dashboard" | "login" | "register" | "logout" | "static" | "t"
+        "" | "admin" | "auth" | "dashboard" | "login" | "register" | "logout" | "static" | "t"
     ) {
         return None;
     }

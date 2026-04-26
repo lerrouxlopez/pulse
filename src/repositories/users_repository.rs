@@ -1,6 +1,69 @@
 use crate::models::{CurrentUser, UserAuth};
 use mysql::prelude::*;
 use mysql::PooledConn;
+use serde::Serialize;
+
+#[derive(Debug, Serialize, Clone)]
+pub struct AdminUserRow {
+    pub id: i64,
+    pub name: String,
+    pub email: String,
+    pub user_type: String,
+    pub tournament_id: i64,
+    pub tournament_name: Option<String>,
+    pub photo_url: Option<String>,
+}
+
+pub fn list_all_users(conn: &mut PooledConn) -> mysql::Result<Vec<AdminUserRow>> {
+    conn.exec_map(
+        "SELECT u.id, u.name, u.email, COALESCE(u.user_type, ''), u.tournament_id, t.name, u.photo_url
+         FROM users u
+         LEFT JOIN tournaments t ON t.id = u.tournament_id
+         ORDER BY u.id DESC",
+        (),
+        |(id, name, email, user_type, tournament_id, tournament_name, photo_url): (
+            i64,
+            String,
+            String,
+            String,
+            i64,
+            Option<String>,
+            Option<String>,
+        )| AdminUserRow {
+            id,
+            name,
+            email,
+            user_type,
+            tournament_id,
+            tournament_name,
+            photo_url,
+        },
+    )
+}
+
+pub fn admin_update_user_fields(
+    conn: &mut PooledConn,
+    user_id: i64,
+    name: &str,
+    email: &str,
+    user_type: &str,
+    tournament_id: i64,
+) -> mysql::Result<usize> {
+    conn.exec_drop(
+        "UPDATE users
+         SET name = ?, email = ?, user_type = ?, tournament_id = ?
+         WHERE id = ?",
+        (name, email, user_type, tournament_id, user_id),
+    )?;
+    Ok(conn.affected_rows() as usize)
+}
+
+pub fn admin_delete_user(conn: &mut PooledConn, user_id: i64) -> mysql::Result<usize> {
+    // Remove role assignment rows first (best-effort).
+    let _ = conn.exec_drop("DELETE FROM tournament_user_roles WHERE user_id = ?", (user_id,));
+    conn.exec_drop("DELETE FROM users WHERE id = ?", (user_id,))?;
+    Ok(conn.affected_rows() as usize)
+}
 
 pub fn create_system_user(
     conn: &mut PooledConn,

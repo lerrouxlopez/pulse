@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse - Admin Users</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/static/site.css" />
+  </head>
+  <body class="bg-ink text-cream dashboard-body">
+    <div class="dashboard-wrap">
+      <aside class="sidebar">
+        {% include "partials/admin_sidebar" %}
+      </aside>
+
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
+      <main class="content">
+        <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
+          <div>
+            <h1 class="fw-bold mb-1">Users</h1>
+            <p class="text-cream-75 mb-0">Manage system and tournament users.</p>
+          </div>
+        </header>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="alert alert-success" role="alert">{{ success }}</div>
+        {% endif %}
+
+        <section class="panel mb-4">
+          <h3 class="fw-semibold mb-3">Create User</h3>
+          <form action="/admin/users/create" method="post" class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label text-cream-60">Name</label>
+              <input class="form-control" name="name" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label text-cream-60">Email</label>
+              <input class="form-control" type="email" name="email" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label text-cream-60">Password</label>
+              <input class="form-control" type="password" name="password" required />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Type</label>
+              <select class="form-select" name="user_type">
+                <option value="system">system (owner)</option>
+                <option value="tournament">tournament</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label text-cream-60">Tournament (for tournament users)</label>
+              <select class="form-select" name="tournament_id">
+                <option value="">(none)</option>
+                {% for t in tournaments %}
+                <option value="{{ t.id }}">{{ t.name }} ({{ t.slug }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end justify-content-end">
+              <button class="btn btn-outline-light" type="submit">Create</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h3 class="fw-semibold mb-3">All Users</h3>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 80px">ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th style="width: 150px">Type</th>
+                  <th>Tournament</th>
+                  <th class="text-end" style="width: 260px">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for u in users %}
+                <tr>
+                  <td class="text-cream-60">#{{ u.id }}</td>
+                  <td class="fw-semibold">{{ u.name }}</td>
+                  <td>{{ u.email }}</td>
+                  <td><span class="badge text-bg-light text-ink">{{ u.user_type }}</span></td>
+                  <td>
+                    {% if u.tournament_id != 0 %}
+                      {{ u.tournament_name | default(value="") }} <span class="text-cream-60 small">(#{{ u.tournament_id }})</span>
+                    {% else %}
+                      <span class="text-cream-60 small">None</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex justify-content-end gap-2">
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editUserModal-{{ u.id }}">Edit</button>
+                      <form action="/admin/users/{{ u.id }}/delete" method="post" onsubmit="return confirm('Delete this user?');">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="6" class="text-cream-60">No users.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {% for u in users %}
+        <div class="modal fade" id="editUserModal-{{ u.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit User #{{ u.id }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="/admin/users/{{ u.id }}/update" method="post">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-md-4">
+                      <label class="form-label text-muted">Name</label>
+                      <input class="form-control" name="name" value="{{ u.name }}" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label text-muted">Email</label>
+                      <input class="form-control" type="email" name="email" value="{{ u.email }}" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label text-muted">New Password (optional)</label>
+                      <input class="form-control" type="password" name="password" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label text-muted">Type</label>
+                      <select class="form-select" name="user_type">
+                        <option value="system" {% if u.user_type | lower == "system" %}selected{% endif %}>system (owner)</option>
+                        <option value="tournament" {% if u.user_type | lower == "tournament" %}selected{% endif %}>tournament</option>
+                      </select>
+                    </div>
+                    <div class="col-md-9">
+                      <label class="form-label text-muted">Tournament (for tournament users)</label>
+                      <select class="form-select" name="tournament_id">
+                        <option value="">(none)</option>
+                        {% for t in tournaments %}
+                        <option value="{{ t.id }}" {% if u.tournament_id == t.id %}selected{% endif %}>{{ t.name }} ({{ t.slug }})</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button class="btn btn-primary" type="submit">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </main>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+      crossorigin="anonymous"
+    ></script>
+    <script src="/static/sidebar.js"></script>
+  </body>
+</html>
+

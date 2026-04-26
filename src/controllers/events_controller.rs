@@ -59,7 +59,7 @@ pub struct MatchTimerForm {
     pub auto_complete: Option<i32>,
 }
 
-#[get("/<slug>/events?<error>&<success>")]
+#[get("/<slug>/events?<error>&<success>", rank = 50)]
 pub fn events_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,

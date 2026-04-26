@@ -243,3 +243,173 @@ pub fn recent_matches(
         },
     )
 }
+
+pub fn members_by_division(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "SELECT COALESCE(d.name, 'Unassigned') AS label, COUNT(*) AS cnt
+         FROM team_members tm
+         LEFT JOIN divisions d ON d.id = tm.division_id AND d.tournament_id = tm.tournament_id
+         WHERE tm.tournament_id = :tournament_id
+         GROUP BY label
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}
+
+pub fn members_by_weight_class(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "SELECT
+            COALESCE(NULLIF(w.name, ''), NULLIF(tm.weight_class, ''), 'Unassigned') AS label,
+            COUNT(*) AS cnt
+         FROM team_members tm
+         LEFT JOIN weight_classes w ON w.id = tm.weight_class_id AND w.tournament_id = tm.tournament_id
+         WHERE tm.tournament_id = :tournament_id
+         GROUP BY label
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}
+
+pub fn members_by_category(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "(SELECT c.name AS label, COUNT(DISTINCT tmc.member_id) AS cnt
+          FROM team_member_categories tmc
+          JOIN categories c ON c.id = tmc.category_id AND c.tournament_id = tmc.tournament_id
+          WHERE tmc.tournament_id = :tournament_id
+          GROUP BY c.id, c.name)
+         UNION ALL
+         (SELECT 'Unassigned' AS label, COUNT(*) AS cnt
+          FROM team_members tm
+          LEFT JOIN team_member_categories tmc
+            ON tmc.member_id = tm.id AND tmc.tournament_id = tm.tournament_id
+          WHERE tm.tournament_id = :tournament_id
+            AND tmc.id IS NULL)
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}
+
+pub fn events_per_division(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "SELECT COALESCE(d.name, 'Unassigned') AS label, COUNT(DISTINCT tme.event_id) AS cnt
+         FROM team_member_events tme
+         JOIN team_members tm ON tm.id = tme.member_id AND tm.tournament_id = tme.tournament_id
+         LEFT JOIN divisions d ON d.id = tm.division_id AND d.tournament_id = tm.tournament_id
+         WHERE tme.tournament_id = :tournament_id
+         GROUP BY label
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}
+
+pub fn events_per_weight_class(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "SELECT
+            COALESCE(NULLIF(w.name, ''), NULLIF(tm.weight_class, ''), 'Unassigned') AS label,
+            COUNT(DISTINCT tme.event_id) AS cnt
+         FROM team_member_events tme
+         JOIN team_members tm ON tm.id = tme.member_id AND tm.tournament_id = tme.tournament_id
+         LEFT JOIN weight_classes w ON w.id = tm.weight_class_id AND w.tournament_id = tm.tournament_id
+         WHERE tme.tournament_id = :tournament_id
+         GROUP BY label
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}
+
+pub fn events_per_category(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "(SELECT c.name AS label, COUNT(DISTINCT tme.event_id) AS cnt
+          FROM team_member_events tme
+          JOIN team_member_categories tmc
+            ON tmc.member_id = tme.member_id AND tmc.tournament_id = tme.tournament_id
+          JOIN categories c ON c.id = tmc.category_id AND c.tournament_id = tmc.tournament_id
+          WHERE tme.tournament_id = :tournament_id
+          GROUP BY c.id, c.name)
+         UNION ALL
+         (SELECT 'Unassigned' AS label, COUNT(DISTINCT tme.event_id) AS cnt
+          FROM team_member_events tme
+          JOIN team_members tm ON tm.id = tme.member_id AND tm.tournament_id = tme.tournament_id
+          LEFT JOIN team_member_categories tmc
+            ON tmc.member_id = tm.id AND tmc.tournament_id = tm.tournament_id
+          WHERE tme.tournament_id = :tournament_id
+            AND tmc.id IS NULL)
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}
+
+pub fn participants_by_event(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    limit: u64,
+) -> mysql::Result<Vec<(String, u64)>> {
+    conn.exec_map(
+        "SELECT e.name AS label, COUNT(DISTINCT tme.member_id) AS cnt
+         FROM team_member_events tme
+         JOIN events e ON e.id = tme.event_id AND e.tournament_id = tme.tournament_id
+         WHERE tme.tournament_id = :tournament_id
+         GROUP BY e.id, e.name
+         ORDER BY cnt DESC
+         LIMIT :limit",
+        params! {
+            "tournament_id" => tournament_id,
+            "limit" => limit,
+        },
+        |(label, count): (String, u64)| (label, count),
+    )
+}

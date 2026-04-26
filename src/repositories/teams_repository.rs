@@ -278,17 +278,41 @@ pub fn list_event_competitors(
         Option<i64>,
         Option<i64>,
         Option<String>,
+        String,
+        Option<String>,
     )>,
 > {
     conn.exec_map(
-        "SELECT tm.id, tm.team_id, tm.name, tm.photo_url, tm.division_id, tm.weight_class_id, tm.weight_class
+        "SELECT tm.id, tm.team_id, tm.name, tm.photo_url, tm.division_id, tm.weight_class_id, tm.weight_class,
+                t.name, t.logo_url
          FROM team_members tm
          JOIN team_member_events tme ON tme.member_id = tm.id
+         JOIN teams t ON t.id = tm.team_id AND t.tournament_id = tm.tournament_id
          WHERE tm.tournament_id = ? AND tme.tournament_id = ? AND tme.event_id = ?
          ORDER BY tm.id",
         (tournament_id, tournament_id, event_id),
-        |(id, team_id, name, photo_url, division_id, weight_class_id, weight_class)| {
-            (id, team_id, name, photo_url, division_id, weight_class_id, weight_class)
+        |(
+            id,
+            team_id,
+            name,
+            photo_url,
+            division_id,
+            weight_class_id,
+            weight_class,
+            team_name,
+            team_logo_url,
+        )| {
+            (
+                id,
+                team_id,
+                name,
+                photo_url,
+                division_id,
+                weight_class_id,
+                weight_class,
+                team_name,
+                team_logo_url,
+            )
         },
     )
 }

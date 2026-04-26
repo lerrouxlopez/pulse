@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse - Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/static/site.css" />
+  </head>
+  <body class="bg-ink text-cream dashboard-body">
+    <div class="dashboard-wrap">
+      <aside class="sidebar">
+        {% include "partials/admin_sidebar" %}
+      </aside>
+
+      <button type="button" class="sidebar-float-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true">
+        <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+
+      <main class="content">
+        <header class="d-flex flex-wrap align-items-start justify-content-between mb-4 gap-3">
+          <div>
+            <h1 class="fw-bold mb-1">System Dashboard</h1>
+            <p class="text-cream-75 mb-0">Aggregate statistics across all tournaments.</p>
+          </div>
+        </header>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <section class="panel mb-4">
+          {% if counts %}
+          <div class="row g-3">
+            <div class="col-6 col-lg-4">
+              <div class="stat-card">
+                <div class="stat-label">Tournaments</div>
+                <div class="stat-value">{{ counts.tournaments }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-4">
+              <div class="stat-card">
+                <div class="stat-label">Teams</div>
+                <div class="stat-value">{{ counts.teams }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-4">
+              <div class="stat-card">
+                <div class="stat-label">Members</div>
+                <div class="stat-value">{{ counts.members }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-4">
+              <div class="stat-card">
+                <div class="stat-label">Users</div>
+                <div class="stat-value">{{ counts.users }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-4">
+              <div class="stat-card">
+                <div class="stat-label">Scheduled Events</div>
+                <div class="stat-value">{{ counts.scheduled_events }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-4">
+              <div class="stat-card">
+                <div class="stat-label">Matches</div>
+                <div class="stat-value">{{ counts.matches }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-12 col-lg-6">
+              <div class="stat-card" style="height: 320px">
+                <div class="stat-label mb-2">System Totals</div>
+                <canvas id="systemTotalsChart" height="240"></canvas>
+              </div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <div class="stat-card" style="height: 320px">
+                <div class="stat-label mb-2">Tournament Volume</div>
+                <canvas id="tournamentVolumeChart" height="240"></canvas>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="text-cream-60">No data available.</div>
+          {% endif %}
+        </section>
+
+        <section class="panel">
+          <h3 class="fw-semibold mb-3">Tournaments</h3>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 80px">ID</th>
+                  <th>Name</th>
+                  <th style="width: 140px">Slug</th>
+                  <th style="width: 220px">Owner</th>
+                  <th style="width: 90px">Teams</th>
+                  <th style="width: 100px">Members</th>
+                  <th style="width: 140px">Scheduled Events</th>
+                  <th style="width: 90px">Matches</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in summaries %}
+                <tr>
+                  <td class="text-cream-60">#{{ t.id }}</td>
+                  <td class="fw-semibold">{{ t.name }}</td>
+                  <td><code>/{{ t.slug }}/</code></td>
+                  <td>
+                    {% if t.owner_email %}
+                      {{ t.owner_email }}
+                    {% else %}
+                      <span class="text-cream-60 small">User #{{ t.owner_user_id }}</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ t.teams }}</td>
+                  <td>{{ t.members }}</td>
+                  <td>{{ t.scheduled_events }}</td>
+                  <td>{{ t.matches }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="8" class="text-cream-60">No tournaments.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="application/json" id="tournamentChartsData">{{ tournament_charts_json | safe }}</script>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script src="/static/sidebar.js"></script>
+    <script>
+      (function () {
+        if (typeof Chart === "undefined") return;
+
+        var dataEl = document.getElementById("tournamentChartsData");
+        var tournamentData = {};
+        try {
+          tournamentData = JSON.parse(dataEl ? dataEl.textContent : "{}");
+        } catch (e) {
+          tournamentData = {};
+        }
+
+        var fg = "rgba(245, 245, 245, 0.9)";
+        var grid = "rgba(245, 245, 245, 0.1)";
+
+        Chart.defaults.color = fg;
+        Chart.defaults.borderColor = grid;
+
+        var systemCanvas = document.getElementById("systemTotalsChart");
+        {% if counts %}
+        if (systemCanvas) {
+          new Chart(systemCanvas, {
+            type: "doughnut",
+            data: {
+              labels: ["Tournaments", "Teams", "Members", "Users", "Scheduled Events", "Matches"],
+              datasets: [
+                {
+                  data: [
+                    {{ counts.tournaments }},
+                    {{ counts.teams }},
+                    {{ counts.members }},
+                    {{ counts.users }},
+                    {{ counts.scheduled_events }},
+                    {{ counts.matches }}
+                  ],
+                  backgroundColor: [
+                    "rgba(94, 234, 212, 0.9)",
+                    "rgba(99, 102, 241, 0.9)",
+                    "rgba(251, 191, 36, 0.9)",
+                    "rgba(248, 113, 113, 0.9)",
+                    "rgba(52, 211, 153, 0.9)",
+                    "rgba(147, 197, 253, 0.9)"
+                  ],
+                  borderWidth: 0
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: "bottom" }
+              }
+            }
+          });
+        }
+        {% endif %}
+
+        var volumeCanvas = document.getElementById("tournamentVolumeChart");
+        if (volumeCanvas && tournamentData && tournamentData.labels) {
+          new Chart(volumeCanvas, {
+            type: "bar",
+            data: {
+              labels: tournamentData.labels || [],
+              datasets: [
+                {
+                  label: "Teams",
+                  data: tournamentData.teams || [],
+                  backgroundColor: "rgba(99, 102, 241, 0.65)"
+                },
+                {
+                  label: "Members",
+                  data: tournamentData.members || [],
+                  backgroundColor: "rgba(251, 191, 36, 0.65)"
+                },
+                {
+                  label: "Scheduled Events",
+                  data: tournamentData.scheduled_events || [],
+                  backgroundColor: "rgba(52, 211, 153, 0.65)"
+                },
+                {
+                  label: "Matches",
+                  data: tournamentData.matches || [],
+                  backgroundColor: "rgba(147, 197, 253, 0.65)"
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: {
+                  grid: { display: false },
+                  ticks: { maxRotation: 0, autoSkip: true }
+                },
+                y: {
+                  beginAtZero: true,
+                  grid: { color: grid }
+                }
+              },
+              plugins: {
+                legend: { position: "bottom" },
+                tooltip: { mode: "index", intersect: false }
+              }
+            }
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

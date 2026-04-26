@@ -61,7 +61,17 @@
               {% else %}
               <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ competitor.member_id }}" alt="Player photo placeholder" class="competitor-photo">
               {% endif %}
-              <div class="competitor-name">{{ competitor.name }}</div>
+              <div class="competitor-info">
+                <div class="competitor-name">{{ competitor.name }}</div>
+                <div class="competitor-team">
+                  {% if competitor.team_logo_url %}
+                  <img src="{{ competitor.team_logo_url }}" alt="Team logo" class="competitor-team-logo">
+                  {% else %}
+                  <img src="/static/placeholders/team-1.svg" data-placeholder="team" data-seed="{{ competitor.team_id }}" alt="Team logo placeholder" class="competitor-team-logo">
+                  {% endif %}
+                  <div class="competitor-team-name">{{ competitor.team_name }}</div>
+                </div>
+              </div>
             </li>
             {% else %}
             <li class="text-cream-60">No players entered for this event yet.</li>
@@ -182,7 +192,15 @@
             {% endfor %}
             {% for match in bracket_matches %}
             <div class="fg-match {% if match.is_bye %}is-bye{% endif %}" style="left: {{ match.x }}px; top: {{ match.y }}px; width: {{ bracket_box_width }}px; height: {{ bracket_box_total_height }}px;">
-              <div class="fg-match-header">{{ match.header_label }}</div>
+              <div class="fg-match-header">
+                <span class="fg-match-title">{{ match.header_label }}</span>
+                <button type="button" class="fg-match-edit" data-bs-toggle="modal" data-bs-target="#editMatchModal-{{ match.id }}" aria-label="Edit match" title="Edit">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
               <div class="fg-match-body" style="height: {{ bracket_box_height }}px;">
                 <div class="fg-player {% if match.winner_side == "red" %}is-winner{% endif %}">
                   {% if match.top_photo != "" %}
