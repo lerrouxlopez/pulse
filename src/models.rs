@@ -171,6 +171,8 @@ pub struct EventCompetitor {
     pub team_id: i64,
     pub name: String,
     pub photo_url: Option<String>,
+    pub team_name: String,
+    pub team_logo_url: Option<String>,
 }
 
 #[derive(Serialize)]

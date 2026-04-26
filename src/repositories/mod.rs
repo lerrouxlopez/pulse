@@ -1,4 +1,5 @@
 pub mod categories_repository;
+pub mod admin_repository;
 pub mod dashboard_repository;
 pub mod divisions_repository;
 pub mod events_repository;

@@ -39,7 +39,19 @@
             <h1 class="fw-bold mb-1">Results</h1>
             <p class="text-cream-75 mb-0">Tournament results for {{ tournament_name }}.</p>
           </div>
+          {% if can_reset_results %}
+          <form action="/{{ tournament_slug }}/results/reset" method="post" onsubmit="return confirm('Recalculate tournament results now?');">
+            <button class="btn btn-outline-light" type="submit">Reset Results</button>
+          </form>
+          {% endif %}
         </header>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% endif %}
 
         <section class="panel mb-4 text-ink">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">

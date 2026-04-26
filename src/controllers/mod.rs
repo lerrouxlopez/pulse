@@ -1,4 +1,5 @@
 pub mod auth_controller;
+pub mod admin_controller;
 pub mod dashboard_controller;
 pub mod events_controller;
 pub mod index_controller;

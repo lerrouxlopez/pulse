@@ -73,7 +73,7 @@ pub struct TournamentBrandingForm<'r> {
     pub logo_file: Option<TempFile<'r>>,
     pub clear_logo: Option<String>,
 }
-#[get("/<slug>/settings?<error>&<success>&<tab>")]
+#[get("/<slug>/settings?<error>&<success>&<tab>", rank = 50)]
 pub fn settings_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,

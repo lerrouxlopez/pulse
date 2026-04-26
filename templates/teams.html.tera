@@ -127,27 +127,39 @@
               <div class="row g-4 mt-1">
                 <div class="col-md-4">
                   <p class="text-cream-60 mb-2">Gender Divisions</p>
+                  <div class="form-check mb-2">
+                    <input class="form-check-input js-select-all" type="checkbox" id="new-select-all-divisions" data-group="new-team-divisions" />
+                    <label class="form-check-label" for="new-select-all-divisions">Select all</label>
+                  </div>
                   {% for division in divisions %}
                   <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="division_ids" value="{{ division.id }}" id="new-division-{{ division.id }}">
+                    <input class="form-check-input js-select-item" type="checkbox" name="division_ids" value="{{ division.id }}" id="new-division-{{ division.id }}" data-group="new-team-divisions">
                     <label class="form-check-label" for="new-division-{{ division.id }}">{{ division.name }}</label>
                   </div>
                   {% endfor %}
                 </div>
                 <div class="col-md-4">
                   <p class="text-cream-60 mb-2">Age Categories</p>
+                  <div class="form-check mb-2">
+                    <input class="form-check-input js-select-all" type="checkbox" id="new-select-all-categories" data-group="new-team-categories" />
+                    <label class="form-check-label" for="new-select-all-categories">Select all</label>
+                  </div>
                   {% for category in categories %}
                   <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="new-category-{{ category.id }}">
+                    <input class="form-check-input js-select-item" type="checkbox" name="category_ids" value="{{ category.id }}" id="new-category-{{ category.id }}" data-group="new-team-categories">
                     <label class="form-check-label" for="new-category-{{ category.id }}">{{ category.name }}</label>
                   </div>
                   {% endfor %}
                 </div>
                 <div class="col-md-4">
                   <p class="text-cream-60 mb-2">Events</p>
+                  <div class="form-check mb-2">
+                    <input class="form-check-input js-select-all" type="checkbox" id="new-select-all-events" data-group="new-team-events" />
+                    <label class="form-check-label" for="new-select-all-events">Select all</label>
+                  </div>
                   {% for event in events %}
                   <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="new-event-{{ event.id }}">
+                    <input class="form-check-input js-select-item" type="checkbox" name="event_ids" value="{{ event.id }}" id="new-event-{{ event.id }}" data-group="new-team-events">
                     <label class="form-check-label" for="new-event-{{ event.id }}">{{ event.name }}</label>
                   </div>
                   {% endfor %}
@@ -275,9 +287,13 @@
                   <div class="row g-4 mt-1">
                     <div class="col-md-4">
                       <p class="text-muted mb-2">Divisions</p>
+                      <div class="form-check mb-2">
+                        <input class="form-check-input js-select-all" type="checkbox" id="edit-{{ team.id }}-select-all-divisions" data-group="edit-{{ team.id }}-divisions" />
+                        <label class="form-check-label" for="edit-{{ team.id }}-select-all-divisions">Select all</label>
+                      </div>
                       {% for division in divisions %}
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="division_ids" value="{{ division.id }}" id="edit-{{ team.id }}-division-{{ division.id }}"
+                        <input class="form-check-input js-select-item" type="checkbox" name="division_ids" value="{{ division.id }}" id="edit-{{ team.id }}-division-{{ division.id }}" data-group="edit-{{ team.id }}-divisions"
                           {% if division.id in team.division_ids %}checked{% endif %}>
                         <label class="form-check-label" for="edit-{{ team.id }}-division-{{ division.id }}">{{ division.name }}</label>
                       </div>
@@ -285,9 +301,13 @@
                     </div>
                     <div class="col-md-4">
                       <p class="text-muted mb-2">Categories</p>
+                      <div class="form-check mb-2">
+                        <input class="form-check-input js-select-all" type="checkbox" id="edit-{{ team.id }}-select-all-categories" data-group="edit-{{ team.id }}-categories" />
+                        <label class="form-check-label" for="edit-{{ team.id }}-select-all-categories">Select all</label>
+                      </div>
                       {% for category in categories %}
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="category_ids" value="{{ category.id }}" id="edit-{{ team.id }}-category-{{ category.id }}"
+                        <input class="form-check-input js-select-item" type="checkbox" name="category_ids" value="{{ category.id }}" id="edit-{{ team.id }}-category-{{ category.id }}" data-group="edit-{{ team.id }}-categories"
                           {% if category.id in team.category_ids %}checked{% endif %}>
                         <label class="form-check-label" for="edit-{{ team.id }}-category-{{ category.id }}">{{ category.name }}</label>
                       </div>
@@ -295,9 +315,13 @@
                     </div>
                     <div class="col-md-4">
                       <p class="text-muted mb-2">Events</p>
+                      <div class="form-check mb-2">
+                        <input class="form-check-input js-select-all" type="checkbox" id="edit-{{ team.id }}-select-all-events" data-group="edit-{{ team.id }}-events" />
+                        <label class="form-check-label" for="edit-{{ team.id }}-select-all-events">Select all</label>
+                      </div>
                       {% for event in events %}
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="edit-{{ team.id }}-event-{{ event.id }}"
+                        <input class="form-check-input js-select-item" type="checkbox" name="event_ids" value="{{ event.id }}" id="edit-{{ team.id }}-event-{{ event.id }}" data-group="edit-{{ team.id }}-events"
                           {% if event.id in team.event_ids %}checked{% endif %}>
                         <label class="form-check-label" for="edit-{{ team.id }}-event-{{ event.id }}">{{ event.name }}</label>
                       </div>
@@ -323,6 +347,43 @@
       crossorigin="anonymous"
     ></script>
     <script src="/static/sidebar.js"></script>
+    <script>
+      (() => {
+        const updateSelectAllState = (group) => {
+          const selectAll = document.querySelector(`.js-select-all[data-group="${group}"]`);
+          if (!selectAll) {
+            return;
+          }
+
+          const items = Array.from(document.querySelectorAll(`.js-select-item[data-group="${group}"]`))
+            .filter((item) => !item.disabled);
+
+          const checkedCount = items.filter((item) => item.checked).length;
+          const allChecked = items.length > 0 && checkedCount === items.length;
+          const noneChecked = checkedCount === 0;
+
+          selectAll.checked = allChecked;
+          selectAll.indeterminate = !allChecked && !noneChecked;
+        };
+
+        document.querySelectorAll(".js-select-all").forEach((selectAll) => {
+          const group = selectAll.dataset.group;
+          selectAll.addEventListener("change", () => {
+            document.querySelectorAll(`.js-select-item[data-group="${group}"]`).forEach((item) => {
+              if (!item.disabled) {
+                item.checked = selectAll.checked;
+              }
+            });
+            updateSelectAllState(group);
+          });
+          updateSelectAllState(group);
+        });
+
+        document.querySelectorAll(".js-select-item").forEach((item) => {
+          item.addEventListener("change", () => updateSelectAllState(item.dataset.group));
+        });
+      })();
+    </script>
     <script>
       const drawerToggles = document.querySelectorAll(".js-drawer-toggle");
       drawerToggles.forEach((toggle) => {

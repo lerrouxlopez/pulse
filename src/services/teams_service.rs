@@ -374,7 +374,7 @@ pub fn update_member(
         existing.photo_url.clone()
     };
 
-    let changed = teams_repository::update_member(
+    let _ = teams_repository::update_member(
         &mut conn,
         tournament_id,
         member_id,
@@ -400,9 +400,6 @@ pub fn update_member(
         member_id,
         &next_event_ids,
     )?;
-    if changed == 0 {
-        return Err("Player not found for this tournament.".to_string());
-    }
     Ok(())
 }
 

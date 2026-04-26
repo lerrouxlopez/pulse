@@ -82,6 +82,29 @@ pub fn list_by_user(conn: &mut PooledConn, user_id: i64) -> mysql::Result<Vec<To
     )
 }
 
+pub fn list_all(conn: &mut PooledConn) -> mysql::Result<Vec<Tournament>> {
+    conn.exec_map(
+        "SELECT t.id, t.name, COALESCE(t.slug, ''), CAST(t.is_setup AS SIGNED), t.user_id, t.started_at, t.logo_url, t.theme_primary_color, t.theme_accent_color, t.theme_background_color, t.nav_background_color, t.nav_text_color
+         FROM tournaments t
+         ORDER BY t.id DESC",
+        (),
+        |row: (
+            i64,
+            String,
+            String,
+            i64,
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )| map_tournament(row),
+    )
+}
+
 pub fn create(conn: &mut PooledConn, user_id: i64, name: &str, slug: &str) -> mysql::Result<i64> {
     conn.exec_drop(
         "INSERT INTO tournaments (user_id, name, slug, is_setup) VALUES (?, ?, ?, 0)",
@@ -224,6 +247,14 @@ pub fn update_name(conn: &mut PooledConn, tournament_id: i64, name: &str) -> mys
     conn.exec_drop(
         "UPDATE tournaments SET name = ? WHERE id = ?",
         (name, tournament_id),
+    )?;
+    Ok(())
+}
+
+pub fn update_owner(conn: &mut PooledConn, tournament_id: i64, user_id: i64) -> mysql::Result<()> {
+    conn.exec_drop(
+        "UPDATE tournaments SET user_id = ? WHERE id = ?",
+        (user_id, tournament_id),
     )?;
     Ok(())
 }

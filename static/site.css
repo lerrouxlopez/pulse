@@ -714,6 +714,34 @@ body.sidebar-collapsed .sidebar-float-toggle .icon-collapse {
   text-overflow: ellipsis;
 }
 
+.competitor-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.competitor-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.70);
+}
+
+.competitor-team-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.competitor-team-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .match-avatar {
   width: 30px;
   height: 30px;

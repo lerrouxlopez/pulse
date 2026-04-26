@@ -560,7 +560,7 @@ pub fn list_competitors(
         .map_err(|err| format!("Storage error: {err}"))?;
     Ok(rows
         .into_iter()
-        .filter(|(_, _, _, _, division_id, weight_class_id, _)| {
+        .filter(|(_, _, _, _, division_id, weight_class_id, _, _, _)| {
             if !is_contact {
                 return true;
             }
@@ -575,11 +575,15 @@ pub fn list_competitors(
             division_ok && weight_ok
         })
         .map(
-            |(member_id, team_id, name, photo_url, _, _, _)| EventCompetitor {
-                member_id,
-                team_id,
-                name,
-                photo_url,
+            |(member_id, team_id, name, photo_url, _, _, _, team_name, team_logo_url)| {
+                EventCompetitor {
+                    member_id,
+                    team_id,
+                    name,
+                    photo_url,
+                    team_name,
+                    team_logo_url,
+                }
             },
         )
         .collect())
@@ -2334,7 +2338,8 @@ pub fn ensure_bracket_for_contact_event(
     let mut round = 1i64;
     let mut next_match_number = 1i64;
 
-    while current_round.len() > 1 {
+    // Round 1 bracket logic must remain unchanged. (See user instructions.)
+    if current_round.len() > 1 {
         let mut next_round = Vec::new();
         let mut slot = 1i64;
         let mut index = 0usize;
@@ -2786,6 +2791,127 @@ pub fn ensure_bracket_for_contact_event(
                 | (None, None) => BracketParticipant::Unknown,
             };
             next_round.push(next_participant);
+        }
+
+        current_round = next_round;
+        round += 1;
+    }
+
+    // Round 2+: randomize matchups per round. Assign BYEs per round if needed, ensuring:
+    // - the Round 1 BYE recipient isn't chosen again as a BYE recipient in Round 2
+    // - generally, the same participant shouldn't receive multiple BYEs
+    let mut bye_member_ids = std::collections::HashSet::<i64>::new();
+    let mut bye_label_tokens = std::collections::HashSet::<String>::new();
+
+    let participant_label_and_id = |item: &BracketParticipant| -> (String, Option<i64>) {
+        match item {
+            BracketParticipant::Competitor(c) => (c.name.clone(), Some(c.member_id)),
+            BracketParticipant::Winner(label) => (label.clone(), None),
+            BracketParticipant::ByeCarry(label, id) => (label.clone(), *id),
+            BracketParticipant::Unknown => ("TBD".to_string(), None),
+        }
+    };
+
+    // Round 1 BYE recipients are carried via `ByeCarry`.
+    for item in &current_round {
+        if let BracketParticipant::ByeCarry(_, Some(id)) = item {
+            bye_member_ids.insert(*id);
+        }
+    }
+
+    while current_round.len() > 1 {
+        // Shuffle participants so match pairings are randomized per round.
+        current_round.shuffle(&mut thread_rng());
+
+        let mut next_round = Vec::new();
+        let mut slot = 1i64;
+
+        // If uneven, pick a BYE recipient randomly, avoiding anyone who already got a BYE.
+        if current_round.len() % 2 != 0 {
+            let mut candidate_indices: Vec<usize> = Vec::new();
+            for (idx, item) in current_round.iter().enumerate() {
+                let (label, member_id) = participant_label_and_id(item);
+                let has_member_bye = member_id.is_some_and(|id| bye_member_ids.contains(&id));
+                let has_label_bye = bye_label_tokens.contains(&label);
+                if !has_member_bye && !has_label_bye {
+                    candidate_indices.push(idx);
+                }
+            }
+            if candidate_indices.is_empty() {
+                candidate_indices = (0..current_round.len()).collect();
+            }
+            let bye_idx = *candidate_indices
+                .choose(&mut thread_rng())
+                .unwrap_or(&0usize);
+            let bye_participant = current_round.remove(bye_idx);
+            let (label, member_id) = participant_label_and_id(&bye_participant);
+            let bye_display = format!("{} - bye", label);
+            create(
+                state,
+                user_id,
+                tournament_id,
+                scheduled_event_id,
+                None,
+                None,
+                Some(&bye_display),
+                None,
+                "Finished",
+                None,
+                None,
+                Some(round),
+                Some(slot),
+                member_id,
+                None,
+                true,
+                0,
+                0,
+            )?;
+            slot += 1;
+            if let Some(id) = member_id {
+                bye_member_ids.insert(id);
+            } else {
+                bye_label_tokens.insert(label);
+            }
+            next_round.push(bye_participant);
+        }
+
+        // Pair off remaining participants.
+        let mut idx = 0usize;
+        while idx < current_round.len() {
+            let red = current_round[idx].clone();
+            let blue = current_round[idx + 1].clone();
+            idx += 2;
+
+            let (red_label, red_id) = participant_label_and_id(&red);
+            let (blue_label, blue_id) = participant_label_and_id(&blue);
+
+            let match_number = next_match_number;
+            create(
+                state,
+                user_id,
+                tournament_id,
+                scheduled_event_id,
+                None,
+                None,
+                Some(&red_label),
+                Some(&blue_label),
+                "Scheduled",
+                None,
+                None,
+                Some(round),
+                Some(slot),
+                red_id,
+                blue_id,
+                false,
+                0,
+                0,
+            )?;
+            next_match_number += 1;
+            slot += 1;
+            next_round.push(BracketParticipant::Winner(format!(
+                "Winner of Match {}",
+                match_number
+            )));
         }
 
         current_round = next_round;

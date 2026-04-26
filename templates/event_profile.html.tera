@@ -61,7 +61,17 @@
               {% else %}
               <img src="/static/placeholders/player-1.svg" data-placeholder="player" data-seed="{{ competitor.member_id }}" alt="Player photo placeholder" class="competitor-photo">
               {% endif %}
-              <div class="competitor-name">{{ competitor.name }}</div>
+              <div class="competitor-info">
+                <div class="competitor-name">{{ competitor.name }}</div>
+                <div class="competitor-team">
+                  {% if competitor.team_logo_url %}
+                  <img src="{{ competitor.team_logo_url }}" alt="Team logo" class="competitor-team-logo">
+                  {% else %}
+                  <img src="/static/placeholders/team-1.svg" data-placeholder="team" data-seed="{{ competitor.team_id }}" alt="Team logo placeholder" class="competitor-team-logo">
+                  {% endif %}
+                  <div class="competitor-team-name">{{ competitor.team_name }}</div>
+                </div>
+              </div>
             </li>
             {% else %}
             <li class="text-cream-60">No players entered for this event yet.</li>
