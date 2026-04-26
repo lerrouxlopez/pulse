@@ -1662,46 +1662,58 @@ pub fn update_contact_match(
 
     let next_round = round + 1;
     let next_slot = (slot + 1) / 2;
-    let mut target = matches_repository::get_by_round_slot(
+    // Prefer placeholder-based propagation. This supports randomized bracket generation where
+    // the next match isn't necessarily derived from (round, slot).
+    let placeholder_changed = advance_winner_by_placeholder(
         &mut conn,
         tournament_id,
         scheduled_event_id,
-        next_round,
-        next_slot,
-    )
-    .map_err(|err| format!("Storage error: {err}"))?;
-    if let Some(ref mut target_match) = target {
-        if slot % 2 == 1 {
-            target_match.red = Some(winner_label.clone());
-            target_match.red_member_id = Some(winner_id).flatten();
-        } else {
-            target_match.blue = Some(winner_label.clone());
-            target_match.blue_member_id = Some(winner_id).flatten();
-        }
-        let changed = matches_repository::update(
+        existing.id,
+        &winner_label,
+        winner_id,
+    )?;
+    if placeholder_changed == 0 {
+        let mut target = matches_repository::get_by_round_slot(
             &mut conn,
             tournament_id,
-            target_match.id,
             scheduled_event_id,
-            target_match.mat.as_deref(),
-            target_match.category.as_deref(),
-            target_match.red.as_deref(),
-            target_match.blue.as_deref(),
-            &target_match.status,
-            target_match.location.as_deref(),
-            target_match.match_time.as_deref(),
-            target_match.round,
-            target_match.slot,
-            target_match.red_member_id,
-            target_match.blue_member_id,
-            target_match.is_bye,
-            target_match.winner_side.as_deref(),
-            target_match.red_total_score,
-            target_match.blue_total_score,
+            next_round,
+            next_slot,
         )
         .map_err(|err| format!("Storage error: {err}"))?;
-        if changed == 0 {
-            return Err("Next round match not found.".to_string());
+        if let Some(ref mut target_match) = target {
+            if slot % 2 == 1 {
+                target_match.red = Some(winner_label.clone());
+                target_match.red_member_id = Some(winner_id).flatten();
+            } else {
+                target_match.blue = Some(winner_label.clone());
+                target_match.blue_member_id = Some(winner_id).flatten();
+            }
+            let changed = matches_repository::update(
+                &mut conn,
+                tournament_id,
+                target_match.id,
+                scheduled_event_id,
+                target_match.mat.as_deref(),
+                target_match.category.as_deref(),
+                target_match.red.as_deref(),
+                target_match.blue.as_deref(),
+                &target_match.status,
+                target_match.location.as_deref(),
+                target_match.match_time.as_deref(),
+                target_match.round,
+                target_match.slot,
+                target_match.red_member_id,
+                target_match.blue_member_id,
+                target_match.is_bye,
+                target_match.winner_side.as_deref(),
+                target_match.red_total_score,
+                target_match.blue_total_score,
+            )
+            .map_err(|err| format!("Storage error: {err}"))?;
+            if changed == 0 {
+                return Err("Next round match not found.".to_string());
+            }
         }
     }
 
@@ -2161,46 +2173,56 @@ fn finalize_first_point_advantage_match(
     // Advance winner into next bracket match, if one exists.
     let next_round = round + 1;
     let next_slot = (slot + 1) / 2;
-    let mut target = matches_repository::get_by_round_slot(
+    let placeholder_changed = advance_winner_by_placeholder(
         conn,
         tournament_id,
         scheduled_event_id,
-        next_round,
-        next_slot,
-    )
-    .map_err(|err| format!("Storage error: {err}"))?;
-    if let Some(ref mut target_match) = target {
-        if slot % 2 == 1 {
-            target_match.red = Some(winner_label.clone());
-            target_match.red_member_id = Some(winner_id).flatten();
-        } else {
-            target_match.blue = Some(winner_label.clone());
-            target_match.blue_member_id = Some(winner_id).flatten();
-        }
-        let changed = matches_repository::update(
+        match_row.id,
+        &winner_label,
+        winner_id,
+    )?;
+    if placeholder_changed == 0 {
+        let mut target = matches_repository::get_by_round_slot(
             conn,
             tournament_id,
-            target_match.id,
             scheduled_event_id,
-            target_match.mat.as_deref(),
-            target_match.category.as_deref(),
-            target_match.red.as_deref(),
-            target_match.blue.as_deref(),
-            &target_match.status,
-            target_match.location.as_deref(),
-            target_match.match_time.as_deref(),
-            target_match.round,
-            target_match.slot,
-            target_match.red_member_id,
-            target_match.blue_member_id,
-            target_match.is_bye,
-            target_match.winner_side.as_deref(),
-            target_match.red_total_score,
-            target_match.blue_total_score,
+            next_round,
+            next_slot,
         )
         .map_err(|err| format!("Storage error: {err}"))?;
-        if changed == 0 {
-            return Err("Next round match not found.".to_string());
+        if let Some(ref mut target_match) = target {
+            if slot % 2 == 1 {
+                target_match.red = Some(winner_label.clone());
+                target_match.red_member_id = Some(winner_id).flatten();
+            } else {
+                target_match.blue = Some(winner_label.clone());
+                target_match.blue_member_id = Some(winner_id).flatten();
+            }
+            let changed = matches_repository::update(
+                conn,
+                tournament_id,
+                target_match.id,
+                scheduled_event_id,
+                target_match.mat.as_deref(),
+                target_match.category.as_deref(),
+                target_match.red.as_deref(),
+                target_match.blue.as_deref(),
+                &target_match.status,
+                target_match.location.as_deref(),
+                target_match.match_time.as_deref(),
+                target_match.round,
+                target_match.slot,
+                target_match.red_member_id,
+                target_match.blue_member_id,
+                target_match.is_bye,
+                target_match.winner_side.as_deref(),
+                target_match.red_total_score,
+                target_match.blue_total_score,
+            )
+            .map_err(|err| format!("Storage error: {err}"))?;
+            if changed == 0 {
+                return Err("Next round match not found.".to_string());
+            }
         }
     }
 
@@ -2297,6 +2319,11 @@ pub fn ensure_bracket_for_contact_event(
     }
     let existing = list(state, user_id, tournament_id, scheduled_event_id)?;
     if !existing.is_empty() {
+        let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
+        // Keep bracket participants consistent even if previous winner propagation failed
+        // (e.g., after randomizing matches in later rounds).
+        let _ = sync_bracket_winner_placeholders(&mut conn, tournament_id, scheduled_event_id)?;
+
         let mut existing_ids = std::collections::HashSet::new();
         for item in &existing {
             if let Some(id) = item.red_member_id {
@@ -2320,7 +2347,6 @@ pub fn ensure_bracket_for_contact_event(
         if has_locked_matches {
             return Ok(());
         }
-        let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
         match_judges_repository::delete_by_scheduled_event(
             &mut conn,
             tournament_id,
@@ -3003,6 +3029,252 @@ fn status_class(status: &str) -> &'static str {
     } else {
         "status-ready"
     }
+}
+
+fn advance_winner_by_placeholder(
+    conn: &mut mysql::PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    source_match_id: i64,
+    winner_label: &str,
+    winner_id: Option<i64>,
+) -> Result<usize, String> {
+    // Brackets store placeholders using the human-visible "Match N" numbering,
+    // not the database match id. Compute that number consistently by ordering
+    // by (round, slot) and skipping BYE matches.
+    let source_match_number = match_number_for_match(conn, tournament_id, scheduled_event_id, source_match_id)?;
+    let source_match_number = match source_match_number {
+        Some(value) => value,
+        None => return Ok(0),
+    };
+    let mut changed_total: usize = 0;
+    let placeholders = [
+        (format!("Winner of Match {}", source_match_number), winner_label.to_string()),
+        (
+            format!("Winner of Match {} - bye", source_match_number),
+            // The match is already labeled as a BYE; keep the participant label clean.
+            winner_label.to_string(),
+        ),
+    ];
+
+    for (placeholder, replacement_label) in placeholders {
+        let targets = matches_repository::find_by_winner_placeholder(
+            conn,
+            tournament_id,
+            scheduled_event_id,
+            &placeholder,
+        )
+        .map_err(|err| format!("Storage error: {err}"))?;
+
+        for mut target_match in targets {
+            // Don't mutate locked matches. Exception: BYE matches are created as "Finished"
+            // while still carrying placeholders (e.g. "Winner of Match N - bye"), so allow
+            // resolving placeholders on BYE matches.
+            let is_locked = target_match.winner_side.is_some()
+                || target_match.status.eq_ignore_ascii_case("Forfeit")
+                || (target_match.status.eq_ignore_ascii_case("Finished") && !target_match.is_bye);
+            if is_locked {
+                continue;
+            }
+
+            let mut updated = false;
+            if target_match.red.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+                target_match.red = Some(replacement_label.clone());
+                target_match.red_member_id = winner_id;
+                updated = true;
+            }
+            if target_match.blue.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+                target_match.blue = Some(replacement_label.clone());
+                target_match.blue_member_id = winner_id;
+                updated = true;
+            }
+
+            if !updated {
+                continue;
+            }
+
+            let changed = matches_repository::update(
+                conn,
+                tournament_id,
+                target_match.id,
+                scheduled_event_id,
+                target_match.mat.as_deref(),
+                target_match.category.as_deref(),
+                target_match.red.as_deref(),
+                target_match.blue.as_deref(),
+                &target_match.status,
+                target_match.location.as_deref(),
+                target_match.match_time.as_deref(),
+                target_match.round,
+                target_match.slot,
+                target_match.red_member_id,
+                target_match.blue_member_id,
+                target_match.is_bye,
+                target_match.winner_side.as_deref(),
+                target_match.red_total_score,
+                target_match.blue_total_score,
+            )
+            .map_err(|err| format!("Storage error: {err}"))?;
+            changed_total = changed_total.saturating_add(changed as usize);
+        }
+    }
+
+    Ok(changed_total)
+}
+
+fn match_number_for_match(
+    conn: &mut mysql::PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    match_id: i64,
+) -> Result<Option<i64>, String> {
+    let matches = matches_repository::list(conn, tournament_id, scheduled_event_id)
+        .map_err(|err| format!("Storage error: {err}"))?;
+    let mut ordered: Vec<&ScheduledMatch> = matches.iter().collect();
+    ordered.sort_by(|a, b| {
+        let ra = a.round.unwrap_or(1);
+        let rb = b.round.unwrap_or(1);
+        let sa = a.slot.unwrap_or(0);
+        let sb = b.slot.unwrap_or(0);
+        ra.cmp(&rb).then(sa.cmp(&sb)).then(a.id.cmp(&b.id))
+    });
+
+    let mut next_number = 1i64;
+    for item in ordered {
+        if item.is_bye {
+            continue;
+        }
+        if item.id == match_id {
+            return Ok(Some(next_number));
+        }
+        next_number += 1;
+    }
+    Ok(None)
+}
+
+fn sync_bracket_winner_placeholders(
+    conn: &mut mysql::PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> Result<usize, String> {
+    let matches = matches_repository::list(conn, tournament_id, scheduled_event_id)
+        .map_err(|err| format!("Storage error: {err}"))?;
+    if matches.is_empty() {
+        return Ok(0);
+    }
+
+    let mut ordered: Vec<&ScheduledMatch> = matches.iter().collect();
+    ordered.sort_by(|a, b| {
+        let ra = a.round.unwrap_or(1);
+        let rb = b.round.unwrap_or(1);
+        let sa = a.slot.unwrap_or(0);
+        let sb = b.slot.unwrap_or(0);
+        ra.cmp(&rb).then(sa.cmp(&sb)).then(a.id.cmp(&b.id))
+    });
+
+    // Map match_id -> Match N numbering (skipping BYEs).
+    let mut number_by_id: HashMap<i64, i64> = HashMap::new();
+    let mut next_number = 1i64;
+    for item in ordered {
+        if item.is_bye {
+            continue;
+        }
+        number_by_id.insert(item.id, next_number);
+        next_number += 1;
+    }
+
+    let mut changed_total: usize = 0;
+    for item in matches {
+        let winner_side = match item.winner_side.as_deref() {
+            Some(value) => value,
+            None => continue,
+        };
+
+        let (winner_label, winner_id) = if winner_side.eq_ignore_ascii_case("red") {
+            (item.red.clone().unwrap_or_default(), item.red_member_id)
+        } else if winner_side.eq_ignore_ascii_case("blue") {
+            (item.blue.clone().unwrap_or_default(), item.blue_member_id)
+        } else {
+            continue;
+        };
+        if winner_label.trim().is_empty() {
+            continue;
+        }
+
+        let match_number = match number_by_id.get(&item.id).copied() {
+            Some(value) => value,
+            None => continue,
+        };
+        let placeholders = [
+            (format!("Winner of Match {}", match_number), winner_label.clone()),
+            (
+                format!("Winner of Match {} - bye", match_number),
+                winner_label.clone(),
+            ),
+        ];
+
+        for (placeholder, replacement_label) in placeholders {
+            let targets = matches_repository::find_by_winner_placeholder(
+                conn,
+                tournament_id,
+                scheduled_event_id,
+                &placeholder,
+            )
+            .map_err(|err| format!("Storage error: {err}"))?;
+
+            for mut target_match in targets {
+                // Don't mutate locked matches. Exception: allow resolving placeholders on BYE matches
+                // (which are stored as "Finished").
+                let is_locked = target_match.winner_side.is_some()
+                    || target_match.status.eq_ignore_ascii_case("Forfeit")
+                    || (target_match.status.eq_ignore_ascii_case("Finished") && !target_match.is_bye);
+                if is_locked {
+                    continue;
+                }
+
+                let mut updated = false;
+                if target_match.red.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+                    target_match.red = Some(replacement_label.clone());
+                    target_match.red_member_id = winner_id;
+                    updated = true;
+                }
+                if target_match.blue.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+                    target_match.blue = Some(replacement_label.clone());
+                    target_match.blue_member_id = winner_id;
+                    updated = true;
+                }
+                if !updated {
+                    continue;
+                }
+
+                let changed = matches_repository::update(
+                    conn,
+                    tournament_id,
+                    target_match.id,
+                    scheduled_event_id,
+                    target_match.mat.as_deref(),
+                    target_match.category.as_deref(),
+                    target_match.red.as_deref(),
+                    target_match.blue.as_deref(),
+                    &target_match.status,
+                    target_match.location.as_deref(),
+                    target_match.match_time.as_deref(),
+                    target_match.round,
+                    target_match.slot,
+                    target_match.red_member_id,
+                    target_match.blue_member_id,
+                    target_match.is_bye,
+                    target_match.winner_side.as_deref(),
+                    target_match.red_total_score,
+                    target_match.blue_total_score,
+                )
+                .map_err(|err| format!("Storage error: {err}"))?;
+                changed_total = changed_total.saturating_add(changed as usize);
+            }
+        }
+    }
+
+    Ok(changed_total)
 }
 
 fn populate_judge_scores(

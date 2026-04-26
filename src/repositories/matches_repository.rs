@@ -282,6 +282,31 @@ pub fn get_by_round_slot(
     Ok(row.map(row_to_match))
 }
 
+pub fn find_by_winner_placeholder(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    placeholder: &str,
+) -> mysql::Result<Vec<ScheduledMatch>> {
+    conn.exec_map(
+        "SELECT COALESCE(id, 0), COALESCE(scheduled_event_id, 0), mat, category, red, blue, COALESCE(status, ''), location, match_time,
+                round, slot, fight_round, timer_started_at, timer_duration_seconds, COALESCE(timer_is_running, 0),
+                timer_last_completed_round,
+                red_member_id, blue_member_id, COALESCE(is_bye, 0), winner_side, COALESCE(red_total_score, 0), COALESCE(blue_total_score, 0)
+         FROM matches
+         WHERE tournament_id = :tournament_id
+           AND scheduled_event_id = :scheduled_event_id
+           AND (red = :placeholder OR blue = :placeholder)
+         ORDER BY id",
+        params! {
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+            "placeholder" => placeholder,
+        },
+        row_to_match,
+    )
+}
+
 pub fn set_timer_state(
     conn: &mut PooledConn,
     tournament_id: i64,

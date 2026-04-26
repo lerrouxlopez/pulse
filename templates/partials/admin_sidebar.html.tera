@@ -1,0 +1,18 @@
+<div class="brand d-flex align-items-center gap-2">
+  <img src="/static/logo-dark.png" class="brand-logo logo-dark" alt="Pulse logo dark" />
+  <img src="/static/logo-light.png" class="brand-logo logo-light" alt="Pulse logo light" />
+</div>
+<nav class="nav flex-column mt-4">
+  <a class="nav-link {% if active == "admin_dashboard" %}active{% endif %}" href="/admin/dashboard">System Dashboard</a>
+  <a class="nav-link {% if active == "admin_tournaments" %}active{% endif %}" href="/admin/tournaments">Tournaments</a>
+  <a class="nav-link {% if active == "admin_users" %}active{% endif %}" href="/admin/users">Users</a>
+  <a class="nav-link {% if active == "admin_teams" %}active{% endif %}" href="/admin/teams">Teams</a>
+  <a class="nav-link {% if active == "admin_events" %}active{% endif %}" href="/admin/events">Events</a>
+  <a class="nav-link {% if active == "admin_settings" %}active{% endif %}" href="/admin/settings">Settings</a>
+  <a class="nav-link {% if active == "admin_results" %}active{% endif %}" href="/admin/results">Results</a>
+</nav>
+<form action="/admin/logout" method="post" class="mt-auto w-100">
+  <button class="btn btn-outline-light w-100 mt-4" type="submit">
+    Sign out
+  </button>
+</form>
