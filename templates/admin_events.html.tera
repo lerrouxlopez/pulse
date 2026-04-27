@@ -135,8 +135,8 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label text-cream-60">Division (Contact only)</label>
-              <select class="form-select" name="division_id">
+              <label class="form-label text-cream-60">Gender Division</label>
+              <select class="form-select" name="division_id" required>
                 <option value="">(none)</option>
                 {% for d in divisions %}
                 <option value="{{ d.id }}">{{ d.name }}</option>
@@ -144,8 +144,8 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label text-cream-60">Weight Class (Contact only)</label>
-              <select class="form-select" name="weight_class_id">
+              <label class="form-label text-cream-60">Weight Class</label>
+              <select class="form-select" name="weight_class_id" required>
                 <option value="">(none)</option>
                 {% for w in weight_classes %}
                 <option value="{{ w.id }}">{{ w.name }}</option>
@@ -275,8 +275,8 @@
                       </select>
                     </div>
                     <div class="col-md-6">
-                      <label class="form-label text-muted">Division (Contact only)</label>
-                      <select class="form-select" name="division_id">
+                      <label class="form-label text-muted">Gender Division</label>
+                      <select class="form-select" name="division_id" required>
                         <option value="">(none)</option>
                         {% for d in divisions %}
                         <option value="{{ d.id }}" {% if se.division_id and d.id == se.division_id %}selected{% endif %}>{{ d.name }}</option>
@@ -284,8 +284,8 @@
                       </select>
                     </div>
                     <div class="col-md-6">
-                      <label class="form-label text-muted">Weight Class (Contact only)</label>
-                      <select class="form-select" name="weight_class_id">
+                      <label class="form-label text-muted">Weight Class</label>
+                      <select class="form-select" name="weight_class_id" required>
                         <option value="">(none)</option>
                         {% for w in weight_classes %}
                         <option value="{{ w.id }}" {% if se.weight_class_id and w.id == se.weight_class_id %}selected{% endif %}>{{ w.name }}</option>
@@ -315,4 +315,3 @@
     <script src="/static/sidebar.js"></script>
   </body>
 </html>
-

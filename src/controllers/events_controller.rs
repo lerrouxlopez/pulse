@@ -111,8 +111,11 @@ pub fn events_page(
     let contact_types = scheduled_events_service::contact_types();
     let statuses = scheduled_events_service::statuses();
     let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
-    let sidebar_nav_items =
-        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
+    let sidebar_nav_items = access_service::sidebar_nav_items(
+        &allowed_pages,
+        tournament.is_setup,
+        Some(&tournament.slug),
+    );
 
     Ok(Template::render(
         "events",
@@ -253,10 +256,17 @@ pub fn event_profile(
     let match_statuses = matches_service::statuses();
     let judge_users = matches_service::list_judges(state, tournament.id);
     let is_contact = event.contact_type.eq_ignore_ascii_case("Contact");
-
+    let mut error = error;
     let competitors =
-        matches_service::list_competitors(state, user.id, tournament.id, event.id)
-            .unwrap_or_default();
+        match matches_service::list_competitors(state, user.id, tournament.id, event.id) {
+            Ok(values) => values,
+            Err(message) => {
+                if error.is_none() {
+                    error = Some(message);
+                }
+                Vec::new()
+            }
+        };
 
     let event_judge_user_ids: Vec<i64> = if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
         crate::repositories::scheduled_event_judges_repository::list_assigned_judges(
@@ -618,8 +628,11 @@ pub fn event_profile(
 
     let canvas_width = champion_x + champion_width + margin_left;
     let allowed_pages = access_service::user_permissions(state, user.id, tournament.id);
-    let sidebar_nav_items =
-        access_service::sidebar_nav_items(&allowed_pages, tournament.is_setup, Some(&tournament.slug));
+    let sidebar_nav_items = access_service::sidebar_nav_items(
+        &allowed_pages,
+        tournament.is_setup,
+        Some(&tournament.slug),
+    );
 
     Ok(Template::render(
         "event_profile",
@@ -1118,6 +1131,38 @@ pub fn reset_matchmaking(
         )))),
         Err(message) => Ok(Redirect::to(uri!(events_page(
             slug = slug,
+            error = Some(message),
+            success = Option::<String>::None
+        )))),
+    }
+}
+
+#[post("/<slug>/events/<id>/reset-performances")]
+pub fn reset_performances(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    id: i64,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Ok(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
+
+    match matches_service::reset_non_contact_performances(state, user.id, tournament.id, id) {
+        Ok(_) => Ok(Redirect::to(uri!(event_profile(
+            slug = slug,
+            id = id,
+            error = Option::<String>::None,
+            success = Some("Performances reset.".to_string())
+        )))),
+        Err(message) => Ok(Redirect::to(uri!(event_profile(
+            slug = slug,
+            id = id,
             error = Some(message),
             success = Option::<String>::None
         )))),

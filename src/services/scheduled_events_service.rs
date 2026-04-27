@@ -143,20 +143,19 @@ pub fn create(
             }
         }
     }
-    let duplicate_division_id = if is_contact { division_id } else { None };
-    let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
+    // Both contact and non-contact scheduled events are scoped to a single division + weight class.
+    // This keeps competitors consistent (especially for non-contact performances).
+    let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
+    let weight_class_id = weight_class_id.ok_or_else(|| "Weight class is required.".to_string())?;
     if existing.iter().any(|item| {
         item.event_id == event_id
             && item.contact_type.eq_ignore_ascii_case(contact_type)
-            && item.division_id == duplicate_division_id
-            && item.weight_class_id == duplicate_weight_class_id
+            && item.division_id == Some(division_id)
+            && item.weight_class_id == Some(weight_class_id)
     }) {
         return Err("Event is already scheduled for this tournament.".to_string());
     }
     if is_contact {
-        let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
-        let weight_class_id =
-            weight_class_id.ok_or_else(|| "Weight class is required.".to_string())?;
         let draw_system = draw_system
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
@@ -179,18 +178,18 @@ pub fn create(
         {
             return Err("Invalid draw system.".to_string());
         }
-        if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
-            .map_err(|err| format!("Storage error: {err}"))?
-            .is_none()
-        {
-            return Err("Division not found.".to_string());
-        }
-        if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
-            .map_err(|err| format!("Storage error: {err}"))?
-            .is_none()
-        {
-            return Err("Weight class not found.".to_string());
-        }
+    }
+    if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
+        .map_err(|err| format!("Storage error: {err}"))?
+        .is_none()
+    {
+        return Err("Division not found.".to_string());
+    }
+    if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
+        .map_err(|err| format!("Storage error: {err}"))?
+        .is_none()
+    {
+        return Err("Weight class not found.".to_string());
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
         .map_err(|err| format!("Storage error: {err}"))?
@@ -237,8 +236,8 @@ pub fn create(
         point_system_value,
         time_rule_value,
         draw_system_value,
-        if is_contact { division_id } else { None },
-        if is_contact { weight_class_id } else { None },
+        Some(division_id),
+        Some(weight_class_id),
     )
     .map_err(|err| format!("Storage error: {err}"))?;
     Ok(())
@@ -288,21 +287,18 @@ pub fn update(
             }
         }
     }
-    let duplicate_division_id = if is_contact { division_id } else { None };
-    let duplicate_weight_class_id = if is_contact { weight_class_id } else { None };
+    let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
+    let weight_class_id = weight_class_id.ok_or_else(|| "Weight class is required.".to_string())?;
     if existing.iter().any(|item| {
         item.id != id
             && item.event_id == event_id
             && item.contact_type.eq_ignore_ascii_case(contact_type)
-            && item.division_id == duplicate_division_id
-            && item.weight_class_id == duplicate_weight_class_id
+            && item.division_id == Some(division_id)
+            && item.weight_class_id == Some(weight_class_id)
     }) {
         return Err("Event is already scheduled for this tournament.".to_string());
     }
     if is_contact {
-        let division_id = division_id.ok_or_else(|| "Division is required.".to_string())?;
-        let weight_class_id =
-            weight_class_id.ok_or_else(|| "Weight class is required.".to_string())?;
         let draw_system = draw_system
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
@@ -325,18 +321,18 @@ pub fn update(
         {
             return Err("Invalid draw system.".to_string());
         }
-        if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
-            .map_err(|err| format!("Storage error: {err}"))?
-            .is_none()
-        {
-            return Err("Division not found.".to_string());
-        }
-        if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
-            .map_err(|err| format!("Storage error: {err}"))?
-            .is_none()
-        {
-            return Err("Weight class not found.".to_string());
-        }
+    }
+    if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
+        .map_err(|err| format!("Storage error: {err}"))?
+        .is_none()
+    {
+        return Err("Division not found.".to_string());
+    }
+    if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
+        .map_err(|err| format!("Storage error: {err}"))?
+        .is_none()
+    {
+        return Err("Weight class not found.".to_string());
     }
     let event_ids = events_repository::list(&mut conn, tournament_id)
         .map_err(|err| format!("Storage error: {err}"))?
@@ -384,8 +380,8 @@ pub fn update(
         point_system_value,
         time_rule_value,
         draw_system_value,
-        if is_contact { division_id } else { None },
-        if is_contact { weight_class_id } else { None },
+        Some(division_id),
+        Some(weight_class_id),
     )
     .map_err(|err| format!("Storage error: {err}"))?;
     if changed == 0 {
