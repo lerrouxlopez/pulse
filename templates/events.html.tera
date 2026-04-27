@@ -92,6 +92,24 @@
               <label class="form-label text-cream-60">Date & Time</label>
               <input class="form-control" type="datetime-local" name="event_time" />
             </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Gender Division</label>
+              <select class="form-select" name="division_id" required>
+                <option value="">Select division</option>
+                {% for division in divisions %}
+                <option value="{{ division.id }}">{{ division.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-cream-60">Weight Class</label>
+              <select class="form-select" name="weight_class_id" required>
+                <option value="">Select weight class</option>
+                {% for weight in weight_classes %}
+                <option value="{{ weight.id }}">{{ weight.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
             <div class="col-12 js-contact-only d-none">
               <div class="row g-3">
                 <div class="col-md-4">
@@ -106,24 +124,6 @@
                   <select class="form-select" name="draw_system">
                     <option value="Extension">Extension</option>
                     <option value="First point Advantage">First point Advantage</option>
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label text-cream-60">Gender Division</label>
-                  <select class="form-select" name="division_id">
-                    <option value="">Select division</option>
-                    {% for division in divisions %}
-                    <option value="{{ division.id }}">{{ division.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label text-cream-60">Weight Class</label>
-                  <select class="form-select" name="weight_class_id">
-                    <option value="">Select weight class</option>
-                    {% for weight in weight_classes %}
-                    <option value="{{ weight.id }}">{{ weight.name }}</option>
-                    {% endfor %}
                   </select>
                 </div>
               </div>
@@ -204,6 +204,8 @@
                     <th>Date & Time</th>
                     <th>Point System</th>
                     <th>Time</th>
+                    <th>Gender Division</th>
+                    <th>Weight Class</th>
                     <th class="text-end">Actions</th>
                   </tr>
                 </thead>
@@ -218,6 +220,8 @@
                     <td>{{ item.event_time | default(value="") }}</td>
                     <td>{{ item.point_system | default(value="") }}</td>
                     <td>{{ item.time_rule | default(value="") }}</td>
+                    <td>{{ item.division_name | default(value="") }}</td>
+                    <td>{{ item.weight_class_label | default(value="") }}</td>
                     <td class="text-end">
                       <div class="d-flex justify-content-end gap-2">
                         <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editEventModal-{{ item.id }}">
@@ -231,7 +235,7 @@
                   </tr>
                   {% else %}
                   <tr>
-                    <td colspan="7" class="text-cream-60">No non-contact events scheduled yet.</td>
+                    <td colspan="9" class="text-cream-60">No non-contact events scheduled yet.</td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -284,6 +288,24 @@
                         <option value="No time limit" {% if item.time_rule == "No time limit" %}selected{% endif %}>No time limit</option>
                       </select>
                     </div>
+                    <div class="col-md-4">
+                      <label class="form-label text-muted">Gender Division</label>
+                      <select class="form-select" name="division_id" required>
+                        <option value="">Select division</option>
+                        {% for division in divisions %}
+                        <option value="{{ division.id }}" {% if item.division_id == division.id %}selected{% endif %}>{{ division.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label text-muted">Weight Class</label>
+                      <select class="form-select" name="weight_class_id" required>
+                        <option value="">Select weight class</option>
+                        {% for weight in weight_classes %}
+                        <option value="{{ weight.id }}" {% if item.weight_class_id == weight.id %}selected{% endif %}>{{ weight.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
                     <div class="col-12">
                       <label class="form-label text-muted">Location</label>
                       <input class="form-control" name="location" value="{{ item.location | default(value="") }}" />
@@ -306,24 +328,6 @@
                           <select class="form-select" name="draw_system">
                             <option value="Extension" {% if item.draw_system == "Extension" %}selected{% endif %}>Extension</option>
                             <option value="First point Advantage" {% if item.draw_system == "First point Advantage" %}selected{% endif %}>First point Advantage</option>
-                          </select>
-                        </div>
-                        <div class="col-md-4">
-                          <label class="form-label text-muted">Division</label>
-                          <select class="form-select" name="division_id">
-                            <option value="">Select division</option>
-                            {% for division in divisions %}
-                            <option value="{{ division.id }}" {% if item.division_id == division.id %}selected{% endif %}>{{ division.name }}</option>
-                            {% endfor %}
-                          </select>
-                        </div>
-                        <div class="col-md-4">
-                          <label class="form-label text-muted">Weight Class</label>
-                          <select class="form-select" name="weight_class_id">
-                            <option value="">Select weight class</option>
-                            {% for weight in weight_classes %}
-                            <option value="{{ weight.id }}" {% if item.weight_class_id == weight.id %}selected{% endif %}>{{ weight.name }}</option>
-                            {% endfor %}
                           </select>
                         </div>
                       </div>

@@ -17,6 +17,98 @@
       crossorigin="anonymous"
     />
     <link rel="stylesheet" href="/static/site.css" />
+    <style>
+      @media print {
+        @page {
+          margin: 12mm;
+        }
+
+        body * {
+          visibility: hidden !important;
+        }
+
+        body {
+          background: #fff !important;
+          color: #000 !important;
+        }
+
+        .sidebar,
+        .sidebar-float-toggle,
+        .drawer-handle,
+        .modal,
+        .btn,
+        form {
+          display: none !important;
+        }
+
+        .dashboard-wrap,
+        main.content {
+          padding: 0 !important;
+          margin: 0 !important;
+          max-width: none !important;
+        }
+
+        #teams-print-area,
+        #teams-print-area * {
+          visibility: visible !important;
+        }
+
+        #teams-print-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+        }
+
+        .panel {
+          background: transparent !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+        }
+
+        .table-responsive {
+          overflow: visible !important;
+        }
+
+        a {
+          color: inherit !important;
+          text-decoration: none !important;
+        }
+
+        .teams-table {
+          width: 100% !important;
+          table-layout: fixed;
+          font-size: 9pt;
+        }
+
+        .teams-table th,
+        .teams-table td {
+          padding: 0.25rem 0.35rem !important;
+          color: #000 !important;
+          border-color: #ddd !important;
+          vertical-align: top;
+        }
+
+        .teams-table .teams-actions-col {
+          display: none !important;
+        }
+
+        .teams-table img {
+          width: 24px !important;
+          height: 24px !important;
+          border-radius: 6px !important;
+        }
+
+        .teams-table .badge {
+          background: #fff !important;
+          color: #000 !important;
+          border: 1px solid #ddd !important;
+          font-size: 8pt;
+          padding: 0.12rem 0.25rem;
+        }
+      }
+    </style>
   </head>
   <body class="bg-ink text-cream dashboard-body">
     <div class="dashboard-wrap">
@@ -181,9 +273,12 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="teams-print-area">
           <div class="d-flex align-items-center justify-content-between mb-3">
             <h3 class="fw-semibold mb-0">Teams</h3>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="window.print()">
+              Print
+            </button>
           </div>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0 teams-table">
@@ -193,7 +288,7 @@
                   <th scope="col">Gender Divisions</th>
                   <th scope="col">Age Categories</th>
                   <th scope="col">Events</th>
-                  <th scope="col" class="text-end">Actions</th>
+                  <th scope="col" class="text-end teams-actions-col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,7 +337,7 @@
                       {% endfor %}
                     </div>
                   </td>
-                  <td class="text-end">
+                  <td class="text-end teams-actions-col">
                     <div class="d-flex justify-content-end gap-2">
                       <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editTeamModal-{{ team.id }}">
                         Edit
@@ -255,7 +350,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="3" class="text-cream-60">No teams yet.</td>
+                  <td colspan="5" class="text-cream-60">No teams yet.</td>
                 </tr>
                 {% endfor %}
               </tbody>

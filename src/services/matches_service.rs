@@ -64,9 +64,10 @@ pub fn set_non_contact_event_judges(
         return Err("Tournament not found.".to_string());
     }
 
-    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|err| format!("Storage error: {err}"))?
-        .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+    let scheduled =
+        scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+            .map_err(|err| format!("Storage error: {err}"))?
+            .ok_or_else(|| "Event not found for this tournament.".to_string())?;
     if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
         return Err("Judge assignments for contact events are set per match.".to_string());
     }
@@ -75,15 +76,16 @@ pub fn set_non_contact_event_judges(
     let performances = matches_repository::list(&mut conn, tournament_id, scheduled_event_id)
         .map_err(|err| format!("Storage error: {err}"))?;
     for perf in &performances {
-        let scored = match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
-            &mut conn,
-            tournament_id,
-            perf.id,
-            1,
-            5,
-            10,
-        )
-        .unwrap_or(0);
+        let scored =
+            match_judges_repository::count_distinct_judges_with_valid_red_score_for_match_round(
+                &mut conn,
+                tournament_id,
+                perf.id,
+                1,
+                5,
+                10,
+            )
+            .unwrap_or(0);
         if scored > 0 {
             return Err("Cannot change judges after scoring has started.".to_string());
         }
@@ -114,9 +116,10 @@ pub fn ensure_performances_for_non_contact_event(
         return Err("Tournament not found.".to_string());
     }
 
-    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|err| format!("Storage error: {err}"))?
-        .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+    let scheduled =
+        scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+            .map_err(|err| format!("Storage error: {err}"))?
+            .ok_or_else(|| "Event not found for this tournament.".to_string())?;
     if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
         return Ok(());
     }
@@ -541,37 +544,30 @@ pub fn list_competitors(
     }
     let scheduled =
         scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-            .map_err(|err| format!("Storage error: {err}"))?;
-    let (division_filter, weight_class_filter, is_contact) = scheduled
-        .as_ref()
-        .map(|event| {
-            (
-                event.division_id,
-                event.weight_class_id,
-                event.contact_type.eq_ignore_ascii_case("Contact"),
-            )
-        })
-        .unwrap_or((None, None, false));
-    let event_id = scheduled
-        .as_ref()
-        .map(|event| event.event_id)
-        .unwrap_or(scheduled_event_id);
+            .map_err(|err| format!("Storage error: {err}"))?
+            .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+    let division_filter = scheduled.division_id.ok_or_else(|| {
+        format!(
+            "Division is required for {} events.",
+            scheduled.contact_type.trim()
+        )
+    })?;
+    let weight_class_filter = scheduled.weight_class_id.ok_or_else(|| {
+        format!(
+            "Weight class is required for {} events.",
+            scheduled.contact_type.trim()
+        )
+    })?;
+    let event_id = scheduled.event_id;
     let rows = teams_repository::list_event_competitors(&mut conn, tournament_id, event_id)
         .map_err(|err| format!("Storage error: {err}"))?;
     Ok(rows
         .into_iter()
         .filter(|(_, _, _, _, division_id, weight_class_id, _, _, _)| {
-            if !is_contact {
-                return true;
-            }
-            let division_ok = match division_filter {
-                Some(required) => division_id.map(|id| id == required).unwrap_or(false),
-                None => false,
-            };
-            let weight_ok = match (weight_class_filter, weight_class_id) {
-                (Some(required), Some(current)) => required == *current,
-                _ => false,
-            };
+            let division_ok = division_id.map(|id| id == division_filter).unwrap_or(false);
+            let weight_ok = weight_class_id
+                .map(|id| id == weight_class_filter)
+                .unwrap_or(false);
             division_ok && weight_ok
         })
         .map(
@@ -793,7 +789,11 @@ pub fn toggle_match_timer(
                 tournament_id,
                 scheduled_event_id,
                 match_id,
-                if is_non_contact { "Finished" } else { "Scheduled" },
+                if is_non_contact {
+                    "Finished"
+                } else {
+                    "Scheduled"
+                },
                 existing.fight_round,
                 existing.timer_started_at,
                 existing.timer_duration_seconds,
@@ -852,7 +852,11 @@ pub fn toggle_match_timer(
             tournament_id,
             scheduled_event_id,
             match_id,
-            if is_non_contact { "Finished" } else { "Scheduled" },
+            if is_non_contact {
+                "Finished"
+            } else {
+                "Scheduled"
+            },
             existing.fight_round,
             None,
             None,
@@ -945,12 +949,9 @@ pub fn toggle_match_timer_pause(
     let time_rule =
         crate::services::scheduled_events_service::parse_time_rule(scheduled.time_rule.as_deref());
     let duration_limit = time_rule.map(|rule| rule.seconds_per_round).unwrap_or(0);
-    let is_no_time_limit = scheduled
-        .time_rule
-        .as_deref()
-        .is_some_and(|value| {
-            value.eq_ignore_ascii_case(crate::services::scheduled_events_service::NO_TIME_LIMIT_RULE)
-        });
+    let is_no_time_limit = scheduled.time_rule.as_deref().is_some_and(|value| {
+        value.eq_ignore_ascii_case(crate::services::scheduled_events_service::NO_TIME_LIMIT_RULE)
+    });
     if duration_limit <= 0 && !is_no_time_limit {
         return Err("Timer is not configured for this event.".to_string());
     }
@@ -1317,11 +1318,17 @@ pub fn set_or_adjust_judge_score(
     .ok_or_else(|| "Event not found.".to_string())?;
 
     if is_contact_first_point_advantage(&scheduled) {
-        return Err("This event uses pause-vote scoring; judge round scores are disabled.".to_string());
+        return Err(
+            "This event uses pause-vote scoring; judge round scores are disabled.".to_string(),
+        );
     }
 
     let is_non_contact = !scheduled.contact_type.eq_ignore_ascii_case("Contact");
-    let allow_unassigned = if is_non_contact { false } else { allow_unassigned };
+    let allow_unassigned = if is_non_contact {
+        false
+    } else {
+        allow_unassigned
+    };
 
     let point_rule = crate::services::scheduled_events_service::parse_point_rule(
         scheduled.point_system.as_deref(),
@@ -1378,7 +1385,9 @@ pub fn set_or_adjust_judge_score(
 
     let side = side.trim().to_lowercase();
     if is_non_contact && side == "blue" {
-        return Err("Non-contact performances have a single score; select Red/Performance.".to_string());
+        return Err(
+            "Non-contact performances have a single score; select Red/Performance.".to_string(),
+        );
     }
     if let Some(value) = value {
         if value < min_allowed || value > max_allowed {
@@ -1436,7 +1445,12 @@ pub fn set_or_adjust_judge_score(
     );
 
     if is_non_contact {
-        let _ = try_finalize_non_contact_event_from_scores(state, actor_user_id, tournament_id, match_id);
+        let _ = try_finalize_non_contact_event_from_scores(
+            state,
+            actor_user_id,
+            tournament_id,
+            match_id,
+        );
     }
 
     Ok(())
@@ -1784,16 +1798,22 @@ pub fn try_finalize_non_contact_event_from_scores(
         .ok_or_else(|| "Match not found.".to_string())?;
 
     let scheduled_event_id = match_row.scheduled_event_id;
-    let scheduled = scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
-        .map_err(|err| format!("Storage error: {err}"))?
-        .ok_or_else(|| "Event not found.".to_string())?;
+    let scheduled =
+        scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+            .map_err(|err| format!("Storage error: {err}"))?
+            .ok_or_else(|| "Event not found.".to_string())?;
     if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
         return Ok(());
     }
 
     // Ensure performances exist and event judges have been propagated into per-performance assignments.
     drop(conn);
-    let _ = ensure_performances_for_non_contact_event(state, actor_user_id, tournament_id, scheduled_event_id);
+    let _ = ensure_performances_for_non_contact_event(
+        state,
+        actor_user_id,
+        tournament_id,
+        scheduled_event_id,
+    );
     let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
 
     let judge_user_ids = scheduled_event_judges_repository::list_assigned_judges(
@@ -2996,6 +3016,54 @@ pub fn reset_automatic_matchmaking(
     )
 }
 
+pub fn reset_non_contact_performances(
+    state: &State<AppState>,
+    user_id: i64,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> Result<(), String> {
+    let mut conn = db::open_conn(&state.pool).map_err(|err| format!("Storage error: {err}"))?;
+    let has_access = tournaments_repository::user_has_access(&mut conn, tournament_id, user_id)
+        .map_err(|err| format!("Storage error: {err}"))?;
+    if !has_access {
+        return Err("Tournament not found.".to_string());
+    }
+
+    let scheduled =
+        scheduled_events_repository::get_by_id(&mut conn, tournament_id, scheduled_event_id)
+            .map_err(|err| format!("Storage error: {err}"))?
+            .ok_or_else(|| "Event not found for this tournament.".to_string())?;
+    if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Err("Reset performances is only available for non-contact events.".to_string());
+    }
+
+    // Clear scores + performances.
+    match_judges_repository::delete_by_scheduled_event(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+    )
+    .map_err(|err| format!("Storage error: {err}"))?;
+    matches_repository::delete_by_scheduled_event(&mut conn, tournament_id, scheduled_event_id)
+        .map_err(|err| format!("Storage error: {err}"))?;
+
+    // Clear winners (single-winner + multi-winner table).
+    let _ = conn.exec_drop(
+        "DELETE FROM scheduled_event_winners WHERE tournament_id = ? AND scheduled_event_id = ?",
+        (tournament_id, scheduled_event_id),
+    );
+    let _ = scheduled_events_repository::update_status_and_winner(
+        &mut conn,
+        tournament_id,
+        scheduled_event_id,
+        "Scheduled",
+        None,
+    );
+
+    // Rebuild performances using the same logic as the event page.
+    ensure_performances_for_non_contact_event(state, user_id, tournament_id, scheduled_event_id)
+}
+
 #[derive(Clone)]
 enum BracketParticipant {
     Competitor(EventCompetitor),
@@ -3042,14 +3110,18 @@ fn advance_winner_by_placeholder(
     // Brackets store placeholders using the human-visible "Match N" numbering,
     // not the database match id. Compute that number consistently by ordering
     // by (round, slot) and skipping BYE matches.
-    let source_match_number = match_number_for_match(conn, tournament_id, scheduled_event_id, source_match_id)?;
+    let source_match_number =
+        match_number_for_match(conn, tournament_id, scheduled_event_id, source_match_id)?;
     let source_match_number = match source_match_number {
         Some(value) => value,
         None => return Ok(0),
     };
     let mut changed_total: usize = 0;
     let placeholders = [
-        (format!("Winner of Match {}", source_match_number), winner_label.to_string()),
+        (
+            format!("Winner of Match {}", source_match_number),
+            winner_label.to_string(),
+        ),
         (
             format!("Winner of Match {} - bye", source_match_number),
             // The match is already labeled as a BYE; keep the participant label clean.
@@ -3078,12 +3150,20 @@ fn advance_winner_by_placeholder(
             }
 
             let mut updated = false;
-            if target_match.red.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+            if target_match
+                .red
+                .as_deref()
+                .is_some_and(|v| v == placeholder.as_str())
+            {
                 target_match.red = Some(replacement_label.clone());
                 target_match.red_member_id = winner_id;
                 updated = true;
             }
-            if target_match.blue.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+            if target_match
+                .blue
+                .as_deref()
+                .is_some_and(|v| v == placeholder.as_str())
+            {
                 target_match.blue = Some(replacement_label.clone());
                 target_match.blue_member_id = winner_id;
                 updated = true;
@@ -3206,7 +3286,10 @@ fn sync_bracket_winner_placeholders(
             None => continue,
         };
         let placeholders = [
-            (format!("Winner of Match {}", match_number), winner_label.clone()),
+            (
+                format!("Winner of Match {}", match_number),
+                winner_label.clone(),
+            ),
             (
                 format!("Winner of Match {} - bye", match_number),
                 winner_label.clone(),
@@ -3227,18 +3310,27 @@ fn sync_bracket_winner_placeholders(
                 // (which are stored as "Finished").
                 let is_locked = target_match.winner_side.is_some()
                     || target_match.status.eq_ignore_ascii_case("Forfeit")
-                    || (target_match.status.eq_ignore_ascii_case("Finished") && !target_match.is_bye);
+                    || (target_match.status.eq_ignore_ascii_case("Finished")
+                        && !target_match.is_bye);
                 if is_locked {
                     continue;
                 }
 
                 let mut updated = false;
-                if target_match.red.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+                if target_match
+                    .red
+                    .as_deref()
+                    .is_some_and(|v| v == placeholder.as_str())
+                {
                     target_match.red = Some(replacement_label.clone());
                     target_match.red_member_id = winner_id;
                     updated = true;
                 }
-                if target_match.blue.as_deref().is_some_and(|v| v == placeholder.as_str()) {
+                if target_match
+                    .blue
+                    .as_deref()
+                    .is_some_and(|v| v == placeholder.as_str())
+                {
                     target_match.blue = Some(replacement_label.clone());
                     target_match.blue_member_id = winner_id;
                     updated = true;

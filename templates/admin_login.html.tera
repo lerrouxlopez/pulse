@@ -20,9 +20,9 @@
   </head>
   <body class="bg-ink text-cream">
     <main class="container py-5" style="max-width: 520px;">
-      <div class="panel">
+      <div class="panel text-ink">
         <h1 class="fw-bold mb-2">Admin Workspace</h1>
-        <p class="text-cream-75 mb-4">Sign in to manage the entire system.</p>
+        <p class="text-muted mb-4">Sign in to manage the entire system.</p>
 
         {% if error %}
         <div class="alert alert-danger" role="alert">{{ error }}</div>
@@ -30,19 +30,18 @@
 
         <form action="/admin/login" method="post" class="row g-3">
           <div class="col-12">
-            <label class="form-label text-cream-60">Email</label>
+            <label class="form-label text-muted">Email</label>
             <input class="form-control" type="email" name="email" autocomplete="username" required />
           </div>
           <div class="col-12">
-            <label class="form-label text-cream-60">Password</label>
+            <label class="form-label text-muted">Password</label>
             <input class="form-control" type="password" name="password" autocomplete="current-password" required />
           </div>
           <div class="col-12 d-flex justify-content-end">
-            <button class="btn btn-outline-light" type="submit">Sign in</button>
+            <button class="btn btn-primary" type="submit">Sign in</button>
           </div>
         </form>
       </div>
     </main>
   </body>
 </html>
-

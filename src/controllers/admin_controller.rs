@@ -1070,6 +1070,14 @@ fn canonicalize_scheduled_event_input(
         } else {
             "1 round | 2 minutes"
         };
+        let division_id = input
+            .division_id
+            .filter(|v| *v > 0)
+            .ok_or_else(|| "Division is required.".to_string())?;
+        let weight_class_id = input
+            .weight_class_id
+            .filter(|v| *v > 0)
+            .ok_or_else(|| "Weight class is required.".to_string())?;
         Ok((
             input.event_id,
             "Non-Contact",
@@ -1079,8 +1087,8 @@ fn canonicalize_scheduled_event_input(
             Some("5-10 points"),
             Some(canonical_rule),
             None,
-            None,
-            None,
+            Some(division_id),
+            Some(weight_class_id),
         ))
     }
 }
@@ -1177,10 +1185,51 @@ pub fn admin_events_create(
         ))));
     }
 
+    let division_id = match division_id {
+        Some(value) => value,
+        None => {
+            return Ok(Redirect::to(uri!(admin_events_page(
+                tournament_id = Some(input.tournament_id),
+                error = Some("Division is required.".to_string()),
+                success = Option::<String>::None
+            ))));
+        }
+    };
+    let weight_class_id = match weight_class_id {
+        Some(value) => value,
+        None => {
+            return Ok(Redirect::to(uri!(admin_events_page(
+                tournament_id = Some(input.tournament_id),
+                error = Some("Weight class is required.".to_string()),
+                success = Option::<String>::None
+            ))));
+        }
+    };
+    if divisions_repository::get_by_id(&mut conn, input.tournament_id, division_id)
+        .unwrap_or(None)
+        .is_none()
+    {
+        return Ok(Redirect::to(uri!(admin_events_page(
+            tournament_id = Some(input.tournament_id),
+            error = Some("Division not found.".to_string()),
+            success = Option::<String>::None
+        ))));
+    }
+    if weight_classes_repository::get_by_id(&mut conn, input.tournament_id, weight_class_id)
+        .unwrap_or(None)
+        .is_none()
+    {
+        return Ok(Redirect::to(uri!(admin_events_page(
+            tournament_id = Some(input.tournament_id),
+            error = Some("Weight class not found.".to_string()),
+            success = Option::<String>::None
+        ))));
+    }
+
     // Prevent duplicates following the same rules as the tournament UI.
     let existing = scheduled_events_repository::list(&mut conn, input.tournament_id).unwrap_or_default();
-    let dupe_division = if is_contact { division_id } else { None };
-    let dupe_weight = if is_contact { weight_class_id } else { None };
+    let dupe_division = Some(division_id);
+    let dupe_weight = Some(weight_class_id);
     if existing.iter().any(|item| {
         item.event_id == event_id
             && item.contact_type.eq_ignore_ascii_case(contact_type)
@@ -1205,8 +1254,8 @@ pub fn admin_events_create(
         point_system,
         time_rule,
         draw_system,
-        division_id,
-        weight_class_id,
+        Some(division_id),
+        Some(weight_class_id),
     ) {
         Ok(_) => Ok(Redirect::to(uri!(admin_events_page(
             tournament_id = Some(input.tournament_id),
@@ -1272,10 +1321,51 @@ pub fn admin_events_update(
         ))));
     }
 
+    let division_id = match division_id {
+        Some(value) => value,
+        None => {
+            return Ok(Redirect::to(uri!(admin_events_page(
+                tournament_id = Some(tournament_id),
+                error = Some("Division is required.".to_string()),
+                success = Option::<String>::None
+            ))));
+        }
+    };
+    let weight_class_id = match weight_class_id {
+        Some(value) => value,
+        None => {
+            return Ok(Redirect::to(uri!(admin_events_page(
+                tournament_id = Some(tournament_id),
+                error = Some("Weight class is required.".to_string()),
+                success = Option::<String>::None
+            ))));
+        }
+    };
+    if divisions_repository::get_by_id(&mut conn, tournament_id, division_id)
+        .unwrap_or(None)
+        .is_none()
+    {
+        return Ok(Redirect::to(uri!(admin_events_page(
+            tournament_id = Some(tournament_id),
+            error = Some("Division not found.".to_string()),
+            success = Option::<String>::None
+        ))));
+    }
+    if weight_classes_repository::get_by_id(&mut conn, tournament_id, weight_class_id)
+        .unwrap_or(None)
+        .is_none()
+    {
+        return Ok(Redirect::to(uri!(admin_events_page(
+            tournament_id = Some(tournament_id),
+            error = Some("Weight class not found.".to_string()),
+            success = Option::<String>::None
+        ))));
+    }
+
     // Prevent duplicates (excluding the row being updated).
     let existing = scheduled_events_repository::list(&mut conn, tournament_id).unwrap_or_default();
-    let dupe_division = if is_contact { division_id } else { None };
-    let dupe_weight = if is_contact { weight_class_id } else { None };
+    let dupe_division = Some(division_id);
+    let dupe_weight = Some(weight_class_id);
     if existing.iter().any(|item| {
         item.id != id
             && item.event_id == event_id
@@ -1302,8 +1392,8 @@ pub fn admin_events_update(
         point_system,
         time_rule,
         draw_system,
-        division_id,
-        weight_class_id,
+        Some(division_id),
+        Some(weight_class_id),
     ) {
         Ok(_) => Ok(Redirect::to(uri!(admin_events_page(
             tournament_id = Some(tournament_id),
