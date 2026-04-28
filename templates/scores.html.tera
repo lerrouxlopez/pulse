@@ -44,37 +44,84 @@
         <section class="panel mb-4 text-ink">
           <form method="get" action="/{{ tournament_slug }}/scores" class="row g-3 align-items-end">
             <div class="col-12 col-lg-6">
-              <label class="form-label">Match</label>
-              <select class="form-select" name="match_id" required>
-                {% for item in matches %}
-                <option value="{{ item.id }}" {% if selected_match_id and item.id == selected_match_id %}selected{% endif %}>
-                  {{ item.label }} ({{ item.status }})
-                </option>
+              <label class="form-label">Event</label>
+              <select class="form-select" name="event_id" required>
+                <option value="" {% if not selected_event_id %}selected{% endif %} disabled>Select an event</option>
+                {% for item in event_options %}
+                <option value="{{ item.id }}" {% if selected_event_id and item.id == selected_event_id %}selected{% endif %}>{{ item.name }}</option>
                 {% endfor %}
               </select>
             </div>
+
+            {% if selected_event_id %}
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Division</label>
+              <select class="form-select" name="division_id" required>
+                <option value="" {% if not selected_division_id %}selected{% endif %} disabled>Select a division</option>
+                {% for item in division_options %}
+                <option value="{{ item.id }}" {% if selected_division_id and item.id == selected_division_id %}selected{% endif %}>{{ item.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            {% if selected_event_id and selected_division_id %}
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Weight</label>
+              <select class="form-select" name="weight_class_id" required>
+                <option value="" {% if not selected_weight_class_id %}selected{% endif %} disabled>Select a weight</option>
+                {% for item in weight_options %}
+                <option value="{{ item.id }}" {% if selected_weight_class_id and item.id == selected_weight_class_id %}selected{% endif %}>{{ item.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            {% if selected_event_id and selected_division_id and selected_weight_class_id %}
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Match</label>
+              <select class="form-select" name="match_id" {% if not matches or matches | length == 0 %}disabled{% endif %} required>
+                {% if matches and matches | length > 0 %}
+                  <option value="" {% if not selected_match_id %}selected{% endif %} disabled>Select a match</option>
+                  {% for item in matches %}
+                  <option value="{{ item.id }}" {% if selected_match_id and item.id == selected_match_id %}selected{% endif %}>{{ item.label }} ({{ item.status }})</option>
+                  {% endfor %}
+                {% else %}
+                  <option value="" selected>No matches ready for scoring.</option>
+                {% endif %}
+              </select>
+            </div>
+
             {% if can_admin %}
             <div class="col-12 col-lg-3">
               <label class="form-label">Judge</label>
-              <select class="form-select" name="judge_id" required>
+              <select class="form-select" name="judge_id" {% if not selected_match_id %}disabled{% endif %} required>
                 {% for judge in judges %}
                 <option value="{{ judge.id }}" {% if judge.id == selected_judge_id %}selected{% endif %}>{{ judge.name }}</option>
                 {% endfor %}
               </select>
             </div>
             {% endif %}
+
             <div class="col-12 col-lg-3">
               <label class="form-label">Round</label>
-              <select class="form-select" name="round" required>
+              <select class="form-select" name="round" {% if not selected_match_id %}disabled{% endif %} required>
                 {% for r in rounds %}
                 <option value="{{ r }}" {% if r == selected_round %}selected{% endif %}>Round {{ r }}</option>
                 {% endfor %}
               </select>
             </div>
-            <div class="col-12 col-lg-3 d-flex justify-content-end">
-              <button class="btn btn-outline-light" type="submit">Load</button>
+            {% endif %}
+
+            <div class="col-12 col-lg-3 d-flex justify-content-end gap-2">
+              <a class="btn btn-outline-secondary w-100" href="/{{ tournament_slug }}/scores">Reset</a>
+              <button class="btn btn-outline-light w-100" type="submit">Load</button>
             </div>
           </form>
+
+          {% if selected_event_id and selected_division_id and selected_weight_class_id and matches is defined and (not matches or matches | length == 0) %}
+            <div class="text-muted small mt-3">Only matches that are not finished and have assigned judges are shown here.</div>
+          {% endif %}
         </section>
 
         {% set red_name = "TBD" %}
@@ -110,6 +157,9 @@
 
               <div class="d-flex flex-wrap gap-2">
                 <form action="/{{ tournament_slug }}/scores/pause-vote" method="post">
+                  {% if selected_event_id %}<input type="hidden" name="event_id" value="{{ selected_event_id }}" />{% endif %}
+                  {% if selected_division_id %}<input type="hidden" name="division_id" value="{{ selected_division_id }}" />{% endif %}
+                  {% if selected_weight_class_id %}<input type="hidden" name="weight_class_id" value="{{ selected_weight_class_id }}" />{% endif %}
                   <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
                   <input type="hidden" name="side" value="red" />
                   {% if can_admin %}
@@ -119,6 +169,9 @@
                 </form>
 
                 <form action="/{{ tournament_slug }}/scores/pause-vote" method="post">
+                  {% if selected_event_id %}<input type="hidden" name="event_id" value="{{ selected_event_id }}" />{% endif %}
+                  {% if selected_division_id %}<input type="hidden" name="division_id" value="{{ selected_division_id }}" />{% endif %}
+                  {% if selected_weight_class_id %}<input type="hidden" name="weight_class_id" value="{{ selected_weight_class_id }}" />{% endif %}
                   <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
                   <input type="hidden" name="side" value="blue" />
                   {% if can_admin %}
@@ -152,6 +205,9 @@
               </div>
             </div>
             <form action="/{{ tournament_slug }}/scores/adjust" method="post" class="d-flex align-items-center gap-2 flex-wrap">
+              {% if selected_event_id %}<input type="hidden" name="event_id" value="{{ selected_event_id }}" />{% endif %}
+              {% if selected_division_id %}<input type="hidden" name="division_id" value="{{ selected_division_id }}" />{% endif %}
+              {% if selected_weight_class_id %}<input type="hidden" name="weight_class_id" value="{{ selected_weight_class_id }}" />{% endif %}
               <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
               <input type="hidden" name="fight_round" value="{{ selected_round }}" />
               <input type="hidden" name="side" value="red" />
@@ -177,6 +233,9 @@
                 </div>
               </div>
               <form action="/{{ tournament_slug }}/scores/adjust" method="post" class="d-flex align-items-center gap-2 flex-wrap">
+                {% if selected_event_id %}<input type="hidden" name="event_id" value="{{ selected_event_id }}" />{% endif %}
+                {% if selected_division_id %}<input type="hidden" name="division_id" value="{{ selected_division_id }}" />{% endif %}
+                {% if selected_weight_class_id %}<input type="hidden" name="weight_class_id" value="{{ selected_weight_class_id }}" />{% endif %}
                 <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
                 <input type="hidden" name="fight_round" value="{{ selected_round }}" />
                 <input type="hidden" name="side" value="red" />
@@ -201,6 +260,9 @@
                 <img src="{{ blue_photo_url }}" alt="{{ blue_name }}" class="match-fighter-photo score-corner-photo" />
               </div>
               <form action="/{{ tournament_slug }}/scores/adjust" method="post" class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                {% if selected_event_id %}<input type="hidden" name="event_id" value="{{ selected_event_id }}" />{% endif %}
+                {% if selected_division_id %}<input type="hidden" name="division_id" value="{{ selected_division_id }}" />{% endif %}
+                {% if selected_weight_class_id %}<input type="hidden" name="weight_class_id" value="{{ selected_weight_class_id }}" />{% endif %}
                 <input type="hidden" name="match_id" value="{{ selected_match_id | default(value=0) }}" />
                 <input type="hidden" name="fight_round" value="{{ selected_round }}" />
                 <input type="hidden" name="side" value="blue" />

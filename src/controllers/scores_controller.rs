@@ -22,8 +22,17 @@ struct ScoreJudgeOption {
     name: String,
 }
 
+#[derive(Serialize)]
+struct ScoreFilterOption {
+    id: i64,
+    name: String,
+}
+
 #[derive(FromForm)]
 pub struct ScoreAdjustForm {
+    pub event_id: Option<i64>,
+    pub division_id: Option<i64>,
+    pub weight_class_id: Option<i64>,
     pub match_id: i64,
     pub fight_round: i64,
     pub side: String,
@@ -34,6 +43,9 @@ pub struct ScoreAdjustForm {
 
 #[derive(FromForm)]
 pub struct PauseVoteForm {
+    pub event_id: Option<i64>,
+    pub division_id: Option<i64>,
+    pub weight_class_id: Option<i64>,
     pub match_id: i64,
     pub side: String,
     pub judge_user_id: Option<i64>,
@@ -57,11 +69,14 @@ struct PendingPauseVoteView {
     is_complete: bool,
 }
 
-#[get("/<slug>/scores?<match_id>&<round>&<judge_id>")]
+#[get("/<slug>/scores?<event_id>&<division_id>&<weight_class_id>&<match_id>&<round>&<judge_id>")]
 pub fn scores_page(
     state: &State<AppState>,
     jar: &CookieJar<'_>,
     slug: String,
+    event_id: Option<i64>,
+    division_id: Option<i64>,
+    weight_class_id: Option<i64>,
     match_id: Option<i64>,
     round: Option<i64>,
     judge_id: Option<i64>,
@@ -106,6 +121,199 @@ pub fn scores_page(
     let mut options: Vec<ScoreMatchOption> = Vec::new();
     let scheduled_events =
         scheduled_events_service::list(state, user.id, tournament.id).unwrap_or_default();
+
+    // Scores can be very large; require narrowing to Event -> Division -> Weight (Scheduled Event) first.
+    let mut event_options: Vec<ScoreFilterOption> = Vec::new();
+    let mut event_name_by_event_id: std::collections::HashMap<i64, String> =
+        std::collections::HashMap::new();
+    for item in &scheduled_events {
+        event_name_by_event_id
+            .entry(item.event_id)
+            .or_insert_with(|| item.event_name.clone());
+    }
+
+    // Only show events that have participants. For Scores, "participants" is defined as:
+    // there exists at least one scheduled event under that event_id that has at least one match row.
+    // This keeps the page usable even when team/member registration data isn't present.
+    let mut has_participants_by_event_id: std::collections::HashMap<i64, bool> =
+        std::collections::HashMap::new();
+    if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+        for (event_id, _) in &event_name_by_event_id {
+            let mut any = false;
+            for se in &scheduled_events {
+                if se.event_id != *event_id {
+                    continue;
+                }
+                if division_id.is_some() && se.division_id != division_id {
+                    continue;
+                }
+                if weight_class_id.is_some() && se.weight_class_id != weight_class_id {
+                    continue;
+                }
+
+                let count = crate::repositories::matches_repository::count_matches_for_scheduled_event(
+                    &mut conn,
+                    tournament.id,
+                    se.id,
+                )
+                .unwrap_or(0);
+                if count > 0 {
+                    any = true;
+                    break;
+                }
+            }
+            has_participants_by_event_id.insert(*event_id, any);
+        }
+    }
+
+    for (id, name) in &event_name_by_event_id {
+        let ok = has_participants_by_event_id.get(id).copied().unwrap_or(false);
+        if !ok {
+            continue;
+        }
+        event_options.push(ScoreFilterOption {
+            id: *id,
+            name: name.clone(),
+        });
+    }
+    event_options.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    let selected_event_id = event_id.filter(|id| event_options.iter().any(|opt| opt.id == *id));
+
+    let mut division_options: Vec<ScoreFilterOption> = Vec::new();
+    let mut division_name_by_id: std::collections::HashMap<i64, String> =
+        std::collections::HashMap::new();
+    if let Some(selected_event_id) = selected_event_id {
+        for item in &scheduled_events {
+            if item.event_id != selected_event_id {
+                continue;
+            }
+            let Some(div_id) = item.division_id else {
+                continue;
+            };
+            let name = item
+                .division_name
+                .clone()
+                .unwrap_or_else(|| format!("Division {div_id}"));
+            division_name_by_id.entry(div_id).or_insert(name);
+        }
+    }
+    if let Some(selected_event_id) = selected_event_id {
+        if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+            for (id, name) in &division_name_by_id {
+                let mut any = false;
+                for se in &scheduled_events {
+                    if se.event_id != selected_event_id {
+                        continue;
+                    }
+                    if se.division_id != Some(*id) {
+                        continue;
+                    }
+                    let count =
+                        crate::repositories::matches_repository::count_matches_for_scheduled_event(
+                            &mut conn,
+                            tournament.id,
+                            se.id,
+                        )
+                        .unwrap_or(0);
+                    if count > 0 {
+                        any = true;
+                        break;
+                    }
+                }
+                if !any {
+                    continue;
+                }
+                division_options.push(ScoreFilterOption {
+                    id: *id,
+                    name: name.clone(),
+                });
+            }
+        }
+    }
+    division_options.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    let selected_division_id =
+        division_id.filter(|id| division_options.iter().any(|opt| opt.id == *id));
+
+    let mut weight_options: Vec<ScoreFilterOption> = Vec::new();
+    let mut weight_name_by_id: std::collections::HashMap<i64, String> =
+        std::collections::HashMap::new();
+    if let (Some(selected_event_id), Some(selected_division_id)) =
+        (selected_event_id, selected_division_id)
+    {
+        for item in &scheduled_events {
+            if item.event_id != selected_event_id {
+                continue;
+            }
+            if item.division_id != Some(selected_division_id) {
+                continue;
+            }
+            let Some(weight_id) = item.weight_class_id else {
+                continue;
+            };
+            let name = item
+                .weight_class_label
+                .clone()
+                .or(item.weight_class_name.clone())
+                .unwrap_or_else(|| format!("Weight {weight_id}"));
+            weight_name_by_id.entry(weight_id).or_insert(name);
+        }
+    }
+    if let (Some(selected_event_id), Some(selected_division_id)) =
+        (selected_event_id, selected_division_id)
+    {
+        if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+            for (id, name) in &weight_name_by_id {
+                let mut any = false;
+                for se in &scheduled_events {
+                    if se.event_id != selected_event_id {
+                        continue;
+                    }
+                    if se.division_id != Some(selected_division_id) {
+                        continue;
+                    }
+                    if se.weight_class_id != Some(*id) {
+                        continue;
+                    }
+                    let count =
+                        crate::repositories::matches_repository::count_matches_for_scheduled_event(
+                            &mut conn,
+                            tournament.id,
+                            se.id,
+                        )
+                        .unwrap_or(0);
+                    if count > 0 {
+                        any = true;
+                        break;
+                    }
+                }
+                if !any {
+                    continue;
+                }
+                weight_options.push(ScoreFilterOption {
+                    id: *id,
+                    name: name.clone(),
+                });
+            }
+        }
+    }
+    weight_options.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    let selected_weight_class_id =
+        weight_class_id.filter(|id| weight_options.iter().any(|opt| opt.id == *id));
+
+    let selected_scheduled_event_id = if let (Some(eid), Some(did), Some(wid)) = (
+        selected_event_id,
+        selected_division_id,
+        selected_weight_class_id,
+    ) {
+        scheduled_events
+            .iter()
+            .find(|se| se.event_id == eid && se.division_id == Some(did) && se.weight_class_id == Some(wid))
+            .map(|se| se.id)
+    } else {
+        None
+    };
+
     let mut event_name_by_id = std::collections::HashMap::new();
     let mut event_contact_by_id = std::collections::HashMap::new();
     for item in &scheduled_events {
@@ -113,26 +321,32 @@ pub fn scores_page(
         event_contact_by_id.insert(item.id, item.contact_type.clone());
     }
 
-    let match_rows = if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
-        if can_admin {
-            crate::repositories::matches_repository::list_by_tournament(&mut conn, tournament.id)
-                .unwrap_or_default()
-        } else {
-            let match_ids = crate::repositories::match_judges_repository::list_match_ids_for_judge(
+    let match_rows = if let (Some(selected_scheduled_event_id), Ok(mut conn)) =
+        (selected_scheduled_event_id, crate::db::open_conn(&state.pool))
+    {
+        let judge_filter = if can_admin { None } else { Some(user.id) };
+        let is_non_contact = scheduled_events
+            .iter()
+            .find(|se| se.id == selected_scheduled_event_id)
+            .map(|se| !se.contact_type.eq_ignore_ascii_case("Contact"))
+            .unwrap_or(false);
+
+        if is_non_contact {
+            crate::repositories::matches_repository::list_scoring_candidates_non_contact(
                 &mut conn,
                 tournament.id,
-                user.id,
+                selected_scheduled_event_id,
+                judge_filter,
             )
-            .unwrap_or_default();
-            let mut rows = Vec::new();
-            for id in match_ids {
-                if let Ok(Some(row)) =
-                    crate::repositories::matches_repository::get_by_id(&mut conn, tournament.id, id)
-                {
-                    rows.push(row);
-                }
-            }
-            rows
+            .unwrap_or_default()
+        } else {
+            crate::repositories::matches_repository::list_scoring_candidates(
+                &mut conn,
+                tournament.id,
+                selected_scheduled_event_id,
+                judge_filter,
+            )
+            .unwrap_or_default()
         }
     } else {
         Vec::new()
@@ -171,7 +385,9 @@ pub fn scores_page(
         });
     }
 
-    let selected_match_id = match_id.or_else(|| options.first().map(|item| item.id));
+    let selected_match_id = match_id
+        .filter(|id| options.iter().any(|opt| opt.id == *id))
+        .or_else(|| options.first().map(|item| item.id));
     let mut selected_match = None;
     let mut selected_match_detail = None;
     if let Some(selected_id) = selected_match_id {
@@ -508,6 +724,12 @@ pub fn scores_page(
             name: user.name,
             tournament_name: tournament.name,
             tournament_slug: tournament_slug,
+            event_options: event_options,
+            division_options: division_options,
+            weight_options: weight_options,
+            selected_event_id: selected_event_id,
+            selected_division_id: selected_division_id,
+            selected_weight_class_id: selected_weight_class_id,
             matches: options,
             selected_match_id: selected_match_id,
             selected_match_detail: selected_match_detail,
@@ -564,6 +786,9 @@ pub fn submit_pause_vote(
 
     Ok(Redirect::to(uri!(scores_page(
         slug = slug,
+        event_id = form.event_id,
+        division_id = form.division_id,
+        weight_class_id = form.weight_class_id,
         match_id = Some(form.match_id),
         round = Option::<i64>::None,
         judge_id = Some(judge_user_id),
@@ -619,6 +844,9 @@ pub fn adjust_score(
 
     Ok(Redirect::to(uri!(scores_page(
         slug = slug,
+        event_id = form.event_id,
+        division_id = form.division_id,
+        weight_class_id = form.weight_class_id,
         match_id = Some(form.match_id),
         round = redirect_round,
         judge_id = Some(judge_user_id),
