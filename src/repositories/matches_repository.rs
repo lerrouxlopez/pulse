@@ -117,6 +117,122 @@ pub fn list_by_tournament(
     )
 }
 
+pub fn list_scoring_candidates(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    judge_user_id: Option<i64>,
+) -> mysql::Result<Vec<ScheduledMatch>> {
+    let base_sql = "SELECT COALESCE(m.id, 0), COALESCE(m.scheduled_event_id, 0), m.mat, m.category, m.red, m.blue, COALESCE(m.status, ''), m.location, m.match_time,
+                m.round, m.slot, m.fight_round, m.timer_started_at, m.timer_duration_seconds, COALESCE(m.timer_is_running, 0),
+                m.timer_last_completed_round,
+                m.red_member_id, m.blue_member_id, COALESCE(m.is_bye, 0), m.winner_side, COALESCE(m.red_total_score, 0), COALESCE(m.blue_total_score, 0)
+         FROM matches m
+         WHERE m.tournament_id = :tournament_id
+           AND m.scheduled_event_id = :scheduled_event_id
+           AND COALESCE(m.is_bye, 0) = 0
+           AND NOT (LOWER(COALESCE(m.status, '')) = 'finished' OR LOWER(COALESCE(m.status, '')) = 'forfeit')
+           AND EXISTS (
+             SELECT 1
+             FROM match_judges mj
+             WHERE mj.tournament_id = m.tournament_id AND mj.match_id = m.id
+           )";
+
+    let (sql, params) = if let Some(judge_user_id) = judge_user_id {
+        (
+            format!(
+                "{}\n           AND EXISTS (\n             SELECT 1\n             FROM match_judges mj2\n             WHERE mj2.tournament_id = m.tournament_id AND mj2.match_id = m.id AND mj2.judge_user_id = :judge_user_id\n           )\n         ORDER BY\n           CASE\n             WHEN LOWER(COALESCE(m.status, '')) = 'ongoing' THEN 0\n             WHEN LOWER(COALESCE(m.status, '')) = 'scheduled' THEN 1\n             ELSE 2\n           END,\n           COALESCE(m.round, 1) ASC,\n           COALESCE(m.slot, 0) ASC,\n           m.id ASC",
+                base_sql
+            ),
+            params! {
+                "tournament_id" => tournament_id,
+                "scheduled_event_id" => scheduled_event_id,
+                "judge_user_id" => judge_user_id,
+            },
+        )
+    } else {
+        (
+            format!(
+                "{}\n         ORDER BY\n           CASE\n             WHEN LOWER(COALESCE(m.status, '')) = 'ongoing' THEN 0\n             WHEN LOWER(COALESCE(m.status, '')) = 'scheduled' THEN 1\n             ELSE 2\n           END,\n           COALESCE(m.round, 1) ASC,\n           COALESCE(m.slot, 0) ASC,\n           m.id ASC",
+                base_sql
+            ),
+            params! {
+                "tournament_id" => tournament_id,
+                "scheduled_event_id" => scheduled_event_id,
+            },
+        )
+    };
+
+    conn.exec_map(sql, params, row_to_match)
+}
+
+pub fn list_scoring_candidates_non_contact(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+    judge_user_id: Option<i64>,
+) -> mysql::Result<Vec<ScheduledMatch>> {
+    // Non-contact performances are scored by scheduled-event judges (not match_judges).
+    let base_sql = "SELECT COALESCE(m.id, 0), COALESCE(m.scheduled_event_id, 0), m.mat, m.category, m.red, m.blue, COALESCE(m.status, ''), m.location, m.match_time,
+                m.round, m.slot, m.fight_round, m.timer_started_at, m.timer_duration_seconds, COALESCE(m.timer_is_running, 0),
+                m.timer_last_completed_round,
+                m.red_member_id, m.blue_member_id, COALESCE(m.is_bye, 0), m.winner_side, COALESCE(m.red_total_score, 0), COALESCE(m.blue_total_score, 0)
+         FROM matches m
+         WHERE m.tournament_id = :tournament_id
+           AND m.scheduled_event_id = :scheduled_event_id
+           AND COALESCE(m.is_bye, 0) = 0
+           AND NOT (LOWER(COALESCE(m.status, '')) = 'finished' OR LOWER(COALESCE(m.status, '')) = 'forfeit')
+           AND EXISTS (
+             SELECT 1
+             FROM scheduled_event_judges sej
+             WHERE sej.tournament_id = m.tournament_id AND sej.scheduled_event_id = m.scheduled_event_id
+           )";
+
+    let (sql, params) = if let Some(judge_user_id) = judge_user_id {
+        (
+            format!(
+                "{}\n           AND EXISTS (\n             SELECT 1\n             FROM scheduled_event_judges sej2\n             WHERE sej2.tournament_id = m.tournament_id AND sej2.scheduled_event_id = m.scheduled_event_id AND sej2.judge_user_id = :judge_user_id\n           )\n         ORDER BY\n           CASE\n             WHEN LOWER(COALESCE(m.status, '')) = 'ongoing' THEN 0\n             WHEN LOWER(COALESCE(m.status, '')) = 'scheduled' THEN 1\n             ELSE 2\n           END,\n           COALESCE(m.slot, 0) ASC,\n           m.id ASC",
+                base_sql
+            ),
+            params! {
+                "tournament_id" => tournament_id,
+                "scheduled_event_id" => scheduled_event_id,
+                "judge_user_id" => judge_user_id,
+            },
+        )
+    } else {
+        (
+            format!(
+                "{}\n         ORDER BY\n           CASE\n             WHEN LOWER(COALESCE(m.status, '')) = 'ongoing' THEN 0\n             WHEN LOWER(COALESCE(m.status, '')) = 'scheduled' THEN 1\n             ELSE 2\n           END,\n           COALESCE(m.slot, 0) ASC,\n           m.id ASC",
+                base_sql
+            ),
+            params! {
+                "tournament_id" => tournament_id,
+                "scheduled_event_id" => scheduled_event_id,
+            },
+        )
+    };
+
+    conn.exec_map(sql, params, row_to_match)
+}
+
+pub fn count_matches_for_scheduled_event(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    scheduled_event_id: i64,
+) -> mysql::Result<i64> {
+    let value: Option<i64> = conn.exec_first(
+        "SELECT COALESCE(COUNT(*), 0)
+         FROM matches
+         WHERE tournament_id = :tournament_id AND scheduled_event_id = :scheduled_event_id",
+        params! {
+            "tournament_id" => tournament_id,
+            "scheduled_event_id" => scheduled_event_id,
+        },
+    )?;
+    Ok(value.unwrap_or(0))
+}
+
 pub fn create(
     conn: &mut PooledConn,
     tournament_id: i64,

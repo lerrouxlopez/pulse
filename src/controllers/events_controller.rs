@@ -59,6 +59,16 @@ pub struct MatchTimerForm {
     pub auto_complete: Option<i32>,
 }
 
+#[derive(FromForm)]
+pub struct PerformanceEditForm {
+    pub finished: Option<i32>,
+    pub judge_1_score: Option<i32>,
+    pub judge_2_score: Option<i32>,
+    pub judge_3_score: Option<i32>,
+    pub judge_4_score: Option<i32>,
+    pub judge_5_score: Option<i32>,
+}
+
 #[get("/<slug>/events?<error>&<success>", rank = 50)]
 pub fn events_page(
     state: &State<AppState>,
@@ -275,6 +285,71 @@ pub fn event_profile(
             event.id,
         )
         .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    #[derive(Serialize, Clone)]
+    struct ScoreOptionView {
+        value: i32,
+        label: String,
+    }
+    let allowed_non_contact_scores: Vec<ScoreOptionView> = (50..=100)
+        .map(|value| ScoreOptionView {
+            value,
+            label: format!("{:.1}", (value as f32) / 10.0),
+        })
+        .collect();
+
+    // For non-contact events, include per-judge performance scores so the event page can edit them inline.
+    if !is_contact {
+        if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+            for item in matches.iter_mut() {
+                item.judge_scores =
+                    crate::repositories::match_judges_repository::list_by_match(
+                        &mut conn,
+                        tournament.id,
+                        item.id,
+                        1,
+                    )
+                    .unwrap_or_default();
+            }
+        }
+    }
+
+    #[derive(Serialize, Clone)]
+    struct WinnerView {
+        member_id: i64,
+        name: String,
+        team_name: String,
+    }
+    let winners: Vec<WinnerView> = if !is_contact && event.status.eq_ignore_ascii_case("Finished") {
+        if let Ok(mut conn) = crate::db::open_conn(&state.pool) {
+            let winner_member_ids = crate::repositories::scheduled_event_winners_repository::list_winner_member_ids_for_event(
+                &mut conn,
+                tournament.id,
+                event.id,
+            )
+            .unwrap_or_default();
+
+            let mut competitor_by_id: HashMap<i64, &crate::models::EventCompetitor> = HashMap::new();
+            for c in &competitors {
+                competitor_by_id.insert(c.member_id, c);
+            }
+
+            winner_member_ids
+                .into_iter()
+                .filter_map(|member_id| {
+                    competitor_by_id.get(&member_id).map(|c| WinnerView {
+                        member_id,
+                        name: c.name.clone(),
+                        team_name: c.team_name.clone(),
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
     } else {
         Vec::new()
     };
@@ -646,6 +721,8 @@ pub fn event_profile(
             competitors: competitors,
             judge_users: judge_users,
             event_judge_slots: event_judge_slots,
+            allowed_non_contact_scores: allowed_non_contact_scores,
+            winners: winners,
             error: error,
             success: success,
             is_contact: is_contact,
@@ -1167,6 +1244,136 @@ pub fn reset_performances(
             success = Option::<String>::None
         )))),
     }
+}
+
+#[post("/<slug>/events/<event_id>/performances/<match_id>/edit", data = "<form>")]
+pub fn edit_performance(
+    state: &State<AppState>,
+    jar: &CookieJar<'_>,
+    slug: String,
+    event_id: i64,
+    match_id: i64,
+    form: Form<PerformanceEditForm>,
+) -> Result<Redirect, Status> {
+    let user = auth_service::current_user(state, jar).ok_or(Status::Unauthorized)?;
+    let tournament =
+        tournament_service::get_by_slug_for_user(state, &slug, user.id).ok_or(Status::NotFound)?;
+    if !access_service::user_has_permission(state, user.id, tournament.id, "events") {
+        return Ok(Redirect::to(uri!(
+            crate::controllers::dashboard_controller::tournament_dashboard(slug = tournament.slug)
+        )));
+    }
+
+    // Ensure performances exist and judge assignments are propagated into per-performance rows.
+    let _ = matches_service::ensure_performances_for_non_contact_event(
+        state,
+        user.id,
+        tournament.id,
+        event_id,
+    );
+
+    let mut conn = crate::db::open_conn(&state.pool).map_err(|_| Status::InternalServerError)?;
+    let scheduled = crate::repositories::scheduled_events_repository::get_by_id(
+        &mut conn,
+        tournament.id,
+        event_id,
+    )
+    .map_err(|_| Status::InternalServerError)?
+    .ok_or(Status::NotFound)?;
+    if scheduled.contact_type.eq_ignore_ascii_case("Contact") {
+        return Err(Status::BadRequest);
+    }
+
+    let match_row =
+        crate::repositories::matches_repository::get_by_id(&mut conn, tournament.id, match_id)
+            .map_err(|_| Status::InternalServerError)?
+            .ok_or(Status::NotFound)?;
+    if match_row.scheduled_event_id != event_id {
+        return Err(Status::BadRequest);
+    }
+
+    let judge_user_ids = crate::repositories::scheduled_event_judges_repository::list_assigned_judges(
+        &mut conn,
+        tournament.id,
+        event_id,
+    )
+    .map_err(|_| Status::InternalServerError)?;
+
+    let scores = [
+        form.judge_1_score,
+        form.judge_2_score,
+        form.judge_3_score,
+        form.judge_4_score,
+        form.judge_5_score,
+    ];
+
+    for (idx, judge_user_id) in judge_user_ids.iter().copied().enumerate() {
+        if idx >= scores.len() {
+            break;
+        }
+        let Some(score) = scores[idx] else {
+            continue;
+        };
+        if !(50..=100).contains(&score) {
+            return Err(Status::BadRequest);
+        }
+        let _ = crate::repositories::match_judges_repository::upsert_score(
+            &mut conn,
+            tournament.id,
+            match_id,
+            judge_user_id,
+            1,
+            (idx as i32) + 1,
+            score,
+            0,
+        );
+    }
+
+    // Update totals to match current judge score sum (best-effort).
+    if let Ok((sum_red, _)) =
+        crate::repositories::match_judges_repository::sum_for_match_round(&mut conn, tournament.id, match_id, 1)
+    {
+        let _ = crate::repositories::matches_repository::set_totals(
+            &mut conn,
+            tournament.id,
+            match_id,
+            sum_red.min(i64::from(i32::MAX)) as i32,
+            0,
+        );
+    }
+
+    // Mark as finished if requested.
+    if form.finished.unwrap_or(0) != 0 {
+        let fight_round = match_row.fight_round.unwrap_or(1);
+        let _ = crate::repositories::matches_repository::set_timer_state(
+            &mut conn,
+            tournament.id,
+            event_id,
+            match_id,
+            "Finished",
+            Some(fight_round),
+            match_row.timer_started_at,
+            match_row.timer_duration_seconds,
+            false,
+            match_row.timer_last_completed_round,
+        );
+    }
+
+    drop(conn);
+    // Best-effort: if this was the last needed performance, finalize the event + persist winners.
+    let _ = matches_service::try_finalize_non_contact_event_from_scores(
+        state,
+        user.id,
+        tournament.id,
+        match_id,
+    );
+
+    Ok(Redirect::to(uri!(event_profile(
+        slug = slug,
+        id = event_id,
+        error = Option::<String>::None,
+        success = Option::<String>::None
+    ))))
 }
 
 fn build_judge_assignments_from_slots(values: [Option<i64>; 5]) -> Vec<i64> {

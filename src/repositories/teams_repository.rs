@@ -1,5 +1,6 @@
 use crate::models::{NamedItem, Team, TeamMember};
 use mysql::prelude::*;
+use mysql::params;
 use mysql::PooledConn;
 
 pub fn list_teams(conn: &mut PooledConn, tournament_id: i64) -> mysql::Result<Vec<Team>> {
@@ -315,6 +316,86 @@ pub fn list_event_competitors(
             )
         },
     )
+}
+
+pub fn count_event_competitors(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    event_id: i64,
+) -> mysql::Result<i64> {
+    let value: Option<i64> = conn.exec_first(
+        "SELECT COALESCE(COUNT(DISTINCT tme.member_id), 0)
+         FROM team_member_events tme
+         WHERE tme.tournament_id = ? AND tme.event_id = ?",
+        (tournament_id, event_id),
+    )?;
+    Ok(value.unwrap_or(0))
+}
+
+pub fn count_event_competitors_filtered(
+    conn: &mut PooledConn,
+    tournament_id: i64,
+    event_id: i64,
+    division_id: Option<i64>,
+    weight_class_id: Option<i64>,
+) -> mysql::Result<i64> {
+    let (sql, p) = match (division_id, weight_class_id) {
+        (Some(division_id), Some(weight_class_id)) => (
+            "SELECT COALESCE(COUNT(DISTINCT tm.id), 0)
+             FROM team_member_events tme
+             JOIN team_members tm
+               ON tm.tournament_id = tme.tournament_id AND tm.id = tme.member_id
+             WHERE tme.tournament_id = :tournament_id AND tme.event_id = :event_id
+               AND tm.division_id = :division_id
+               AND tm.weight_class_id = :weight_class_id",
+            params! {
+                "tournament_id" => tournament_id,
+                "event_id" => event_id,
+                "division_id" => division_id,
+                "weight_class_id" => weight_class_id,
+            },
+        ),
+        (Some(division_id), None) => (
+            "SELECT COALESCE(COUNT(DISTINCT tm.id), 0)
+             FROM team_member_events tme
+             JOIN team_members tm
+               ON tm.tournament_id = tme.tournament_id AND tm.id = tme.member_id
+             WHERE tme.tournament_id = :tournament_id AND tme.event_id = :event_id
+               AND tm.division_id = :division_id",
+            params! {
+                "tournament_id" => tournament_id,
+                "event_id" => event_id,
+                "division_id" => division_id,
+            },
+        ),
+        (None, Some(weight_class_id)) => (
+            "SELECT COALESCE(COUNT(DISTINCT tm.id), 0)
+             FROM team_member_events tme
+             JOIN team_members tm
+               ON tm.tournament_id = tme.tournament_id AND tm.id = tme.member_id
+             WHERE tme.tournament_id = :tournament_id AND tme.event_id = :event_id
+               AND tm.weight_class_id = :weight_class_id",
+            params! {
+                "tournament_id" => tournament_id,
+                "event_id" => event_id,
+                "weight_class_id" => weight_class_id,
+            },
+        ),
+        (None, None) => (
+            "SELECT COALESCE(COUNT(DISTINCT tm.id), 0)
+             FROM team_member_events tme
+             JOIN team_members tm
+               ON tm.tournament_id = tme.tournament_id AND tm.id = tme.member_id
+             WHERE tme.tournament_id = :tournament_id AND tme.event_id = :event_id",
+            params! {
+                "tournament_id" => tournament_id,
+                "event_id" => event_id,
+            },
+        ),
+    };
+
+    let value: Option<i64> = conn.exec_first(sql, p)?;
+    Ok(value.unwrap_or(0))
 }
 
 pub fn list_member_categories(

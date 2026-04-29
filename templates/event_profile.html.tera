@@ -103,6 +103,20 @@
           </form>
         </section>
 
+        {% if winners and winners | length > 0 %}
+        <section class="panel mb-4">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <h3 class="fw-semibold mb-0">Results</h3>
+            <div class="text-cream-60 small">{% if winners | length > 1 %}Tie{% else %}Winner{% endif %}</div>
+          </div>
+          <ul class="mb-0">
+            {% for w in winners %}
+            <li class="fw-semibold">{{ w.name }} <span class="text-cream-60 fw-normal">({{ w.team_name }})</span></li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+
         <section class="panel">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
             <h3 class="fw-semibold mb-0">Performances</h3>
@@ -163,6 +177,12 @@
                         </select>
                       </form>
                       {% endif %}
+                      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#editPerformanceModal-{{ match.id }}" aria-label="Edit performance" title="Edit">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:inline-block;vertical-align:-2px">
+                          <path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+                        </svg>
+                      </button>
                       <a class="btn btn-sm btn-outline-light" href="/{{ tournament_slug }}/matches/{{ match.id }}">Open</a>
                     </div>
                   </td>
@@ -391,6 +411,76 @@
                 <div class="modal-footer">
                   <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                   <button class="btn btn-primary" type="submit">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if not is_contact %}
+        {% for match in matches %}
+        <div class="modal fade" id="editPerformanceModal-{{ match.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit Performance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="/{{ tournament_slug }}/events/{{ event.id }}/performances/{{ match.id }}/edit" method="post">
+                <div class="modal-body">
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <div class="text-cream-60 small mb-1">Performer</div>
+                      <div class="fw-semibold">{{ match.red | default(value="TBD") }}</div>
+                    </div>
+
+                    <div class="col-12">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1" id="perf-finished-{{ match.id }}" name="finished" {% if match.status == "Finished" %}checked{% endif %}>
+                        <label class="form-check-label" for="perf-finished-{{ match.id }}">Finished</label>
+                      </div>
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label text-muted mb-1">Judge Scores</label>
+                      {% if match.judge_scores and match.judge_scores | length > 0 %}
+                      <div class="d-flex flex-column gap-2">
+                        {% for judge in match.judge_scores %}
+                        <div class="row g-2 align-items-end">
+                          <div class="col-12 col-md-8">
+                            <div class="d-flex align-items-center gap-2">
+                              {% if judge.judge_photo_url %}
+                              <div class="judge-photo-frame">
+                                <img src="{{ judge.judge_photo_url }}" alt="Judge photo" class="judge-photo">
+                              </div>
+                              {% endif %}
+                              <div class="fw-semibold">{{ judge.judge_name }}</div>
+                            </div>
+                          </div>
+                          <div class="col-12 col-md-4">
+                            <select class="form-select" name="judge_{{ loop.index }}_score" aria-label="Judge score">
+                              {% for score in allowed_non_contact_scores %}
+                              <option value="{{ score.value }}"
+                                {% if judge.red_score >= 50 and judge.red_score <= 100 and score.value == judge.red_score %}selected{% elif (judge.red_score < 50 or judge.red_score > 100) and score.value == 50 %}selected{% endif %}>
+                                {{ score.label }}
+                              </option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                        </div>
+                        {% endfor %}
+                      </div>
+                      {% else %}
+                      <div class="text-cream-60">No judges assigned.</div>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button class="btn btn-primary" type="submit">Save</button>
                 </div>
               </form>
             </div>
