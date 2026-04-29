@@ -192,10 +192,13 @@ pub fn results_page(
 
         let mut event_name_by_scheduled_id: std::collections::HashMap<i64, String> =
             std::collections::HashMap::new();
+        let mut is_contact_by_scheduled_id: std::collections::HashMap<i64, bool> =
+            std::collections::HashMap::new();
         for item in
             scheduled_events_service::list(state, user.id, tournament.id).unwrap_or_default()
         {
             event_name_by_scheduled_id.insert(item.id, item.event_name);
+            is_contact_by_scheduled_id.insert(item.id, item.contact_type.eq_ignore_ascii_case("Contact"));
         }
 
         // Only show matches with final-ish state.
@@ -219,7 +222,15 @@ pub fn results_page(
                 } else {
                     m.blue.clone().unwrap_or_else(|| "TBD".to_string())
                 };
-                let label = format!("{} vs {}", red, blue);
+                let is_contact = is_contact_by_scheduled_id
+                    .get(&m.scheduled_event_id)
+                    .copied()
+                    .unwrap_or(true);
+                let label = if is_contact {
+                    format!("{} vs {}", red, blue)
+                } else {
+                    red.clone()
+                };
                 // Hide orphan matches (matches whose scheduled event was deleted).
                 let event_name = event_name_by_scheduled_id
                     .get(&m.scheduled_event_id)?
@@ -674,7 +685,11 @@ pub fn match_result_detail(
     } else {
         match_row.blue.clone().unwrap_or_else(|| "TBD".to_string())
     };
-    let label = format!("{} vs {}", red, blue);
+    let label = if scheduled_event.contact_type.eq_ignore_ascii_case("Contact") {
+        format!("{} vs {}", red, blue)
+    } else {
+        red.clone()
+    };
 
     let mut rounds: Vec<MatchRoundRow> = Vec::new();
     for r in 1..=rounds_total {

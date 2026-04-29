@@ -216,7 +216,7 @@
               {% endif %}
               <select class="form-select w-auto" name="value" aria-label="Performance score">
                 {% for value in allowed_scores %}
-                <option value="{{ value }}" {% if value == red_score %}selected{% endif %}>{{ value }}</option>
+                <option value="{{ value.value }}" {% if value.value == red_score %}selected{% endif %}>{{ value.label }}</option>
                 {% endfor %}
               </select>
               <button class="btn btn-outline-light" type="submit">Set</button>
@@ -244,7 +244,7 @@
                 {% endif %}
                 <select class="form-select w-auto" name="value" aria-label="Red score">
                   {% for value in allowed_scores %}
-                  <option value="{{ value }}" {% if value == red_score %}selected{% endif %}>{{ value }}</option>
+                  <option value="{{ value.value }}" {% if value.value == red_score %}selected{% endif %}>{{ value.label }}</option>
                   {% endfor %}
                 </select>
                 <button class="btn btn-outline-light" type="submit">Set</button>
@@ -271,7 +271,7 @@
                 {% endif %}
                 <select class="form-select w-auto" name="value" aria-label="Blue score">
                   {% for value in allowed_scores %}
-                  <option value="{{ value }}" {% if value == blue_score %}selected{% endif %}>{{ value }}</option>
+                  <option value="{{ value.value }}" {% if value.value == blue_score %}selected{% endif %}>{{ value.label }}</option>
                   {% endfor %}
                 </select>
                 <button class="btn btn-outline-light" type="submit">Set</button>
@@ -296,9 +296,9 @@
                 <div class="fw-semibold">Round {{ rt.round }}</div>
                 <div class="text-muted small">
                   {% if is_non_contact_performance %}
-                  Total: <span class="fw-semibold">{{ rt.red_total }}</span>
+                  Total: <span class="fw-semibold">{{ rt.red_total_label }}</span>
                   {% else %}
-                  Totals: <span class="fw-semibold">{{ rt.red_total }}</span> - <span class="fw-semibold">{{ rt.blue_total }}</span>
+                  Totals: <span class="fw-semibold">{{ rt.red_total_label }}</span> - <span class="fw-semibold">{{ rt.blue_total_label }}</span>
                   {% endif %}
                 </div>
               </div>
@@ -322,10 +322,10 @@
                       <td class="text-muted">{{ j.judge_order }}</td>
                       <td>{{ j.judge_name }}</td>
                       {% if is_non_contact_performance %}
-                      <td class="text-end fw-semibold">{{ j.red_score }}</td>
+                      <td class="text-end fw-semibold">{{ j.score_label }}</td>
                       {% else %}
-                      <td class="text-end fw-semibold">{{ j.red_score }}</td>
-                      <td class="text-end fw-semibold">{{ j.blue_score }}</td>
+                      <td class="text-end fw-semibold">{{ j.red_label }}</td>
+                      <td class="text-end fw-semibold">{{ j.blue_label }}</td>
                       {% endif %}
                     </tr>
                     {% else %}

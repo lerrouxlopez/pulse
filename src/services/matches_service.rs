@@ -82,8 +82,8 @@ pub fn set_non_contact_event_judges(
                 tournament_id,
                 perf.id,
                 1,
-                5,
-                10,
+                50,
+                100,
             )
             .unwrap_or(0);
         if scored > 0 {
@@ -1334,8 +1334,9 @@ pub fn set_or_adjust_judge_score(
         scheduled.point_system.as_deref(),
     )
     .unwrap_or(crate::services::scheduled_events_service::PointRule { min: 0, max: 10 });
-    let min_allowed = if is_non_contact { 5 } else { point_rule.min };
-    let max_allowed = if is_non_contact { 10 } else { point_rule.max };
+    // Non-contact performances use a fixed 5.0-10.0 scale in 0.1 increments, stored as integer tenths.
+    let min_allowed = if is_non_contact { 50 } else { point_rule.min };
+    let max_allowed = if is_non_contact { 100 } else { point_rule.max };
 
     let fight_round = if fight_round < 1 { 1 } else { fight_round };
 
@@ -1851,8 +1852,8 @@ pub fn try_finalize_non_contact_event_from_scores(
                 tournament_id,
                 perf.id,
                 1,
-                5,
-                10,
+                50,
+                100,
             )
             .map_err(|err| format!("Storage error: {err}"))?;
         if scored != judge_count {

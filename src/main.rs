@@ -107,6 +107,7 @@ fn rocket() -> _ {
                 controllers::events_controller::delete_match,
                 controllers::events_controller::reset_matchmaking,
                 controllers::events_controller::reset_performances,
+                controllers::events_controller::edit_performance,
                 controllers::matches_controller::matches_page,
                 controllers::matches_controller::match_page,
                 controllers::matches_controller::match_live,

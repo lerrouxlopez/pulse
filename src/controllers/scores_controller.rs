@@ -17,6 +17,12 @@ struct ScoreMatchOption {
 }
 
 #[derive(Serialize)]
+struct ScoreValueOption {
+    value: i32,
+    label: String,
+}
+
+#[derive(Serialize)]
 struct ScoreJudgeOption {
     id: i64,
     name: String,
@@ -56,7 +62,21 @@ struct ScoreRoundTable {
     round: i64,
     red_total: i64,
     blue_total: i64,
-    judges: Vec<crate::models::MatchJudgeScore>,
+    red_total_label: String,
+    blue_total_label: String,
+    judges: Vec<RoundJudgeView>,
+}
+
+#[derive(Serialize)]
+struct RoundJudgeView {
+    judge_name: String,
+    judge_photo_url: Option<String>,
+    judge_order: i32,
+    red_score: i32,
+    blue_score: i32,
+    score_label: String,
+    red_label: String,
+    blue_label: String,
 }
 
 #[derive(Serialize)]
@@ -466,7 +486,13 @@ pub fn scores_page(
 
         if is_non_contact_performance {
             let selected_round = 1;
-            let allowed_scores: Vec<i32> = (5..=10).collect();
+            // Non-contact performances use a fixed 5.0-10.0 scale in 0.1 increments, stored as integer tenths.
+            let allowed_scores: Vec<ScoreValueOption> = (50..=100)
+                .map(|value| ScoreValueOption {
+                    value,
+                    label: format!("{:.1}", (value as f32) / 10.0),
+                })
+                .collect();
             let red_score = {
                 let mut conn = crate::db::open_conn(&state.pool).ok();
                 conn.as_mut()
@@ -482,7 +508,7 @@ pub fn scores_page(
                         .flatten()
                     })
                     .map(|(red, _blue)| red)
-                    .unwrap_or(5)
+                    .unwrap_or(50)
             };
             (
                 vec![1],
@@ -601,7 +627,12 @@ pub fn scores_page(
                 .max(max_scored_round)
         };
         let selected_round = round.unwrap_or(1).clamp(1, rounds_total);
-        let allowed_scores: Vec<i32> = (min_score..=max_score).collect();
+        let allowed_scores: Vec<ScoreValueOption> = (min_score..=max_score)
+            .map(|value| ScoreValueOption {
+                value,
+                label: value.to_string(),
+            })
+            .collect();
 
         let (red_score, blue_score) = {
             let mut conn = crate::db::open_conn(&state.pool).ok();
@@ -700,11 +731,48 @@ pub fn scores_page(
                         *r,
                     )
                     .unwrap_or((0, 0));
+
+                let (red_total_label, blue_total_label) = if is_non_contact_performance {
+                    (format!("{:.1}", (red_total as f64) / 10.0), String::new())
+                } else {
+                    (red_total.to_string(), blue_total.to_string())
+                };
+
+                let judge_views: Vec<RoundJudgeView> = judges
+                    .into_iter()
+                    .map(|j| {
+                        if is_non_contact_performance {
+                            RoundJudgeView {
+                                judge_name: j.judge_name,
+                                judge_photo_url: j.judge_photo_url,
+                                judge_order: j.judge_order,
+                                red_score: j.red_score,
+                                blue_score: j.blue_score,
+                                score_label: format!("{:.1}", (j.red_score as f64) / 10.0),
+                                red_label: String::new(),
+                                blue_label: String::new(),
+                            }
+                        } else {
+                            RoundJudgeView {
+                                judge_name: j.judge_name,
+                                judge_photo_url: j.judge_photo_url,
+                                judge_order: j.judge_order,
+                                red_score: j.red_score,
+                                blue_score: j.blue_score,
+                                score_label: String::new(),
+                                red_label: j.red_score.to_string(),
+                                blue_label: j.blue_score.to_string(),
+                            }
+                        }
+                    })
+                    .collect();
                 out.push(ScoreRoundTable {
                     round: *r,
                     red_total,
                     blue_total,
-                    judges,
+                    red_total_label,
+                    blue_total_label,
+                    judges: judge_views,
                 });
             }
             out
